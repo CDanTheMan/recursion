@@ -93,6 +93,26 @@
       "git_blob_sha256": "28c52c03dff888c28f59c7ed0225345d13cd77410b20af17f808892bb3705462"
     },
     {
+      "path": "docs/v3/M1A-WIRE-PROFILE.md",
+      "git_blob_sha256": "8041689e110ccdafb10225181abce52bddda7ac1ea198c0118cc1d8de69f11e0"
+    },
+    {
+      "path": "docs/v3/M1B-EXECUTION-CONTRACTS.md",
+      "git_blob_sha256": "3a0307320cb3d1b73c334403b79c6d623725d2c72d990eccf0dc02c9bbc6a3dc"
+    },
+    {
+      "path": "docs/v3/M1B-WIRE-PROFILE.md",
+      "git_blob_sha256": "50f546774fc805a242110d8a8a193d72f3aa50843cc091ec3d92e19b65d4b2b2"
+    },
+    {
+      "path": "docs/v3/M1C-INTEGRITY-CONTRACTS.md",
+      "git_blob_sha256": "f72aeeb05c6090651c97dda59bf5f77f5680abe1bfd5faaad60df153c3f0d5ee"
+    },
+    {
+      "path": "docs/v3/M1C-WIRE-PROFILE.md",
+      "git_blob_sha256": "8ec70e663d76427ccdc0174cde2ff500732e604c925d8683bc8e0623483329d5"
+    },
+    {
       "path": "docs/v3/PERFORMANCE-PLAN.md",
       "git_blob_sha256": "46cb823db3528aacd049e651569f4ae3b7a84146ef9dfe0d12f4a56743c2719a"
     },
@@ -213,8 +233,20 @@
       "git_blob_sha256": "9e3c01bfc2585cf1d0bc16784e94b3b57142700acab93c8404dff5fda88d0d96"
     },
     {
+      "path": "docs/v3/foundation-research/platform-round/interaction-contract.md",
+      "git_blob_sha256": "5c96120a7c5bedfb277026ea0ed711595876b0b87a8199d269f3ed1b4234b80b"
+    },
+    {
+      "path": "docs/v3/foundation-research/platform-round/repository-map.md",
+      "git_blob_sha256": "a82dbcd0276f3bb3f21e6b7ad72fc6dba29e5440b5f77b57543279f9e8970ade"
+    },
+    {
       "path": "docs/v3/prompts/standalone-harness-foundation-deep-research.md",
       "git_blob_sha256": "22f11fa30cfd98a6e67865d7da916bd7c728a27e8c44f7bd24aed6028bc31e23"
+    },
+    {
+      "path": "scripts/v3/planning/validation/contracts.py",
+      "git_blob_sha256": "77df3b180846834da5a4e458e3dc29b2bcbe41b6da821ed0ac29c2e88f188185"
     },
     {
       "path": "state/goals/goal-recursion-v2-execution-fabric.md",
@@ -224,7 +256,7 @@
   "started_utc": "2026-09-07T21:16:24Z",
   "deadline_utc": "2026-09-08T03:16:24Z",
   "review_reserve_start_utc": "2026-09-08T01:46:24Z",
-  "maximum_concurrent_readonly_workers": 2,
+  "maximum_concurrent_readonly_workers": 4,
   "maximum_discovery_minutes": 30,
   "new_metered_spend": 0,
   "provider_trials_authorized": false,

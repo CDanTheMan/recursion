@@ -7,6 +7,17 @@ authority: non-normative until ratified
 
 # Recursion v3 evidence-grounded design workspace
 
+## Mark 3 comparative architecture campaign - 2026-09-07
+
+[Comparison dossier](foundation-research/mark2-research/mark3-comparison/architectures.md),
+[formal-boundary specification](foundation-research/mark2-research/mark3-comparison/formal-boundaries.md)
+and [continuation handoff](foundation-research/mark2-research/mark3-comparison/handoff.md) advance
+OR-036 through OR-039 into three complete candidate arrangements and bounded probe plans.
+Canonical execution, interaction, configuration, context and acceptance documents own the
+resulting contract refinements. Source/code evidence is separate from unrun integration and
+performance behavior; neither production readiness nor the common-writer migration is claimed.
+
+
 ## Mark 3 current reading route — 2026-09-07
 
 Start with the [Mark 3 handoff](foundation-research/mark2-research/mark3/handoff.md),

@@ -6,6 +6,36 @@ last-updated: 2026-09-07
 
 # Recursion v3 construction runbook
 
+## Mark 3 comparison continuation - 2026-09-07
+
+Start from the published candidate's
+[handoff](foundation-research/mark2-research/mark3-comparison/handoff.md),
+[GoalSpec](foundation-research/mark2-research/mark3-comparison/goal.json) and
+[probe records](foundation-research/mark2-research/mark3-comparison/probes.json).
+They bind the frozen start and preserve historical records. External attestations under
+`research-attestations/mark3-comparison/<candidate>/` in the Git common directory establish the
+exact validated/reviewed commit; missing attestations require revalidation, not removal of
+accepted Owner directions.
+
+The first construction request is a bounded interface/admission packet, followed by the smallest
+discriminating interaction/configuration and process probes. Freeze actual executable, protocol,
+model/effort, auth class, billing pool, host/OS, effective revision, fixture/evaluator digests,
+allowed effects, included-capacity reservation, counters, cleanup, deadline and acceptance gate.
+The source pins in research are not installed builds. Null admission fields mean do not run.
+The [future admission schema](foundation-research/mark2-research/mark3-comparison/probe-admission-schema.json)
+requires exact byte/round/queue/spool/cache/process/global-key bounds and destination/capture/
+redaction/retention policies, including MCP headers. Its synthetic validator fixtures establish
+data-shape checks only. Real authority, source/build equivalence, included-capacity evidence,
+cross-field resource limits and fixture effects still need the later packet's admission gate.
+Select at most two cells and six executions per packet; do not expand into a Cartesian trial.
+
+Preserve the formal model -> language -> complete storage sequence with interface probes before
+formal freeze and whole-system optimization alongside it. Do not activate deployed Recursion,
+change PAUSE/config/auth/routing, implement product/model/benchmark code, install dependencies or
+publish operational state under this research packet. No new consequential GRILLME decision is
+currently established; retain technical assumptions as probe questions.
+
+
 ## Current Mark 3 integration and research handoff — 2026-09-07
 
 Use [Mark 3 handoff](foundation-research/mark2-research/mark3/handoff.md) and

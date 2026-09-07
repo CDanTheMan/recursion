@@ -59,26 +59,32 @@ Deep Research skill applies. Its update_plan tool is absent from the active cata
 append-only PlanRevisions here are the fallback. Requested artifacts are repository Markdown
 and JSON, with canonical integration rather than competing office-format summaries.
 
-At most two concurrent read-only workers, each discovery packet at most 30 minutes, no nested
-delegation or writes. Native Luna medium/high discovery and native Terra high private review
-are explicitly permitted. Exact eligibility of the optional Cursor/Grok route is not established;
-do not invoke it or substitute another route. Two Terra reviews have independent execution and
-review focus, with same-provider correlation disclosed. Astra keeps its existing configuration.
+The initial two-worker Luna discovery allowance was superseded by Owner steering in this
+invocation. At most four concurrent read-only research workers were admitted, each discovery
+packet at most thirty minutes, no nested delegation or writes. Native Astra xhigh supplied
+kernel/interaction challenges, performance/route research and independent validation challenges.
+Two final native Astra xhigh reviewers use independent executions with same-provider correlation
+disclosed. These are delegated route choices explicitly authorized by the Owner; the integrator
+retains its existing configuration. Optional Cursor/Grok reviewer eligibility was not established
+and that route was not invoked. Account-wide visible weekly usage was 32% at 22:02:29Z, with no
+paid credit balance or reset consumed; it is not attributed campaign consumption.
 Public queries are independently written generic questions, never private repository text,
 Owner messages, private identifiers, local infrastructure, transcripts or credentials.
 
 ## PlanRevision 1
 
-Scope and frozen inputs retained; no superseded research output exists yet.
+Scope and frozen inputs retained. PlanRevisions 2 and 3 in plan.json record Owner upgrades to
+Astra and four concurrent research lanes. Revision 4 records converged synthesis, source/gate
+challenge repairs and the external exact-candidate terminal procedure.
 
 | Phase | Output and gate | State |
 |---|---|---|
 | Preflight/freeze | Owned clean branch, active parent, scope, capacity, immutable inputs | complete |
-| Existing evidence and discovery | Canonical reads; bounded source/code packets and gap dispositions | in progress |
-| Targeted follow-up | Consequential source rechecks, contradictions and limits | pending |
-| Synthesis | Six required outputs and canonical refinements; no invented decisions | pending |
-| Validation and review | Complete new gate twice and two reviews of identical clean candidate | pending |
-| Publication | Remote recheck; normal push of that exact candidate only | pending |
+| Existing evidence and discovery | Canonical reads; bounded source/code packets and gap dispositions | complete |
+| Targeted follow-up | Consequential source rechecks, contradictions and limits | complete |
+| Synthesis | Six required outputs and canonical refinements; no invented decisions | complete |
+| Validation and review | Complete new gate twice and two reviews of identical clean candidate | external-attestation-required |
+| Publication | Remote recheck; normal push of that exact candidate only | external-attestation-required |
 
 Start with kernel/process ownership, configuration/plugin lifecycle and communication/terminal/
 node coordination. Compare complete alternatives, not isolated feature counts. Keep native,

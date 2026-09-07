@@ -6,6 +6,28 @@ last-updated: 2026-09-07
 
 # Recursion v3 acceptance hypothesis
 
+## Mark 3 comparison readiness gate - 2026-09-07
+
+CMP-018: the foundation is ready for bounded admission/probe construction and deeper formal
+mapping work. It is not ready for production acceptance, formal-model freeze, language/store
+selection or common-writer migration. Current source evidence supports contract refinements;
+no live integration, resource benchmark or formal proof was produced.
+
+The [new campaign gate](foundation-research/mark2-research/mark3-comparison/check.py) checks the
+frozen start, path/identity preservation, source/claim bindings, twelve-area comparison, eight
+unrun probe families, both formal boundaries and honest evidence states. It retains the unchanged
+25-command regression inventory and meaningful historical and new adversarial cases. Final
+acceptance requires two complete passes and two independent reviews of the identical clean
+candidate, with attestations under the Git common directory. A repair invalidates prior final
+passes/reviews for publication. These documentation results do not certify runtime behavior.
+
+The next runtime gate must demonstrate all-role native/upstream/combined closure, ten controls,
+three Stops, queue and ownership settlement, configuration fences, plugin/MCP semantic
+portability, preserved forks, six update modes, remote uncertainty and cumulative recovery
+bounds on exact admitted builds. Failed or unknown required capabilities remain visible; a quota
+benchmark cannot delete them. OR-036 and OR-037 are accepted directions, not pending questions.
+
+
 ## Mark 3 accepted choices and additional evidence gates — 2026-09-07
 
 OR-036/037 resolve both Owner decisions. Model freeze still requires interface probes and

@@ -6,6 +6,60 @@ last-updated: 2026-09-07
 
 # Recursion v3 execution fabric hypothesis
 
+## Mark 3 comparison: dispatch and ownership receipts - 2026-09-07
+
+Each proposed dispatch envelope binds canonical operation/attempt, GoalSpec and packet digests,
+logical actor/role lease, route/session generation, effective configuration revision, current
+authority fence, parent reservation, host and owned process scope. These are adapter mapping
+requirements; the immutable M1 schemas are not extended by this prose. See the
+[formal mapping specification](foundation-research/mark2-research/mark3-comparison/formal-boundaries.md).
+
+The broker owns local execution resources; the kernel owns admission and authoritative
+transitions. A renderer, provider session ID or multiplexer pane cannot become canonical process
+identity. Scope creation/association must precede execution where the OS supports it, and
+association failure blocks dispatch. Windows Job membership and Linux delegated cgroup ownership
+are explicit admissions. A systemd stop operation differs from killing a PID; all independent
+relaunchers still need a current dispatch fence. CMP-002, CMP-003, CMP-004.
+
+Cancellation records requested mode and scope, admission fence, delivery, queue disposition,
+observed process termination and unresolved external effects separately. An offline node remains
+unknown. A stale returning process can supply evidence for reconciliation but cannot publish,
+reacquire authority or renew a reservation. Reattachment does not relaunch work. Ordinary status,
+lease expiry, timer delivery, Stop and reconciliation work without continuous model inference.
+
+Record recipient-installed fence and in-flight launch permits separately from canonical Stop
+acceptance. A disconnected recipient can retain earlier permits until its fence is installed;
+report that exposure. Once installed, earlier permits must fail. Queue acceptance, cancellation
+delivery, owned termination and external settlement are distinct observations. CMP-024.
+
+For a recipient that supports it, compare a queryable operation record committed atomically
+with its effect against workflow-assisted recovery. Stable identity, retry rendezvous after
+relocation and safe record retirement are required. Without that recipient boundary preserve
+unknown and prohibit blind replay. The canonical outbox alone supplies no exactly-once claim.
+CMP-023. Both journal and receiver-record alternatives prohibit retransmitting an ambiguous
+effect before authenticated same-operation resolution; a replay cache only supports query and
+reconciliation, under the immutable M1C ambiguity guard.
+Serialize shared-pool reservations across goals; per-goal writers cannot each reserve
+the same remaining balance. Conserved offline rights are a separately proved comparator, not
+permission to reclaim unknown use after timeout. CMP-026.
+
+Persist meter-segment identity, reset boundary, observed lower bound, outstanding reservation
+and unattributed remainder. Claude reset commands can reset totals and maxBudgetUsd; Grok totals
+reset across process resume; Cursor billing can lag and aggregate usage exceed attributed turns.
+Zero charged dollars or missing final totals never mean zero consumption. Resume, fork, provider
+reset and session-ID rotation do not renew parent or cumulative recovery allowance. CMP-033.
+
+The [route overlay](foundation-research/mark2-research/mark3-comparison/route-deltas.json) preserves
+all 13 integrations and 23 paths. Its role inventory includes executives, workers, reviewers,
+questionnaire assistants, consultants, summarizers, compactors, recovery, classifiers, title and
+token helpers, and MCP sampling. Each role has native, upstream-only and combined paths with
+explicit eligibility/accounting; design coverage is not proof of an available account or build.
+No upstream-only helper may silently require a direct API key. Closure includes conditional
+next-speaker/loop checks, model repair, fallback credentials and retry owners, not only the
+configured primary model. Unknown internal helper closure is an adapter blocker; a separately
+admitted eligible upstream session remains the functional alternative. CMP-011, CMP-017, CMP-032.
+
+
 ## Mark 3 communication and authority projection — 2026-09-07
 
 OR-036/037 settle the proof-boundary and amendment choices while retaining current integrity

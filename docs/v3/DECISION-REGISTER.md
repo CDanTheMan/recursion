@@ -7,6 +7,17 @@ source: archive/session-transcript-2026-09-02.md plus owner direction 2026-09-03
 
 # Recursion v3 session decision register
 
+## Mark 3 comparison disposition - 2026-09-07
+
+OR-036 through OR-039 remain accepted. The
+[comparison dossier](foundation-research/mark2-research/mark3-comparison/architectures.md)
+recommends demand activation as the first probe target while retaining resident and durable
+scheduling alternatives. This is a bounded research disposition, not a new Owner ruling or a
+language/store/framework choice. No consequential new GRILLME decision is established; no new
+Owner answer is recorded. Historic pending fields remain preserved snapshots. Technical
+assumptions proceed to probes under the existing scope and do not reopen routine delegation.
+
+
 ## Mark 3 Owner rulings — 2026-09-07
 
 Both Mark 2 decisions are now approved with qualifications. [Current dispositions](foundation-research/mark2-research/mark3/directions.json)

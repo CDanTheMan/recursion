@@ -6,6 +6,39 @@ last-updated: 2026-09-07
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## Mark 3 comparison dependencies and next requests - 2026-09-07
+
+The [dossier](foundation-research/mark2-research/mark3-comparison/architectures.md) recommends this
+bounded sequence under the accepted directions. Each future request needs its own exact
+GoalSpec, allowed effects, fixture/build/host/capacity admission and gate; existing routine
+research decisions do not need repeated Owner approval. CMP-018.
+
+| Next bounded request | Dependency and output gate |
+|---|---|
+| Interface admission packet | Resolve existing build ownership/digests, supported schemas and all-role included-capacity eligibility for at most two route/host cases; no install or live call by inference |
+| First interaction/configuration probes | Questionnaire-to-Head, pending waiter, queue/steer/Stop, disabled activation and revocation coalescing on public fixtures; preserve unknowns and inspect richer supported interfaces |
+| Broker/process and remote probes | Exact Job/cgroup scope plus relaunch and lost-receipt faults; no unowned process, stale publication or false settlement |
+| Formal adapter and two-boundary comparison | Incorporate probe counterexamples; freeze six M1 mappings, common observations/bounds/fairness and guard mutants; demonstrate split composition or move relevant broker state inward |
+| Language comparison | Only after neutral formal vectors: identical CPython/Rust/Go semantics and fault schedules on Windows/Linux, with build and maintenance costs |
+| Complete storage comparison | Only after language comparison: JSONL/CAS versus SQLite-WAL/CAS including metadata, artifacts, WAL, GC, replay, crash, backup and recovery |
+
+Whole-system optimization continues alongside this sequence: A demand activation versus B
+residency, and C durable scheduling only where a discriminating long-wait recovery case justifies
+it. Run the preserved eight families and six cross-area cases with task completion, human burden
+and fullworkflow consumption. Model, language, store, framework and production defaults remain
+unselected. OR-015's common-writer migration and operational constitutional amendments remain
+separate blocked work, not a deliverable silently completed by this research.
+
+Before the formal construction request, resolve the standalone core/cross-area finite domains
+in [comparison-contract.json](foundation-research/mark2-research/mark3-comparison/comparison-contract.json).
+The twenty-seven schedules need positive trigger witnesses and discriminating guard mutants.
+Semantic or unenforceable-boundary failures motivate moving relevant state inward; inadequate
+proof technique and checker limits leave the comparison incomplete without establishing a
+product fault. Preserve M1A's E-PAUSED observation refusal and the authenticated supplemental
+join required by M1C; neither pure classification nor a receiver replay cache authorizes a
+runtime write or retransmission of an ambiguous effect.
+
+
 ## Mark 3 approved direction and deep comparison sequence — 2026-09-07
 
 The [current handoff](foundation-research/mark2-research/mark3/handoff.md) supersedes the historical Owner queue.

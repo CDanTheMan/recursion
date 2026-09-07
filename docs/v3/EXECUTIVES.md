@@ -6,6 +6,36 @@ last-updated: 2026-09-07
 
 # Recursion v3 executive model
 
+## Mark 3 comparison: advice, adoption and routine delegation - 2026-09-07
+
+The consultation envelope proposed for probes binds request/causation/correlation, requester and
+recipient logical identities and leases, goal/task/version, permitted context/evidence revisions,
+response schema, expiry, depth/cycle limit, route/session/node and parent reservation. Durable
+states distinguish requested, accepted/rejected, delivered, answered/declined/blocked, and
+adopted/expired. Effect settlement is a separate state. See
+[interaction surfaces](INTERACTION-SURFACES.md) for the topology comparison. CMP-012, CMP-013.
+
+The questionnaire assistant can consult Head and specialists inside existing grants. Head and
+ARM retain their recorded decision rights; only the current authorized lease holder accepts
+its authoritative transition. A changed lease can make a delayed answer ineligible for adoption
+while preserving it as attributable evidence. Owner answers remain distinct from advice and
+editorial synthesis. Routine assignment, research organization and tactical replanning do not
+require renewed approvals; actual GoalSpec amendments remain Owner-only under OR-037.
+
+Persistent identity is independent of warm process/session state. Compare reconstruction,
+residency and bounded specialist activation with the same goal continuity and human-quality
+rubric. Every auxiliary call is part of the parent workflow allowance. A provider reset or a
+reconstructed assistant does not renew it. No idle inference loop is required to retain identity.
+
+A suspended consultation releases the serial executive/transport executor; inspect a resource
+wait-for graph as well as participant cycles. Durable consultation identity survives the reply
+delivery generation, while current lease/goal authority controls adoption. Expired delivery
+cannot start a fresh turn without new admission. Full Stop distinguishes an owned child from a
+borrowed operation on a persistent consultant doing unrelated work. Stop the latter operation
+and its effects without terminating unrelated work. Received stale advice remains attributable;
+data dropped before receipt must remain explicitly missing. CMP-021.
+
+
 ## Approved routine delegation and visible consultation — 2026-09-07
 
 OR-037 retains Owner-only actual GoalSpec amendments with substantial routine delegation.

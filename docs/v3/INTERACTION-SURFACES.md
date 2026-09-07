@@ -6,6 +6,49 @@ last-updated: 2026-09-07
 
 # Recursion v3 interaction surfaces and collaborative ARM topology
 
+## Mark 3 comparison: consultation and protocol placement - 2026-09-07
+
+Compare Head relay, direct addressed consultation and a shared room with one bounded step lease
+using the same questionnaire-assistant-to-Head fixture. Each preserves attribution, permitted
+context/evidence exchange and Owner observation, participation, steering and Stop. Direct
+addressing is the first probe target, not a mandated default. Relay can duplicate reasoning;
+shared discussion adds conflict/cycle handling. Human coordination burden and final answer
+quality belong in the comparison. CMP-012.
+
+Use an application-owned consultation envelope and durable event stream across all topologies.
+ACP is a client-agent session adapter; A2A is an optional opaque remote-task bridge. Neither
+protocol's session/context identifier replaces GoalSpec, current role lease or parent accounting.
+Protocol acceptance, delivery, answer and authoritative adoption are separate receipts. A2A
+send idempotency is optional, so the outer command identity must handle duplicates. ACP
+load/resume and additional-root behavior must be bound to negotiated capabilities.
+
+Owner views render the same durable events with speaker, role, route, goal/context revision,
+evidence and adoption state. A host-generated permission reply records its actual principal;
+it must not imply human observation. Stale turn/lease answers and inputs receive typed conflicts.
+A slow or absent view cannot block Stop, canonical append or recovery. Control ingress has
+reserved bounded capacity; presentation may coalesce only after durable append. Replay gaps
+require RESET before new EVENT delivery. CMP-013, CMP-014.
+
+The detailed [bounded probe plans](foundation-research/mark2-research/mark3-comparison/probes.json)
+retain all ten terminal controls, preserved forks, three Stops and remote uncertainty. No
+synthetic document check or protocol method name establishes observed interaction support.
+
+Keep logical consultation, reply-delivery generation, operation ownership and authoritative
+adoption lifetimes distinct. A logical wait must not occupy the only executor needed by its
+consultant or block a read pump that must receive the answer. Reply aliases are useful prior art
+for invalidating future delivery, but do not cancel remote computation or erase already received
+messages. Full Stop of a borrowed consultant operation preserves unrelated persistent-assistant
+work. Owner views expose expiry, stale advice, missing evidence and the next permitted action.
+CMP-021.
+
+Reserve end-to-end control progress before SDK ingestion, through framing/parser, transport
+window, dispatcher, canonical writer and rendering. A bounded SDK notification queue can drop
+a fact before Recursion sees it; require a sequence/query recovery path or keep it unknown.
+Cancellation signals cannot serve as evidence of termination. Record offered arrival, submission,
+canonical acceptance, recipient fence installation, cancellation delivery and settlement
+separately so stalled generators and sinks cannot hide Owner-visible delay. CMP-020.
+
+
 ## Required visible assistant-to-Head workflow — 2026-09-07
 
 OR-038 requires an Owner to work with a questionnaire assistant that can consult Head directly,
