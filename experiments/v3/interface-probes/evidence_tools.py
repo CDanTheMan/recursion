@@ -82,11 +82,69 @@ def codex_projection(a,r,accepted):
             'elapsed_seconds':r['elapsed_s'],'recovery_boundary':'idle server crash; read/resume only, no new inference after restart'}
 
 
+def hermes_trace_checks(r,os,real):
+    expected={'gateway_ready','malformed_json','unknown_method','invalid_params','session_create','normal_submit','normal_terminal','history','interrupt_after_delta','session_close','namespace_owner_exit'}
+    expected|={'postinterrupt_active','postinterrupt_durable_history','same_process_stored_session_resume','same_process_resumed_history'} if real else {'history_applicability'}
+    require(set(os)==expected,'Hermes complete per-mode outcome set')
+    events=r['trace']['events']
+    def received(payload):
+        matches=[e['seq'] for e in events if e['direction']=='receive' and e['payload']==payload]
+        require(len(matches)==1,'Hermes outcome absent or duplicated in received trace')
+        return matches[0]
+    def response(payload,method,params=None):
+        pos=received(payload)
+        sends=[e for e in events if e['direction']=='send' and e['payload'].get('id')==payload['id']]
+        require(len(sends)==1 and sends[0]['seq']<pos and sends[0]['payload']['method']==method,'Hermes response request correlation')
+        if params is not None:require(sends[0]['payload']['params']==params,'Hermes response request parameters')
+        return sends[0]
+    for row in os.values():
+        if 'result' in row:received(row['result'])
+    malformed=os['malformed_json']['result']
+    require(malformed['id'] is None and malformed['error']['code']==-32700 and 'result' not in malformed,'Hermes malformed JSON error')
+    raw=[e for e in events if e['direction']=='send_raw']
+    require(len(raw)==1 and raw[0]['payload']=={'length':11,'utf8':'{not-json}\n'} and raw[0]['seq']<received(malformed),'Hermes malformed input correlation')
+    for name,method,params,code in [('unknown_method','public.fixture.unknown',{},-32601),('invalid_params','session.create',[],-32602)]:
+        reply=os[name]['result'];require(reply['error']['code']==code and 'result' not in reply,'Hermes protocol negative error')
+        response(reply,method,params)
+    ready=os['gateway_ready']['result'];require(ready['method']=='event' and ready['params']['type']=='gateway.ready','Hermes ready notification')
+    response(os['session_create']['result'],'session.create')
+    sid=os['session_create']['result']['result']['session_id']
+    normal_submit=response(os['normal_submit']['result'],'prompt.submit')
+    require(normal_submit['payload']['params']['session_id']==sid,'Hermes normal submit session')
+    response(os['history']['result'],'session.history',{'session_id':sid})
+    response(os['session_close']['result'],'session.close',{'session_id':sid})
+    require(os['session_close']['result']['result']['closed'] is True and os['namespace_owner_exit']['exit_code']==r['namespace_owner_exit_code']==0,'Hermes close/namespace outcomes')
+    turn=os['interrupt_after_delta'];normal=os['normal_terminal']['result']
+    ordered=[normal,turn['second_start'],turn['delta'],turn['terminal']]
+    for payload,kind in zip(ordered,['message.complete','message.start','message.delta','message.complete']):
+        require(payload['method']=='event' and payload['params']['type']==kind and payload['params']['session_id']==sid,'Hermes turn event type/session')
+        received(payload)
+    require(all(x['params']['seq']<y['params']['seq'] and received(x)<received(y) for x,y in zip(ordered,ordered[1:])),'Hermes correlated turn order')
+    starts=[e for e in events if e['direction']=='receive' and isinstance(e['payload'],dict) and e['payload'].get('method')=='event' and e['payload']['params'].get('type')=='message.start' and e['payload']['params'].get('session_id')==sid]
+    submits=[e for e in events if e['direction']=='send' and e['payload'].get('method')=='prompt.submit']
+    require(len(starts)==len(submits)==2 and all(e['payload']['params']['session_id']==sid for e in submits),'Hermes two correlated turn submissions')
+    require(normal_submit['seq']<starts[0]['seq']<received(normal)<submits[1]['seq']<received(turn['second_start']),'Hermes normal/interrupt turn boundary')
+    interrupt=response(turn['ack'],'session.interrupt',{'session_id':sid})
+    require(received(turn['delta'])<interrupt['seq']<received(turn['terminal']) and turn['ack']['result']['status']=='interrupted','Hermes interrupt after delta')
+    require(normal['params']['payload']['status']=='complete' and turn['terminal']['params']['payload']['status']=='interrupted','Hermes terminal statuses')
+    if real:
+        response(os['postinterrupt_active']['result'],'session.activate',{'session_id':sid})
+        response(os['postinterrupt_durable_history']['result'],'session.history',{'session_id':sid})
+        stored=os['postinterrupt_active']['result']['result']['session_key']
+        response(os['same_process_stored_session_resume']['result'],'session.resume',{'session_id':stored})
+        resumed=os['same_process_stored_session_resume']['result']['result']['session_id']
+        response(os['same_process_resumed_history']['result'],'session.history',{'session_id':resumed})
+    else:
+        require('interrupted=False' in normal['params']['payload']['text'] and 'interrupted=True' in turn['terminal']['params']['payload']['text'],'Hermes synthetic terminal disposition')
+        require(os['history']['result']['result']['messages']==[] and os['history_applicability']['status']=='unsupported_by_synthetic_seam','Hermes synthetic persistence limit')
+
+
 def hermes_projection(a,r,accepted):
     os=outcomes(r);real=a.get('mode')=='real'
     if accepted:
         require(r['failure'] is None and r['watchdog_fired'] is False,'Hermes failure or timeout')
         validate_trace(r['trace'])
+        hermes_trace_checks(r,os,real)
         require(r['namespace_owner_exit_code']==0 and r['cleanup_job']['ActiveProcesses']==0,'Hermes namespace cleanup')
         require(r['actual_model_calls']==0,'Hermes actual inference')
         canary=stderr_json(r,'namespace_admission');require(len(canary)==1 and canary[0]['network_canary_errno']==101,'Hermes network canary')

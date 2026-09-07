@@ -202,6 +202,24 @@ def adversarial(e):
     for entry in index['runs']:
         if entry['use']!='accepted-scoped-evidence':continue
         d=pathlib.Path(entry['directory']);a=strict((d/'admission.json').read_text());r=strict((d/'result.json').read_text())
+        if 'hermes' in entry['id']:
+            hf=lambda x:hermes_projection(a,x,True)
+            for outcome in r['outcomes']:
+                bad=copy.deepcopy(r);bad['outcomes']=[o for o in bad['outcomes'] if o['check']!=outcome['check']]
+                rejected.append(reject(hf,bad,entry['id']+'/missing '+outcome['check']))
+            for label,check,field in [('false completion','interrupt_after_delta','terminal'),('wrong protocol code','unknown_method','result'),('wrong session','normal_terminal','result')]:
+                bad=copy.deepcopy(r);payload=next(o for o in bad['outcomes'] if o['check']==check)[field];before=copy.deepcopy(payload)
+                if label=='false completion':payload['params']['payload']['status']='complete'
+                elif label=='wrong protocol code':payload['error']['code']=-32602
+                else:payload['params']['session_id']='PUBLIC_UNRELATED_SESSION'
+                for event in bad['trace']['events']:
+                    if event['direction']=='receive' and event['payload']==before:event['payload']=copy.deepcopy(payload)
+                rejected.append(reject(hf,bad,entry['id']+'/'+label+' in outcome and trace'))
+            bad=copy.deepcopy(r)
+            for event in bad['trace']['events']:
+                if event['direction']=='receive' and isinstance(event['payload'],dict) and event['payload'].get('error',{}).get('code')==-32700:
+                    event['payload']={'jsonrpc':'2.0','id':None,'result':'PUBLIC_UNRELATED_RECEIPT'}
+            rejected.append(reject(hf,bad,entry['id']+'/protocol outcome absent from trace'))
         if 'codex' in entry['id']:
             fn=lambda x:codex_projection(a,x,True);bad=copy.deepcopy(r);bad['scripted_endpoint_requests'][0]['credential_header_present']=True;rejected.append(reject(fn,bad,'Codex inherited credential'))
             bad=copy.deepcopy(r);bad['trace']['reader_threads_alive']=1;rejected.append(reject(fn,bad,'Codex unended observer'))

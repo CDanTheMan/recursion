@@ -55,6 +55,12 @@ all 11,939 regular Hermes archive members with the installed source and found no
 mismatch. This audit was performed afterward; it is not a pre-run build receipt.
 Canonical documents own the resulting contracts and dispositions.
 
+The Codex scripted endpoint recorded POST requests. Its GET handler returned 405
+without adding a request receipt, so those traces are not a census of every HTTP
+method or an OS egress certificate. Packet04 checked its deadline when reserving
+launches; it did not recheck immediately before each later process launch. Accepted
+launches occurred within the recorded window; future execution must use a fresh packet.
+
 ## Retained setup and verification limits
 
 Exact configurations, source/build/dependency hashes, raw public-fixture

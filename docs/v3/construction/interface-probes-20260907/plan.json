@@ -43,6 +43,22 @@
         "Post-packet03-closure cosmetic rerun from accepted evidence"
       ],
       "invalidated": []
+    },
+    {
+      "revision": 4,
+      "at": "2026-09-07T23:51:14.726036+00:00",
+      "reason": "Independent exact-candidate review rejected incomplete Hermes observation validation; require per-mode outcomes, raw request/reply and event correlation, terminal states and discriminating mutants",
+      "retained": [
+        "All actual probe results and source evidence",
+        "Contract review found no additional semantic blocker"
+      ],
+      "superseded": [
+        "cebd09de4ee2d641a1aadbd7a4bd6c8f88951547 as final publication candidate"
+      ],
+      "quarantined": [],
+      "invalidated": [
+        "Initial gate attempt on superseded candidate: final MVP cleanliness check failed while review repair began; no final gate pass claimed"
+      ]
     }
   ],
   "steps": [
