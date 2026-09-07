@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "goal": "recursion.v3.formal-comparison.construction.20260907",
+  "revisions": [
+    {
+      "revision": 1,
+      "at": "2026-09-07T23:59:08.787613+00:00",
+      "reason": "Start first formal construction packet after accepted interface campaign; preserve full comparison while building a checkable slice"
+    }
+  ],
+  "steps": [
+    {
+      "id": "domain-resolution",
+      "status": "in_progress"
+    },
+    {
+      "id": "independent-models",
+      "status": "pending"
+    },
+    {
+      "id": "exhaustive-and-adversarial-checks",
+      "status": "pending"
+    },
+    {
+      "id": "canonical-synthesis",
+      "status": "pending"
+    },
+    {
+      "id": "exact-validation-review-publication",
+      "status": "pending"
+    }
+  ],
+  "owner_questions": []
+}
