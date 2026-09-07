@@ -6,6 +6,33 @@ last-updated: 2026-09-07
 
 # Recursion v3 provider-route capability matrix
 
+## Installed fixture overlay — 2026-09-07
+
+The [interface evidence](construction/interface-probes-20260907/evidence.json) overlays the
+preserved 13-entry, 23-path matrix without promoting any live model/account route. Both Cursor
+paths and Grok, Cursor, Gemini, Claude, Hermes, OpenCode and ChatGPT remain required.
+
+| Executing harness | Provider/interface and authentication | Host/build/distribution context | Established scope |
+|---|---|---|---|
+| Codex App Server | Scripted loopback Responses; no account or credential; no provider billing | Windows 11 build 26200; installed 0.149.0 binary digest retained; corresponding release-tag source 758ef40f50c1a458425c7cfbf1eb12cbc07af0b0; Apache-2.0 source; binary/source equivalence not rebuilt | IPR-002/003: scoped turn/thread controls and protocol counters; no live ChatGPT/API entitlement result |
+| Hermes Gateway and real AIAgent | Custom loopback Chat Completions; public dummy key; no model/billing | Ubuntu 24.04 under WSL2; Python 3.12; source 693641aa8b4359c602283bdbbc14041e03bc47bc/package 0.21.0; isolated editable installation; MIT source | IPR-004/005/006: durable fixture rows, interruption, same-process close/resume, metadata requests and incomplete usage reporting |
+
+IPR-004: the first Hermes synthetic-agent history oracle was invalid because that upstream
+seam updates memory but does not perform normal-agent database persistence. Its failure remains
+retained. The later real-agent fixture used the unchanged upstream gateway and persistence
+path; it preserved the original completed rows plus interrupted partial output and row identities
+across close/resume. Fresh-process recovery and real provider behavior remain untested.
+
+IPR-005: explicit context, an empty toolset and disabled title/background review still left five
+local server-detection GETs and one catalog GET. Source inspection identified initialization and
+pricing metadata paths; the fixture admitted exact negative detection responses, rather than
+inventing a global disable. Account for metadata traffic separately from model inference.
+Installed/disabled capabilities, task activation and helper closure remain distinct dimensions.
+
+No credentials were copied or refreshed. Live included-capacity routes remain unadmitted until
+their supported authentication, helper closure, billing pool and privacy are established. Source
+licenses do not grant account access or settle downstream dependency/distribution terms.
+
 ## Mark 3 comparison route delta - 2026-09-07
 
 The [current overlay](foundation-research/mark2-research/mark3-comparison/route-deltas.json)

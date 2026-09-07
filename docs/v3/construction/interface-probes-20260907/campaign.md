@@ -1,6 +1,8 @@
 # Interface probe campaign — 2026-09-07
 
-Status: execution and evidence review in progress; this is not final acceptance.
+Status: scoped findings and canonical synthesis prepared. Final acceptance is recorded
+outside the candidate by two exact-candidate gates, two independent reviews and a
+verified review-branch push. See [handoff](handoff.md) for receipt locations.
 
 Parent: `goal-recursion-v2-execution-fabric`. Frozen input is merge commit
 `840599ae60a7dadacc8b6ac2eac29ca0734c2a1d` (PR #93), containing reviewed comparative
@@ -14,7 +16,7 @@ review. The root Astra is the only repository writer; bounded native Astra
 workers review source, contracts and containment read-only. No external model
 endpoint, account refresh or paid experiment has been used by the probes.
 
-## Evidence obtained so far
+## Evidence and claim boundaries
 
 - Installed Windows Codex 0.149.0, with scripted loopback Responses outputs:
   active steering, stale-turn rejection, blocking question interruption,
@@ -34,19 +36,32 @@ endpoint, account refresh or paid experiment has been used by the probes.
   run. The first run failed an inapplicable durable-history oracle: the
   synthetic agent does not write the normal agent's message database. That
   failure and its narrower cleanup evidence are retained separately.
+- The same pinned Hermes gateway with its real agent loop and a scripted Chat
+  Completions endpoint preserved completed and interrupted database rows across
+  same-process close/resume. Its accepted run made two chat POSTs, five negative
+  backend-detection GETs and one model-catalog GET. Interrupted usage lacked a
+  final usage receipt; missing usage cannot be booked as zero consumption.
+  This establishes neither live-provider eligibility nor fresh-process recovery.
 - Offline finite interface vectors examine recipient fences, connection
   receipts, consultation replacement, evidence disposition and operation Stop.
   Broken guards are required to fail; positive independent work and fresh
   consultation must still proceed. These are modeled interface falsifiers,
   not integration observations or an independently checked broker refinement.
 
+The [evidence manifest](evidence.json) retains fifteen successful and failed runs,
+with four accepted runs supporting seven scoped claims. Thirteen pinned primary
+source receipts support the new source entries. A post-run source audit compared
+all 11,939 regular Hermes archive members with the installed source and found no
+mismatch. This audit was performed afterward; it is not a pre-run build receipt.
+Canonical documents own the resulting contracts and dispositions.
+
 ## Retained setup and verification limits
 
 Exact configurations, source/build/dependency hashes, raw public-fixture
 transcripts, timing and cleanup receipts are retained in the user-local
-`RecursionProbeLab` directory. Public summaries will use allowlisted fields;
+`RecursionProbeLab` directory and copied Git-common discovery cache. Public summaries use allowlisted fields;
 raw files may contain local fixture paths and session identifiers and are not
-publication artifacts. Final attestations will be under the Git common
+publication artifacts. Final attestations belong under the Git common
 directory, outside the candidate.
 
 The first temporary WSL installation did not persist across distro boots;
@@ -61,6 +76,14 @@ multi-run packet accounting was reconstructed afterward. Do not describe
 that accounting as a preregistration. Packet 02 records the next repair
 release prospectively. Setup failures and weaker initial observer versions
 remain evidence; stronger reruns do not retroactively upgrade them.
+
+Two real-agent attempts failed their initial route admission because backend
+metadata GETs were not admitted. A later cosmetic dummy-key rerun had individual
+admission but occurred after packet03 closure; it is retained as a release-control
+deviation and excluded from accepted evidence. Packet04 prospectively reserved
+three harness launches and produced the accepted real-agent and Codex reruns.
+Its immutable release, retained lease ledger and separate closure are checked
+together. No further launches are admitted by those closed packets.
 
 Final acceptance requires the complete new gate, unchanged historical
 regressions, two independent exact-candidate reviews and two clean-candidate

@@ -65,6 +65,14 @@
                   "rejected"
                 ]
               ],
+              "grants": {
+                "A": false,
+                "B": true
+              },
+              "new_request": {
+                "operation": "A",
+                "epoch": 2
+              },
               "postrevoke_new_A": "rejected"
             }
           }
@@ -89,6 +97,14 @@
                   "executed"
                 ]
               ],
+              "grants": {
+                "A": false,
+                "B": true
+              },
+              "new_request": {
+                "operation": "A",
+                "epoch": 2
+              },
               "postrevoke_new_A": "rejected"
             }
           }
@@ -118,6 +134,14 @@
                   "executed_exposed"
                 ]
               ],
+              "grants": {
+                "A": false,
+                "B": true
+              },
+              "new_request": {
+                "operation": "A",
+                "epoch": 2
+              },
               "postrevoke_new_A": "rejected"
             }
           }
@@ -150,6 +174,14 @@
                   "rejected"
                 ]
               ],
+              "grants": {
+                "A": false,
+                "B": true
+              },
+              "new_request": {
+                "operation": "A",
+                "epoch": 2
+              },
               "postrevoke_new_A": "rejected"
             }
           }
@@ -183,6 +215,14 @@
                   "rejected"
                 ]
               ],
+              "grants": {
+                "A": false,
+                "B": true
+              },
+              "new_request": {
+                "operation": "A",
+                "epoch": 2
+              },
               "postrevoke_new_A": "rejected"
             }
           }
@@ -206,6 +246,14 @@
                   "executed"
                 ]
               ],
+              "grants": {
+                "A": false,
+                "B": true
+              },
+              "new_request": {
+                "operation": "A",
+                "epoch": 2
+              },
               "postrevoke_new_A": "admitted"
             }
           }
@@ -229,6 +277,14 @@
                   "rejected"
                 ]
               ],
+              "grants": {
+                "A": false,
+                "B": true
+              },
+              "new_request": {
+                "operation": "A",
+                "epoch": 2
+              },
               "postrevoke_new_A": "rejected"
             }
           }
@@ -320,7 +376,14 @@
               "independent_completed": 0,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": false
@@ -347,7 +410,14 @@
               "independent_completed": 0,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": 0
@@ -379,7 +449,16 @@
               "independent_completed": 1,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [
+                "A"
+              ],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": 0
@@ -410,7 +489,16 @@
               "independent_completed": 0,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [
+                "A"
+              ],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": 1
@@ -445,7 +533,26 @@
               "independent_completed": 1,
               "fresh_requested": true,
               "fresh_evidence": true,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [
+                "A"
+              ],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": {
+                "operation": "B",
+                "goal": 2,
+                "lease": 2,
+                "generation": 2
+              },
+              "fresh_response": {
+                "operation": "B",
+                "goal": 2,
+                "lease": 2,
+                "generation": 2
+              }
             }
           },
           "expected": true
@@ -476,7 +583,16 @@
               "independent_completed": 0,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [
+                "A"
+              ],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": 1
@@ -504,7 +620,14 @@
               "independent_completed": 0,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": false
@@ -532,7 +655,14 @@
               "independent_completed": 0,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": false
@@ -560,7 +690,16 @@
               "independent_completed": 0,
               "fresh_requested": false,
               "fresh_evidence": false,
-              "fresh_adopted": false
+              "fresh_adopted": false,
+              "stopped_operations": [
+                "A"
+              ],
+              "grants": {
+                "A": true,
+                "B": true
+              },
+              "fresh_request": null,
+              "fresh_response": null
             }
           },
           "expected": false
@@ -576,5 +715,5 @@
     "Fresh B consultation is an ordered suffix with assumed independent grant; grant issuance and broker refinement remain unproved",
     "Pre-install old permit execution remains exposed; local revocation is not remote settlement"
   ],
-  "observed_at": "2026-09-07T23:11:58.532526+00:00"
+  "observed_at": "2026-09-07T23:25:42.308967+00:00"
 }

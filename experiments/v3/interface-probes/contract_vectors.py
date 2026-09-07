@@ -30,8 +30,11 @@ def config_trace(order, mutant=None):
     # Prefix: A's permit was issued at E1, then Owner revoked A at E2.
     # R3 is an unrelated preference revision. B retains its independent grant.
     state = dict(canonical_epoch=2, recipient_epoch=1, preference=1,
-                 generation=0, effective_generation=None, outcomes=[],
-                 postrevoke_new_A='admitted' if mutant == 'omit_local_admission' else 'rejected')
+                 generation=0, effective_generation=None, outcomes=[],grants={'A':False,'B':True})
+    request={'operation':'A','epoch':2}
+    admitted=request['epoch']==state['canonical_epoch'] and (state['grants'][request['operation']] or mutant=='omit_local_admission')
+    state['new_request']=request
+    state['postrevoke_new_A']='admitted' if admitted else 'rejected'
     trace = []
     for event in order:
         if event == 'preference_R3':
@@ -93,7 +96,8 @@ CONSULT_DAG = {
 def consultation_trace(order, mutant=None):
     state = dict(goal=1, lease=1, alias_live=True, stopped=False, evidence=False,
                  adopted=False, wakeups=0, relaunches=0, independent_completed=0,
-                 fresh_requested=False, fresh_evidence=False, fresh_adopted=False)
+                 fresh_requested=False, fresh_evidence=False, fresh_adopted=False,
+                 stopped_operations=[], grants={'A':True,'B':True},fresh_request=None,fresh_response=None)
     trace = []
     for event in order:
         if event == 'replace_goal': state['goal'] = 2
@@ -102,6 +106,7 @@ def consultation_trace(order, mutant=None):
         elif event == 'stop_owned_operation':
             state['stopped'] = True
             state['alias_live'] = False
+            state['stopped_operations'].append('A')
         elif event == 'ingress':
             state['evidence'] = state['alias_live'] or mutant == 'invent_expired_evidence'
         elif event == 'adopt':
@@ -120,10 +125,15 @@ def consultation_trace(order, mutant=None):
     # A separate operation B receives a fresh request/reply/adoption after all A events.
     # The request carries current goal/lease and a new generation; A's Stop cannot fence B.
     state['fresh_requested'] = True
+    state['fresh_request']={'operation':'B','goal':state['goal'],'lease':state['lease'],'generation':2}
     trace.append({'event':'fresh_B_request','state':copy.deepcopy(state)})
     state['fresh_evidence'] = True
+    state['fresh_response']=dict(state['fresh_request'])
     trace.append({'event':'fresh_B_ingress','state':copy.deepcopy(state)})
-    state['fresh_adopted'] = mutant not in ('deny_all','cancel_all_consultations')
+    request,response=state['fresh_request'],state['fresh_response']
+    state['fresh_adopted']=(response==request and response['goal']==state['goal'] and response['lease']==state['lease']
+                            and state['grants'][response['operation']] and response['operation'] not in state['stopped_operations']
+                            and mutant not in ('deny_all','cancel_all_consultations'))
     trace.append({'event':'fresh_B_adopt','state':copy.deepcopy(state)})
     return trace
 

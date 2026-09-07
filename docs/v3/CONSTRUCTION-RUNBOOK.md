@@ -6,6 +6,27 @@ last-updated: 2026-09-07
 
 # Recursion v3 construction runbook
 
+## Owner-authorized testing continuation — 2026-09-07
+
+The Owner's subsequent authorization permits isolated testing/setup and review-branch commits
+for the [interface campaign](construction/interface-probes-20260907/goal.json). It supersedes
+the preceding research packet's no-install/no-probe limit within this new bounded scope.
+It does not authorize deployed Recursion activation, PAUSE changes, this assistant's active
+configuration/auth/routing changes, paid usage or default-branch merging.
+
+Continue from the [new handoff](construction/interface-probes-20260907/handoff.md). Preserve the
+raw failed attempts and executed-tooling snapshots in external discovery storage. Replaying
+evidence validation requires those exact bytes; synthetic reconstructions cannot replace an
+observed run. Re-execution uses a new admitted fixture with exact current source/build,
+configuration, effects, counters, deadline and cleanup—not an inferred reusable account grant.
+
+The new final gate runs the unchanged 25-command inventory on the current clean candidate and
+historical research validators on their frozen source. Two complete passes plus two independent
+reviews of that candidate precede a normal push to its review branch. Attestations live under
+`research-attestations/interface-probes/<candidate>/` in the Git common directory.
+Existing routine authorization continues; new GoalSpecs and gates make each subsequent bounded
+campaign reviewable without reopening already approved Owner decisions.
+
 ## Mark 3 comparison continuation - 2026-09-07
 
 Start from the published candidate's

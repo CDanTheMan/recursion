@@ -28,6 +28,21 @@
         "First Hermes history capability inference"
       ],
       "invalidated": []
+    },
+    {
+      "revision": 3,
+      "at": "2026-09-07T23:46:43.253348+00:00",
+      "reason": "Scoped probes, raw evidence audit and canonical synthesis completed; prepare exact-candidate validation and independent review",
+      "retained": [
+        "All fifteen run results, initial setup failures, source receipts and prospective packet04 leases"
+      ],
+      "superseded": [
+        "Synthetic gateway history as an oracle for real-agent persistence"
+      ],
+      "quarantined": [
+        "Post-packet03-closure cosmetic rerun from accepted evidence"
+      ],
+      "invalidated": []
     }
   ],
   "steps": [
@@ -38,23 +53,24 @@
     },
     {
       "id": "probe_tooling",
-      "status": "in_progress",
+      "status": "complete_with_recorded_limits",
       "output": "Isolated transport, observation, containment and adversarial checks"
     },
     {
       "id": "observed_probes",
-      "status": "in_progress",
+      "status": "complete_with_recorded_limits",
       "output": "Bounded exact-build interaction/configuration/process traces and cleanup receipts"
     },
     {
       "id": "synthesis",
-      "status": "pending",
+      "status": "complete_with_recorded_limits",
       "output": "Canonical contract/evidence deltas, unresolved assumptions and next construction requests"
     },
     {
       "id": "validation_review_publication",
-      "status": "pending",
+      "status": "exact_candidate_receipts_required_externally",
       "output": "Two exact-candidate gates, two independent reviews and verified review-branch publication"
     }
-  ]
+  ],
+  "owner_questions": []
 }

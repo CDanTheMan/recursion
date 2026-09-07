@@ -6,6 +6,27 @@ last-updated: 2026-09-07
 
 # Recursion v3 interaction surfaces and collaborative ARM topology
 
+## Installed interaction fixture — 2026-09-07
+
+IPR-002: Codex 0.149.0 App Server, driven by a scripted loopback provider, rejected a stale
+turn steer and an in-flight fork; delivered an accepted steer into the same turn; interrupted
+a blocking question; kept a late old answer from releasing the current waiter during the
+observed 300 ms window; and completed the current question with its own answer. A completed-turn
+fork retained exactly its selected boundary. An idle-server crash/restart preserved the original
+three turn identities and their completed/interrupted/completed statuses.
+
+This is exact-build evidence for the adapter mechanisms, using experimental environment and
+question fields. It does not establish cross-connection correlation, native approval handling,
+post-resume execution authority, in-flight crash recovery or the complete questionnaire-to-Head
+product workflow. Keep canonical consultation/goal/lease/operation identities outside provider
+session IDs, and reapply current grants before resumed execution. Preserve all ten controls,
+three Stop modes, persistent assistants and Owner-visible attribution requirements.
+
+The [finite consultation vectors](construction/interface-probes-20260907/contract-vectors.json)
+separately require local Stop to expire the old reply alias, preserve evidence received earlier,
+prevent stale adoption/relaunch and allow a freshly authorized consultation on another operation.
+Those modeled results do not certify remote cancellation or an implemented communication service.
+
 ## Mark 3 comparison: consultation and protocol placement - 2026-09-07
 
 Compare Head relay, direct addressed consultation and a shared room with one bounded step lease

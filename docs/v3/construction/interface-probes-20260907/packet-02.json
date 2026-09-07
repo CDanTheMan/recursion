@@ -22,5 +22,12 @@
     "Observer error, unexpected credential/account, external model destination, capacity or deadline bound",
     "Namespace exit unavailable: record unknown cleanup and wait owned Linux timeout; no further case until audit"
   ],
-  "status": "open"
+  "status": "closed",
+  "closed_at": "2026-09-07T23:15:03.413793+00:00",
+  "runs": [
+    "hermes-230812056335",
+    "codex-interaction-230823244497"
+  ],
+  "actual_harness_launches": 3,
+  "outcome": "Scoped lifecycle and observer checks passed; synthetic history remains unsupported"
 }

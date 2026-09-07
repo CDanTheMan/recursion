@@ -12,6 +12,7 @@ import sys
 from win_process import Job, Process, minimal_env
 from rpc import Rpc, validate_trace
 from mock_responses import MockResponses
+from release import reserve
 
 def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -53,8 +54,9 @@ def thread_params(fixture, tools=None):
     if tools is not None:result["dynamicTools"]=tools
     return result
 
-def run(lab, executable, mode):
+def run(lab, executable, mode, packet):
     if sys.flags.optimize: raise RuntimeError('Probe oracles require assertions enabled')
+    release=reserve(packet,lab,'codex-'+mode,2 if mode=='interaction' else 1)
     run_dir=lab/"private"/("codex-"+mode+"-"+datetime.datetime.now(datetime.timezone.utc).strftime("%H%M%S%f"))
     run_dir.mkdir()
     mock=MockResponses(); mock.start()
@@ -66,7 +68,7 @@ def run(lab, executable, mode):
         failure=type(exc).__name__+": "+str(exc)
         (run_dir/"setup-failure.json").write_text(json.dumps({"at":now(),"failure":failure,"process_started":False},indent=2)+"\n")
         return {"result":str(run_dir/"setup-failure.json"),"failure":failure,"requests":0,"active_owned_processes":0}
-    admission={"at":now(),"kind":"installed-harness-scripted-model","model_inference":False,"credentials":"absent",
+    admission={"at":now(),"packet_release":release,"kind":"installed-harness-scripted-model","model_inference":False,"credentials":"absent",
                "executable_sha256":sha(executable),"config_sha256":sha(home/"config.toml"),
                "tooling":{p.name:sha(p) for p in pathlib.Path(__file__).parent.glob('*.py')},
                "provider_destination":mock.url,"network_boundary":"configured loopback provider and rejecting ambient HTTP proxies; not OS egress certification",
@@ -211,4 +213,5 @@ def run(lab, executable, mode):
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser();parser.add_argument("--lab",type=pathlib.Path,required=True);parser.add_argument("--executable",type=pathlib.Path,required=True);parser.add_argument("--mode",choices=["calibration","interaction"],default="calibration")
-    args=parser.parse_args();result=run(args.lab,args.executable,args.mode);print(json.dumps(result));raise SystemExit(bool(result["failure"]))
+    parser.add_argument('--packet',type=pathlib.Path,required=True)
+    args=parser.parse_args();result=run(args.lab,args.executable,args.mode,args.packet);print(json.dumps(result));raise SystemExit(bool(result["failure"]))

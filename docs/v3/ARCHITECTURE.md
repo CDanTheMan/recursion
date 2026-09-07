@@ -7,6 +7,29 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 ratified architecture target
 
+## Interface evidence and formal construction boundary — 2026-09-07
+
+The [interface campaign](construction/interface-probes-20260907/campaign.md) advances the
+comparison from source inspection to bounded installed-harness and OS observations. It supports
+adapting rich harness protocols behind an application-owned authority/accounting boundary.
+It supplies no measured winner among demand activation, residency and durable scheduling.
+The newer observations below are scoped deltas; earlier source-only statements remain dated
+campaign records.
+
+IPR-007: finite recipient-fence and consultation fixtures check 4,704 and 40,320 complete
+schedules, respectively, with 16 broken-guard variants rejected. They preserve pre-install
+permit exposure, stale receipt rejection, retained evidence, scoped Stop and fresh independent
+consultation. Their separate event-fact oracles do not establish independent broker refinement
+or fairness. See [exact vectors and limits](construction/interface-probes-20260907/contract-vectors.json).
+
+The next formal campaign must implement both accepted boundaries against the same full corpus.
+In the split, broker delivery/ownership steps either preserve all aggregate observations or map
+to explicit aggregate transitions. In the inclusive model, those same steps remain distinct:
+do not atomically combine local revoke with recipient installation, or answer receipt with
+authoritative adoption. Probe observations become environment constraints and counterexample
+vectors, not a reason to erase uncertain effects. No M1 change, formal freeze, language/store
+selection or resolution of OR-015 follows from this fixture campaign.
+
 ## Mark 3 comparison: canonical state and scheduling boundary - 2026-09-07
 
 The [comparative dossier](foundation-research/mark2-research/mark3-comparison/architectures.md)

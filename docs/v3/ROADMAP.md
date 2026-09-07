@@ -6,6 +6,28 @@ last-updated: 2026-09-07
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## Interface campaign progression — 2026-09-07
+
+The [bounded campaign](construction/interface-probes-20260907/campaign.md) has run installed
+Codex controls with scripted inference, Hermes real-agent persistence/interruption with a
+scripted provider, Windows launch-ownership faults, and finite fence/consultation vectors.
+These satisfy a first discriminating probe step, not every admission or integration requirement.
+
+Next, construct both formal boundaries after explicitly resolving the finite domains left open
+in the preserved comparison contract. Use these observations to retain separate local/recipient
+fences, process creation/registration, reply receipt/adoption and meter lineage/reset steps.
+Require the original 27-schedule corpus, all shared obligations and a positive trigger for every
+fault. Check initialization, step simulation/stutter and composition independently; retain
+counterexample, inadequate mapping, exploration limit and conditional coverage as different
+outcomes. No formal freeze follows from the small Python interface vectors.
+
+Run further interface work alongside formal construction: fresh-connection questions/approvals,
+fresh-process Hermes recovery, registration/relaunch faults, configuration/plugin activation and
+remote uncertainty. Admit a live included-capacity route only after supported auth/helper closure
+is established. Then preserve formal model -> CPython/Rust/Go comparison -> complete storage
+comparison. The [next packets](construction/interface-probes-20260907/next-packets.json) retain
+all eight families and six cross-area cases; no narrow quota test removes accepted capabilities.
+
 ## Mark 3 comparison dependencies and next requests - 2026-09-07
 
 The [dossier](foundation-research/mark2-research/mark3-comparison/architectures.md) recommends this
