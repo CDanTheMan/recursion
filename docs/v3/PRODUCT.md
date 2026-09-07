@@ -6,6 +6,28 @@ last-updated: 2026-09-07
 
 # Recursion v3 product hypothesis
 
+## Accepted working foundation and required collaboration — 2026-09-07
+
+Recursion should stay closely aligned with the user’s goals and adapt its working style to the task. It should support extensive autonomous research and planning when requested, and close collaboration when the user wants to develop something together. Within agreed boundaries, it should use initiative and carry work through. Throughout that work, it should preserve intent, incorporate feedback, surface consequential changes, and remain easy to inspect, redirect and stop.
+
+The paragraph above is exact Owner-approved wording (OR-038). Requested direction also requires
+innovative agent communication, terminal multiplexing and coordinated work across compute
+instances and nodes. Communication, delegation and interaction are required capabilities.
+Research compares mechanisms, activation, defaults and placement in kernel, service or plugin;
+a narrow quota result cannot veto their existence. Rich and lean configurations preserve access
+to accepted capabilities without requiring every optional component to remain resident.
+
+The representative workflow is an Owner working with a questionnaire assistant that consults
+Head directly, returns clarifications and lets the Owner observe attributable exchange,
+participate, redirect and stop it. Head integrates exact accepted answers and repeats research
+toward concrete architecture and bounded delegation. Model, session and node may differ while
+goal, authority, decision provenance and aggregate accounting stay coherent.
+
+OR-039 makes configuration, compatibility and whole-system optimization central. Evaluate
+cognitive/coordination burden, intent continuity, clarity, Owner control, quality and specialized
+assistance alongside OR-024's existing ranking and floors. Additional consumption can be a
+chosen tradeoff; no universal feature-cost or plugin-efficiency claim follows.
+
 ## Mark 2 capability map — research synthesis 2026-09-07
 
 The first usable release includes native, independently useful upstream-only and combined
@@ -18,7 +40,7 @@ MKR-001/MKR-008/MKR-022.
 | Direction | Required capability and responsible component | Configuration and evidence | Decisive next test / milestone |
 |---|---|---|---|
 | Q1 / OR-026 | Shared route registry and deterministic setup detect existing installs; adapter supplies version, auth, billing and control capabilities | Installation owner, pin, route descriptor, managed/manual updates; 13 entries and 23 paths in [matrix](foundation-research/mark2-research/compatibility.json) | Interface/eligibility probe before model freeze; seven names required at first release |
-| Q2 / OR-027 | Persistent assistant identity projects profiles, sessions and Head/ARM/worker leases; runtime owns consultation and idle lifecycle | Memory audience/freshness, decision classes, route/role/pool; MKR-009/MKR-010 | Assistant lifecycle and consultation family; authority amendment decision before freeze |
+| Q2 / OR-027 | Persistent assistant identity projects profiles, sessions and Head/ARM/worker leases; runtime owns consultation and idle lifecycle | Memory audience/freshness, decision classes, route/role/pool; MKR-009/MKR-010 | Assistant lifecycle/consultation family; prove bounded routine delegation and rejection of unauthorized amendments |
 | Q3 / OR-028 | Shared terminal/interaction store and process broker implement all ten controls, three Stops and preserved forks | Turn targeting, Stop scope, disclosure timing, lineage and reservation split; MKR-011/MKR-012 | Negative control/fork traces on Windows/Linux and required upstream routes |
 | Q4 / OR-029 | Capability compiler and native/upstream plugin adapters preserve behavior, report losses and support local execution | Four incompatibility responses; two revision propagation modes; no hidden fallback; MKR-013/MKR-014 | Configuration/plugin family including browser/MCP research workflow |
 | Q5 / OR-030 | Context governor and accounting ledger retain handoff quality and all-role consumption | Capsule validity, compactor ownership, per-role pool and unavailable counters; MKR-002/MKR-019 | Upstream-only full workflow with API credentials absent; continuation fault probes |

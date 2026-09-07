@@ -6,17 +6,36 @@ last-updated: 2026-09-07
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## Mark 3 approved direction and deep comparison sequence — 2026-09-07
+
+The [current handoff](foundation-research/mark2-research/mark3/handoff.md) supersedes the historical Owner queue.
+Both decisions are accepted with qualifications (OR-036/037). Approval unblocks the direction
+of comparative work, not model freeze or runtime construction.
+
+The [twelve-area plan](foundation-research/mark2-research/mark3/research-plan.json) defines competing approaches,
+source anchors, metrics, failures and disposition rules within the existing eight families.
+Source comparison and whole-system optimization can proceed alongside interface/model work;
+language and storage choices still depend on their earlier frozen contracts. Required
+communication, delegation and interaction cannot become optional product scope because a
+particular implementation costs more. Replace weak mechanisms while retaining capabilities.
+
+Required outputs before architecture is ready to construct: competing complete designs;
+capability-to-component/configuration maps; identical bounded traces across both model
+boundaries; evidence-backed dispositions; explicit unresolved assumptions; and runnable,
+resource-bounded construction packets. Topic lists, page counts and larger fleets do not
+establish research depth or complete these outputs.
+
 ## Mark 2 continuation sequence — 2026-09-07
 
-The current [campaign record](foundation-research/mark2-research/campaign.md) and
-[decision-first report](foundation-research/mark2-research/report-source.md) are the continuation
-entrypoints. Historical research and completed Mark 2 answer capture retain their original
+The historical [Mark 2 campaign record](foundation-research/mark2-research/campaign.md) and
+[decision-first report](foundation-research/mark2-research/report-source.md) remain evidence
+entrypoints; Mark 3 above supplies current dispositions. Historical research and completed Mark 2 answer capture retain their original
 status. MKR-021/MKR-022.
 
 | Order | Bounded output | Gate before proceeding |
 |---|---|---|
 | 1. Small interface probes | Exact builds and eligibility; richer SDK/server/ACP/extension traces for seven critical names and remaining requested entries | Authorized disposable scope, explicit all-role pool closure, truthful missing controls; source-only evidence cannot pass |
-| 2. Formal model | Selected aggregate/broker boundary plus six existing and Mark 2 obligations | Counterexamples resolved without silent M1 changes; explicit flow bounds/fairness and unchanged OR-015 |
+| 2. Formal model | Approved aggregate/refinement boundary compared with broker-inclusive model; six existing and Mark 2 obligations | Counterexamples resolved without silent M1 changes; explicit flow bounds/fairness and unchanged OR-015 |
 | 3. Language comparison | Same frozen vectors in CPython, Rust and Go | Windows/Linux correctness/fault equivalence, resource/build/maintenance evidence; no language chosen in advance |
 | 4. Storage comparison | Complete JSONL/CAS versus SQLite-WAL/CAS systems | Count all bytes, replay/GC/backup/crash/locking behavior; no store chosen in advance |
 | 5. First usable construction | Native loop, upstream-only/combined role closure, persistent assistants, ten controls, config/plugins, setup/update/recovery | Complete accepted platform behavior and independent exact-candidate gates; small prototypes do not redefine release |

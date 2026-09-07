@@ -6,6 +6,24 @@ last-updated: 2026-09-07
 
 # Recursion v3 plugins and editions hypothesis
 
+## Mark 3 capability availability and activation — 2026-09-07
+
+OR-039 makes configuration and plugin compatibility central architectural priorities.
+Separate a supported capability from its installation dependencies, activation for a task,
+default setting and placement in kernel/service/plugin. Lean configurations may defer optional
+loading or place it elsewhere; they cannot silently erase accepted capabilities from the release.
+Preserve rich configurations, local execution and all four incompatibility response modes.
+
+Compare manifest-based lazy loading, isolated plugin workers and harness-specific adapters,
+measuring installed-but-disabled import, connection, process, memory and inference costs.
+Plugin boundaries are not automatically faster, safer or cheaper. Compare semantic behavior,
+dependency/isolation failure, configuration propagation and rollback alongside resource use.
+
+MCP coverage includes tools, resources, prompts and host interaction, capability/schema
+negotiation, discovery, context cost, connections/subscriptions where supported, cancellation,
+authentication and accounting. A common protocol name does not prove equivalent host behavior.
+Measure explicit composition losses and retain Owner-visible explanations without hidden fallback.
+
 ## Behavioral portability and incompatibility — proposed 2026-09-07
 
 MKR-014 replaces a metadata-only notion of conversion with a capability-specific loss map.

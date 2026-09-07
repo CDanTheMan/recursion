@@ -7,16 +7,34 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 ratified architecture target
 
-## Mark 2 model and recovery boundary — proposed 2026-09-07
+## Approved proof boundary and comparative obligation — 2026-09-07
 
-The recommended proof boundary is the smallest aggregate plus an explicit bounded broker
-refinement; a bounded broker in the first model remains a consequential Owner choice.
+OR-036 accepts the smallest aggregate plus explicit independently checkable bounded broker
+refinement. Investigate both that split and a broker-inclusive model sufficiently to compare
+coverage and complexity on identical required behavior, bounds, fairness assumptions and fault
+traces. Ease or speed alone cannot remove necessary execution behavior.
+
+Before freeze, the model and refinement together must cover the six M1 obligations and
+process ownership, consultation, queue saturation, RESET/replay, relaunch, configuration and
+update/Stop interactions. Include relevant broker state directly whenever separate checking is
+inadequate or a bounded interleaving violates an aggregate obligation. Retain counterexamples
+and mapping obligations. Whole-system optimization proceeds alongside this work; probes still
+precede model freeze, then language comparison, then storage comparison. OR-015 is unchanged.
+
+OR-039 requires comparing complete architectures, component placement and dependency costs,
+including rich/lean and disabled configurations. A rejected framework, topology or default must
+be replaced with an approach preserving the accepted capability. See [Mark 3 research plan](foundation-research/mark2-research/mark3/research-plan.json).
+
+## Mark 2 model and recovery mechanics — updated by OR-036
+
+The approved proof boundary is the smallest aggregate plus an explicit bounded broker
+refinement; a bounded broker in the first model remains a required technical comparison.
 Neither option selects language/storage/frameworks or changes M1. Preserve the six existing
 obligations: M1A-to-M1C effect identity projection; separate work/writer/process/PAUSE fence
 namespaces; one canonical writer; current-immediate PAUSE; partition/termination ambiguity;
 and bounded broker flow/replay with RESET. Add assistant/consultation flow, revision propagation,
 coherent forks, update admission and cumulative recovery reservations as proposed obligations.
-MKR-018; [pending decisions](foundation-research/mark2-research/decisions.json).
+MKR-018 is the historical recommendation, now accepted with qualifications by OR-036; [current decisions](foundation-research/mark2-research/mark3/directions.json).
 
 | Alternative | Reuse/adaptation benefit | Limit and removal criterion |
 |---|---|---|

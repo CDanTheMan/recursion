@@ -1,14 +1,32 @@
 ---
 title: Recursion v3 planning and Grill Me projection
 status: contract-projection-with-open-policy
-last-updated: 2026-09-03
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 planning and Grill Me projection
 
+## Mark 3 accepted answers and task-aligned initiative — 2026-09-07
+
+[Mark 3 dispositions](foundation-research/mark2-research/mark3/directions.json) resolve both Mark 2 Owner choices.
+OR-036 selects the small aggregate with independently checkable broker refinement and required
+comparison against a broker-inclusive model. OR-037 retains Owner-only actual amendments with
+substantial routine delegation. Historical pending snapshots are not the current Owner queue.
+
+OR-038's accepted foundation supports extended independent research when requested and close
+collaboration when desired, while preserving intent and consequential feedback. A proposed
+conceptual separation is intended result, working relationship and authorized actions. Infer
+these from explicit instructions and existing preferences; this is not three mandatory forms.
+A progress question need not cancel the assignment, and discussion does not widen authority.
+
+The questionnaire-assistant/Head exchange must retain exact Owner answers separately from
+proposals and summaries. Head integrates accepted directions, rechecks consistency and derives
+bounded follow-up packets. Model adequacy, resource-dependent probes and implementation remain
+evidence work; approval of these two choices does not select a language, store or framework.
+
 ## Foundation research to accepted construction
 
-The [foundation GRILLME packet](foundation-research/grillme.md) ranks ten unanswered decisions.
+The [foundation GRILLME packet](foundation-research/grillme.md) is a historical snapshot of ten then-unanswered decisions; current dispositions follow the Owner register and Mark 3 record.
 The first concerns the bounded model integration contract; it does not reopen OR-018/OR-019.
 Record exact later Owner answers through private intent references, apply publication-safe
 dispositions to [decisions.json](foundation-research/decisions.json), reconcile cross-decision

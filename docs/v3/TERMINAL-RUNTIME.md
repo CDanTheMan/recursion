@@ -6,6 +6,25 @@ last-updated: 2026-09-07
 
 # Recursion v3 interactive terminal and persistent session runtime
 
+## Mark 3 multiplexed interaction and control — 2026-09-07
+
+OR-038 requires persistent attachable views over durable work, including the questionnaire
+assistant/Head exchange. Multiple windows or clients must not duplicate execution or inference.
+Compare per-view cursors, bounded projections and replay/snapshot recovery; protect control
+delivery from slow rendering, disconnected views and bulk history replay. Input ownership,
+operation identity, causation and receipt state must be visible.
+
+Owner participation, steering and Aggressive/Full/Lazy Stop remain distinct across sessions and
+configured nodes. An acknowledgment is not remote settlement; retain partition and external
+effect ambiguity. Measure Unicode/render correctness, accessibility, input tail latency,
+attach/detach/reconnect and time to understand state and issue the intended control.
+
+Source-audit counterexamples reinforce the need for composed control mappings: Pi queues may
+survive RPC abort; Hermes busy-input redirection may preserve foreground work in background;
+a host can answer an ACP approval without a human prompt. See SRC-V3-226, SRC-V3-227 and SRC-V3-228 and
+[the bounded source audit](foundation-research/mark2-research/mark3/companion-review.json). These are unrun
+adapter tests, not a new Stop definition or installed-build certification.
+
 ## Mark 2 control contract — proposed 2026-09-07
 
 The ten controls remain required across the platform. The canonical command includes command ID,

@@ -335,3 +335,15 @@ Primary content was opened and bounded repository/doc snapshots retrieved. Movin
 | `SRC-V3-221` | [Claude TypeScript SDK reference](https://code.claude.com/docs/en/agent-sdk/typescript) | Current SDK reference retrieved 2026-09-07; feature minimum versions vary | Feature-gated receipts and checkpoints do not prove scope-wide Stop or preserved forks. |
 | `SRC-V3-222` | [Grok cancellation implementation](https://raw.githubusercontent.com/xai-org/grok-build/72a61251fcffb464bcc687aeb5a998e5a98ec0c9/crates/codegen/xai-grok-shell/src/session/acp_session_impl/cancel.rs) | 72a61251fcffb464bcc687aeb5a998e5a98ec0c9; Apache-2.0 | Source implementation is not an observed remote/external settlement. |
 | `SRC-V3-223` | [OpenCode question HTTP handlers](https://raw.githubusercontent.com/anomalyco/opencode/53fec37d8d2b9e0d92a1b4184e8df8f8480a2d26/packages/opencode/src/server/routes/instance/httpapi/handlers/question.ts) | 53fec37d8d2b9e0d92a1b4184e8df8f8480a2d26; MIT | HTTP interface does not make underlying in-memory waiter durable. |
+
+## Mark 3 companion source audit - 2026-09-07
+
+Dated mechanisms only; exact digests, limits and next tests are in [companion-review.json](foundation-research/mark2-research/mark3/companion-review.json).
+
+| ID | Primary source | Version / retrieval | Applicability |
+|---|---|---|---|
+| `SRC-V3-224` | [Claude permission modes](https://code.claude.com/docs/en/permission-modes) | Moving official docs retrieved 2026-09-07 | This is a documented classifier boundary, not a proof that deny rules mediate every effect or preserve semantic intent. |
+| `SRC-V3-225` | [Gemini CLI policy engine](https://geminicli.com/docs/reference/policy-engine/) | Moving official docs retrieved 2026-09-07 | Bind the exact execution mode and policy/schema; this does not imply every interactive host or extension has identical behavior. |
+| `SRC-V3-226` | [Pi RPC protocol](https://raw.githubusercontent.com/earendil-works/pi/b2602be77cb7b0de45dd616407fd210daa48aa75/packages/coding-agent/docs/rpc.md) | b2602be77cb7b0de45dd616407fd210daa48aa75 | This describes queued steering/follow-up semantics, not external-effect settlement. The recorded repository pin is documentation, not an installed build. |
+| `SRC-V3-227` | [Hermes CLI interface](https://hermes-agent.nousresearch.com/docs/user-guide/cli/) | Moving official docs retrieved 2026-09-07 | Applies to the documented Enter-submitted busy-input path; it is not a universal claim about Ctrl+C, all tools or all descendants. |
+| `SRC-V3-228` | [Hermes ACP host integration](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp/) | Moving official docs retrieved 2026-09-07 | Host-specific behavior, not all ACP clients. The documented timeout/error path denies. Attribute the actual approving principal. |

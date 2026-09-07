@@ -6,6 +6,22 @@ last-updated: 2026-09-07
 
 # Recursion v3 telemetry and optimization hypothesis
 
+## Mark 3 human and whole-workflow outcomes — 2026-09-07
+
+OR-039 adds explicit Owner comprehension and coordination outcomes to the existing complete
+consumption vector: avoidable interventions, repeated intent explanation, coordination backlog,
+time to identify state and issue a correct control, clarity of attribution, access to specialist
+help, intent continuity, quality and escaped defects. Keep human review/correction time visible.
+
+Separate capability availability, activation, default and placement in each observation.
+Compare active, idle, suspended and installed-but-disabled components without pretending a
+removed feature is an optimization. Attribute per-view, broker, plugin, MCP, inference, cache,
+storage and network cost to the parent workflow while preventing double counting.
+
+Source-only, modeled, observed, measured and unresolved evidence remain distinct. No invented
+confidence percentage, numeric weighting, quota conversion or zero value for unavailable
+counters follows from the Owner's optimization direction.
+
 ## Mark 2 accounting observations — proposed 2026-09-07
 
 A usage record binds scope/role/attempt, provider/account pool, executing harness/interface/build,

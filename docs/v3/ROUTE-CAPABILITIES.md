@@ -6,6 +6,18 @@ last-updated: 2026-09-07
 
 # Recursion v3 provider-route capability matrix
 
+## Mark 3 source-only control refinements - 2026-09-07
+
+The [companion audit](foundation-research/mark2-research/mark3/companion-review.json) adds five bounded failure
+cases without changing the historical 13-entry matrix or claiming installed-build conformance.
+Gemini headless ask decisions are denied (SRC-V3-225); interactive permission availability must
+be bound to the actual mode. The documented Hermes Buzz ACP host can answer requests itself
+despite manual configuration (SRC-V3-228); record the actual approving principal and host path.
+Pi queue/abort ordering and Hermes redirect-to-background behavior (SRC-V3-226 and SRC-V3-227) require
+composed Stop probes. A similar method name or visible prompt schema does not certify the
+platform control or grant boundary. No new launch-critical name or Owner scope change follows.
+
+
 ## Mark 2 verified source matrix — 2026-09-07
 
 [The current machine-readable matrix](foundation-research/mark2-research/compatibility.json)

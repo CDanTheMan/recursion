@@ -7,6 +7,17 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 architecture claim ledger
 
+## Mark 3 disposition overlay — 2026-09-07
+
+OR-036/037 in [DECISION-REGISTER](DECISION-REGISTER.md) accept the two qualified Mark 2
+recommendations. MKR-018 remains the preserved historical research statement; Owner approval
+does not turn a proposed mechanism into observed or formally proved behavior. OR-038/039
+record the required interactive foundation and deep configurable optimization direction.
+
+[Mark 3 companion findings](foundation-research/mark2-research/mark3/companion-review.json) use campaign-local
+finding IDs bound to SRC-V3-224 through SRC-V3-228, concrete limits and next tests. They do not
+revise historical integration observations or certify runtime support.
+
 This is the canonical ledger for material claims used by the v3 design. The exact registered
 ranges are machine-readable in [CLAIM-REGISTRY.json](CLAIM-REGISTRY.json); prose queue labels do
 not create a range. A claim is

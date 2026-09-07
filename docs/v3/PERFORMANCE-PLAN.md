@@ -6,6 +6,28 @@ last-updated: 2026-09-07
 
 # Recursion v3 performance and resource hypothesis plan
 
+## Mark 3 comparative depth and required capabilities — 2026-09-07
+
+OR-039 requires [twelve areas and six shared cross-area fault cases](foundation-research/mark2-research/mark3/research-plan.json)
+within the eight existing experiment families. The plan contains concrete alternatives, source
+anchors, assumptions to challenge, metrics and disposition rules; all trials remain unrun.
+A topic marked researched must link competing complete designs, primary/source-code evidence,
+counterexamples, relevant measurements or preregistration, and a reasoned adopt/adapt/reject/
+unresolved disposition for a mechanism or default.
+
+Compare direct eligible harness controls, lean configured implementations and rich activated
+implementations. A no-specialist or direct-harness experimental control is not a proposal to
+remove required platform communication. Capability availability, task activation, default and
+kernel/service/plugin placement are separate axes. More quota may be justified by reduced
+Owner burden, better continuity, control, quality or specialized assistance; retain OR-024's
+ranking and floors without inventing a new scalar weighting.
+
+Use representative independent research, collaborative feature work, and questionnaire-assistant/
+Head exchange alongside the four retained scenarios. Add slow/multiple views, attach/detach,
+stale advice, revocation/cached continuation, auxiliary quota loss, plugin/browser revisions,
+disk pressure and reconnect faults selectively. Include full normal, failed, verification,
+recovery and human-review costs. Bound case selection; do not multiply every dimension.
+
 ## Mark 2 preregistration and practical resources — 2026-09-07
 
 [Eight experiment families](foundation-research/mark2-research/experiments.json) extend the six

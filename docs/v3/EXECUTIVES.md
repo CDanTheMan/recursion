@@ -6,6 +6,26 @@ last-updated: 2026-09-07
 
 # Recursion v3 executive model
 
+## Approved routine delegation and visible consultation — 2026-09-07
+
+OR-037 retains Owner-only actual GoalSpec amendments with substantial routine delegation.
+Within existing grants an assistant may organize research, consult, assign eligible workers,
+compare alternatives and replan tactics. Accepted intent, deliverables, acceptance requirements,
+authority, privacy exposure and resource ceilings remain Owner amendments. Communication or a
+peer recommendation is not Owner approval; authorized routine decisions need no repetitive approval.
+
+OR-038 requires a questionnaire assistant to consult Head and bring clarifications back while
+the Owner observes attributable exchanges, participates, redirects or stops. Distinguish
+request/response from adoption and accepted decision. Use current role leases, permitted
+context, goal version and shared reservations; a persona, message or persistent session
+cannot enlarge authority. Sessions, views, models and nodes may differ.
+
+The assistant experiment compares effective implementations and configurations, including
+human coordination burden and specialized help. It cannot remove required communication,
+delegation or interaction after a narrow quota comparison. If representative workflows need
+actual amendments and suffer avoidable interruptions, identify precise classes for a later
+bounded proposal; no such class is granted now.
+
 ## Persistent assistants and consultation — proposed 2026-09-07
 
 MKR-005/MKR-009/MKR-010 propose an addressable `AssistantIdentity` projection with a stable ID,
@@ -42,10 +62,10 @@ exchange can carry this envelope; it does not supply Recursion's authority rules
 
 Decision rights remain configurable product scope. Routine choice inside an existing grant can
 use its current lease holder. A new class that amends GoalSpec or reallocates cross-goal authority
-needs the explicit pending amendment choice in [decisions](foundation-research/mark2-research/decisions.json).
+requires a separate bounded Owner amendment proposal under OR-037; no new amendment class is approved.
 Current Owner-only amendments remain in force. No per-message Owner approval is added to already
 authorized routine decisions. The assistant trial compares direct execution, one bounded
-consultation and a resident assistant; additional supervisors must earn their total cost.
+consultation and a resident assistant. Compare their total costs and human benefits while preserving required communication and delegation; no mandatory supervisor count is selected.
 
 ## Mark 2 Owner direction — 2026-09-06
 

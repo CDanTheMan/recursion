@@ -6,6 +6,19 @@ last-updated: 2026-09-07
 
 # Recursion v3 CLI hypothesis
 
+## Mark 3 configuration and working relationship — 2026-09-07
+
+OR-038/039 require configurable rich collaboration and lean operation. Show capability
+availability, task activation, selected default and kernel/service/plugin placement as separate
+facts. Existing preferences and natural-language intent can specify the working relationship;
+do not require extra forms or repetitive approvals for routine authorized decisions.
+
+A user can inspect effective settings, enter an assistant/Head conversation, steer ongoing
+work and issue the selected Stop mode through persistent views. A status question need not
+cancel a task. A request changing accepted outcomes, authority, privacy or resource ceilings
+still follows Owner amendment rules. Configurable notification and activation mechanics remain
+research choices, evaluated for comprehension and full workflow cost.
+
 ## Effective configuration revisions — proposed 2026-09-07
 
 MKR-013 retains the existing hierarchy while making merge operators explicit. Preferences use

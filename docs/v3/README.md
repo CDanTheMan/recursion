@@ -7,15 +7,29 @@ authority: non-normative until ratified
 
 # Recursion v3 evidence-grounded design workspace
 
-## Mark 2 research continuation — 2026-09-07
+## Mark 3 current reading route — 2026-09-07
+
+Start with the [Mark 3 handoff](foundation-research/mark2-research/mark3/handoff.md),
+[approved dispositions](foundation-research/mark2-research/mark3/directions.json) and
+[comparative research plan](foundation-research/mark2-research/mark3/research-plan.json). OR-036/037 approve both
+prior A recommendations with qualifications; OR-038/039 record the interactive foundation,
+required configurable communication and deep whole-system research. Neither decision remains
+an unanswered Owner blocker.
+
+The companion is received and its consequential additional mechanisms are separately checked
+in [the source audit](foundation-research/mark2-research/mark3/companion-review.json). Approval, source evidence,
+editorial proposals and unrun technical work remain distinct. Historical Mark 2 artifacts are
+unchanged snapshots. Contract readiness still depends on probes and comparative model evidence.
+
+## Mark 2 research record — historical 2026-09-07
 
 Start with [the campaign record](foundation-research/mark2-research/campaign.md) and
 [decision-first synthesis](foundation-research/mark2-research/report-source.md). The current
 research binds 13 requested integrations, richer supported interfaces, all six packets and eight
 unrun experiment families to canonical documents. [The two consequential Owner choices](foundation-research/mark2-research/grillme.md)
-remain pending; all ten prior answers are complete.
+were pending at that snapshot and are now resolved by OR-036/037; all ten prior answers remain complete.
 
-The foundation supports bounded probes and a model-boundary decision. Complete route/contract
+The foundation supports bounded probes under the now-approved proof-boundary direction. Complete route/contract
 readiness remains conditional; no runtime, performance or migration result is claimed.
 Historical snapshots below retain their original status. Source-documented, locally observed,
 inferred, unsupported and unknown behavior must remain distinguishable. Read canonical

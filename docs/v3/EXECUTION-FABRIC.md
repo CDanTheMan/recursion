@@ -6,6 +6,24 @@ last-updated: 2026-09-07
 
 # Recursion v3 execution fabric hypothesis
 
+## Mark 3 communication and authority projection — 2026-09-07
+
+OR-036/037 settle the proof-boundary and amendment choices while retaining current integrity
+contracts. OR-038 requires direct assistant/Head consultation across compatible sessions and
+configured nodes with one coherent goal/version, authority provenance and aggregate ledger.
+A proposed message envelope binds request/causation, logical actors and role leases, decision
+class, permitted context revision, route/model/harness/session/node, parent reservation and
+delivery/adoption disposition. This is a proposed realization, not an M1 wire-schema change.
+
+Transport, state, replay and visible status can be deterministic. Only admitted semantic
+reasoning invokes models. Count consultation helpers and retries once with parent lineage;
+an upstream-only workflow must not discover a hidden API dependency. Bound cycles, depth and
+queues, and reject stale or revoked advice without deleting its evidence.
+
+Model comparison must use identical queue/relaunch/RESET, lease/revocation, configuration/fork,
+consultation, update/Stop, partition/reconnect and ambiguous-effect traces. Neither direct
+messaging nor richer working relationships changes who can amend a GoalSpec or write canonical state.
+
 ## Role execution and accounting closure — proposed 2026-09-07
 
 MKR-002/MKR-008 extend the existing Route/WorkPacket projection, not the M1 wire schema.

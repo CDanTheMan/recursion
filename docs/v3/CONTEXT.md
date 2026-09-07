@@ -6,6 +6,22 @@ last-updated: 2026-09-07
 
 # Recursion v3 context, cache, and compaction hypothesis
 
+## Mark 3 continuity through collaborative work — 2026-09-07
+
+OR-038/039 require intent and decision continuity across questionnaire assistance, Head
+consultation, autonomous research and collaborative development. Exact accepted answers retain
+their provenance outside summaries; proposed wording must not become an accepted instruction
+through compaction, quotation or peer advice.
+
+Compare provider prompt caches separately from Recursion-owned evidence/context reuse.
+Cross-route reuse and savings need evidence. Stress revoked instructions, changed configuration,
+consultation replies, warm-session reuse and compaction/replay gaps together. Count rediscovery,
+refresh/write/miss costs, quality loss, repeated explanations and downstream corrections.
+
+Claude's documented conversational classifier boundary may disappear when its source message
+is compacted (SRC-V3-224). That is a bounded source-level reason to retain authority outside
+conversation; it does not establish every tool or effect is mediated by a deny rule.
+
 ## Mark 2 continuity and value — research synthesis 2026-09-07
 
 Keep the non-droppable capsule and one compaction governor per route epoch. Assistant memory
