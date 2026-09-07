@@ -26,6 +26,12 @@
       "at": "2026-09-07T22:07:51Z",
       "status": "research-synthesis-complete-terminal-gates-next",
       "work": "Integrated four Astra source packets, kernel/interaction synthesis verification and adversarial gate challenge. Preserved 54 frozen inputs, source bytes, accepted directions and all coverage. Terminal reviews/gates/publication must attest the exact clean candidate externally."
+    },
+    {
+      "revision": 5,
+      "at": "2026-09-07T22:20:55Z",
+      "status": "exact-review-repair",
+      "work": "Candidate e62a7bb passed both full gates; independent contract review required positive-control pairing and conditional rights-profile applicability. Evidence review approved. Repair preserves mandatory shared obligations, then requires two fresh full gates and both exact-candidate re-reviews."
     }
   ],
   "phases": [

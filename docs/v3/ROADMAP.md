@@ -31,7 +31,10 @@ separate blocked work, not a deliverable silently completed by this research.
 
 Before the formal construction request, resolve the standalone core/cross-area finite domains
 in [comparison-contract.json](foundation-research/mark2-research/mark3-comparison/comparison-contract.json).
-The twenty-seven schedules need positive trigger witnesses and discriminating guard mutants.
+The twenty-seven-schedule corpus separates positive control13/negative partner14 from fault
+schedules. Applicable faults need positive trigger witnesses and discriminating guard mutants.
+Shared-pool trace21 is mandatory; rights trace22 is conditional on selecting the same extension
+for both boundaries, otherwise explicitly unrun/not-covered without losing shared obligations.
 Semantic or unenforceable-boundary failures motivate moving relevant state inward; inadequate
 proof technique and checker limits leave the comparison incomplete without establishing a
 product fault. Preserve M1A's E-PAUSED observation refusal and the authenticated supplemental

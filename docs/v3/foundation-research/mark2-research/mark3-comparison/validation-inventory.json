@@ -293,7 +293,7 @@
     },
     {
       "path": "docs/v3/ROADMAP.md",
-      "git_blob_sha256": "e58fd4793a11646e40492e3cb6ffa197df52b379630e35cab72c38ed8d591c9b"
+      "git_blob_sha256": "25275586318fe4b7571b0e68017c6d0fa1cc78181879283b5364a132ce0b6321"
     },
     {
       "path": "docs/v3/ROUTE-CAPABILITIES.md",
@@ -317,11 +317,11 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/check.py",
-      "git_blob_sha256": "bc0876c65096d2e19e02218e6bbe2963d61d2738a3002916cd5a68701d2c201b"
+      "git_blob_sha256": "7e6cc5b18a58c8b1a6abb141af88bf933821a6b52962d0a3761c0e10731e7626"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/comparison-contract.json",
-      "git_blob_sha256": "6ef9ce3469c217cc70e5c65345089c7ec8178cb6a9e76c04155ea28c054dbe23"
+      "git_blob_sha256": "1ebb5f3c56142ee80747f37961cf412348793dee3b3a493d15777bfe59579f91"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/coverage.json",
@@ -333,7 +333,7 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/formal-boundaries.md",
-      "git_blob_sha256": "936758f2317b60eb131c88d2511d3d2f1f693d93fe2b5783e37ecd69d629836a"
+      "git_blob_sha256": "8ff90324da8c223e5c3f22d4d9e00afb785f33131f2fccb0676a04c9a139b1cd"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/goal.json",
@@ -341,7 +341,7 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/handoff.md",
-      "git_blob_sha256": "9f31c455d77d78d93814c851b5cd875ab95f38a88cb9c153352597891b4535e3"
+      "git_blob_sha256": "4e2065b1063679911a2c42207758817672086226873879d0d05862f6474e1e5c"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/manifest.json",
@@ -349,7 +349,7 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/plan.json",
-      "git_blob_sha256": "d9646cf32231b3d0bf09979ea36a09fa58011785df08e58dfd90b0adaa3f01c3"
+      "git_blob_sha256": "30d98b76e116e94cda8d912179dd9c7353b184bda5f480d3cea1081976dd972f"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/probe-admission-schema.json",
@@ -357,7 +357,7 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/probes.json",
-      "git_blob_sha256": "2282c153869e566846536bc394d8ce07de62691fe26b1cffd3200a922318af0b"
+      "git_blob_sha256": "d8679dc8596d1533c1b38494f57e49a71c241f58d6c78a8d446f6c954066b72f"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/mark3-comparison/research-log.json",

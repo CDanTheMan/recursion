@@ -203,7 +203,7 @@ def research_log_gate(log):
         need(r['read_only'] is True and (r['model'],r['effort']) in {('gpt-5.6-luna','high'),('gpt-6-astra','xhigh')},'recorded native route')
 
 def comparison_gate(c):
-    shape(c,'schema_version status start_commit boundaries equal_environment model_implemented model_results obligations core_bounds cross_area_bounds fairness mapping_checks result_categories traces calibrations freeze_gate bound_resolution')
+    shape(c,'schema_version status start_commit boundaries equal_environment model_implemented model_results obligations core_bounds cross_area_bounds fairness mapping_checks result_categories traces calibrations freeze_gate bound_resolution profile_policy')
     need(c['start_commit']==START and c['status']=='preregistered-not-model-checked' and c['model_implemented'] is False and c['model_results']==[],'no model result')
     need(c['boundaries']==['aggregate-plus-bounded-broker-refinement','broker-inclusive'] and c['equal_environment'] is True,'both equal-environment boundaries')
     need([x['id'] for x in c['obligations']]==['effect-join','epoch-types','writer-pool','pause','uncertainty','flow-replay'],'six M1 obligations')
@@ -216,15 +216,25 @@ def comparison_gate(c):
     need(c['result_categories']==['semantic-counterexample','unenforceable-mapping-assumption','inadequate-proof-technique','exploration-limit','conditional-pass'],'failure taxonomy')
     need([x['id'] for x in c['traces']]==['comparison.trace.'+str(i).zfill(2) for i in range(1,28)],'complete trace corpus')
     formal=text(PREFIX+'formal-boundaries.md')
-    for t in c['traces']:
-        shape(t,'id schedule required_outcome_and_mutant status result'); nonempty(t,'schedule required_outcome_and_mutant')
+    for i,t in enumerate(c['traces'],1):
+        shape(t,'id schedule required_outcome_and_mutant status result kind profile paired_trace_ids mutant_requirement'); nonempty(t,'schedule required_outcome_and_mutant')
         need(t['status']=='constructed-unrun' and t['result'] is None and '| '+t['schedule']+' | '+t['required_outcome_and_mutant']+' |' in formal,'trace prose/boundary join')
+        need(t['kind']==('positive-control' if i==13 else 'fault-schedule'),'trace kind distinguishes positive control')
+        need(t['profile']==('conserved-rights-extension' if i==22 else 'baseline'),'trace profile applicability')
+        need(t['paired_trace_ids']==(['comparison.trace.14'] if i==13 else ['comparison.trace.13'] if i==14 else []),'positive/negative obligation pairing')
+        need(t['mutant_requirement']==('paired-negative-sensitivity' if i==13 else 'discriminating-guard-removal'),'appropriate mutant requirement')
     need(len(c['calibrations'])==2,'proof calibration'); strings(c['calibrations'],'calibrations'); nonempty(c,'freeze_gate')
     b=c['bound_resolution']
     shape(b,'profile_composition preference_revision_identities cross_area_aggregates optional_rights_holders optional_transfers_in_flight unresolved_dimensions resolved_configuration_digests per_trace_gate readiness')
     need(b['preference_revision_identities']==['R1','R2','R3'] and b['cross_area_aggregates']==2 and b['optional_rights_holders']==2 and b['optional_transfers_in_flight']==1,'profile cardinality separation')
     need(b['resolved_configuration_digests'] is None and len(b['unresolved_dimensions'])==5,'unresolved formal domains')
     strings(b['unresolved_dimensions'],'unresolved bounds'); nonempty(b,'profile_composition per_trace_gate readiness')
+    pp=c['profile_policy']
+    shape(pp,'baseline conserved_rights_extension conserved_rights_status mandatory_shared_pool_trace conditional_rights_trace positive_control negative_partner unselected_disposition')
+    need(pp['baseline']=='required for both boundaries; all shared obligations retained' and pp['conserved_rights_status']=='unselected-unrun','mandatory baseline and honest conditional profile')
+    need(pp['mandatory_shared_pool_trace']=='comparison.trace.21' and pp['conditional_rights_trace']=='comparison.trace.22' and pp['positive_control']=='comparison.trace.13' and pp['negative_partner']=='comparison.trace.14','profile/trace bindings')
+    need(pp['conserved_rights_extension']=='conditional; select identically for both boundaries before executing its schedule','same conditional extension in both models')
+    nonempty(pp,'unselected_disposition')
 
 def admission_schema_gate():
     """Positive/adversarial synthetic data only; no run admission or integration result."""
@@ -313,6 +323,7 @@ def adversarial(e,c,r,p,g,plan,m):
     cases += [(0,['sources',0,'receipts',0,'sha256'],'0'*64),(0,['sources',0,'receipts',0,'bytes'],1),(0,['sources',0,'receipts',0,'url'],'https://example.com/unrelated'),(0,['claims',0,'canonical'],'CONTROL_PLANE.md'),(2,['deltas',0,'source_ids'],[]),(2,['deltas',0,'source_ids'],['SRC-V3-001']),(2,['deltas',0,'next_test'],'missing-family'),(3,['probes',0,'family'],'performance'),(3,['probes',0,'baseline'],[]),(3,['probes',0,'treatments'],[]),(3,['probes',0,'source_builds',0,'source_id'],'SRC-V3-001'),(3,['probes',0,'source_builds',0,'source_version'],'main'),(3,['probes',0,'source_builds',0,'source_url'],'javascript:alert(1)'),(3,['probes',0,'cell_plan','maximum_cells'],100),(3,['probes',0,'cell_plan','exact_cell_manifest'],'invented'),(3,['probes',0,'cell_plan','subscription_attribution'],'assumed'),(3,['probes',0,'cell_plan','cache_state'],'cold-after-30-minutes'),(5,['model_implemented'],True),(5,['model_results'],['pass']),(5,['boundaries'],['broker-inclusive']),(5,['equal_environment'],False),(5,['obligations'],[]),(5,['obligations',0,'required'],''),(5,['core_bounds','events'],21),(5,['core_bounds','aggregates'],True),(5,['cross_area_bounds','goals'],1),(5,['cross_area_bounds','pool_owners'],2),(5,['fairness','provider_response_assumed'],True),(5,['mapping_checks'],['initialization']),(5,['result_categories'],['conditional-pass']),(5,['traces'],[]),(5,['traces',0,'result'],'observed'),(5,['traces',0,'schedule'],'unbound'),(5,['calibrations'],[]),(6,['observed_integration_runs'],[{'status':'measured-pass'}]),(6,['review_results'],[{'candidate':'invented','verdict':'approved'}]),(6,['limits','nested_delegation'],True),(6,['routes',0,'read_only'],False),(6,['routes',0,'model'],'unapproved'),(7,['inputs'],m['inputs'][:1]),(7,['review_reserve_start_utc'],'2026-09-01T00:00:00Z')]
     cases += [(3,['probes',0,'cell_plan','admission_schema'],'missing.json'),(5,['bound_resolution','preference_revision_identities'],['R1','R3']),(5,['bound_resolution','resolved_configuration_digests'],['invented']),(5,['bound_resolution','unresolved_dimensions'],[]),(0,['sources',0,'receipts'],e['sources'][1]['receipts']),(2,['deltas',0,'source_ids'],['SRC-V3-229']),(2,['deltas',0,'binding','provider'],'UnrelatedProvider'),(2,['deltas',0,'binding','version'],'main'),(3,['probes',5,'fixture_specification'],'Twelve constructed traces')]
     cases += [(0,['claims',0,'canonical'],'docs/v3/CLAIM-LEDGER.md')]
+    cases += [(5,['traces',12,'kind'],'fault-schedule'),(5,['traces',12,'paired_trace_ids'],[]),(5,['traces',12,'mutant_requirement'],'discriminating-guard-removal'),(5,['traces',21,'profile'],'baseline'),(5,['profile_policy','conserved_rights_status'],'covered'),(5,['profile_policy','mandatory_shared_pool_trace'],'comparison.trace.22')]
     rejected=[]
     for i,path,value in cases:
         d=copy.deepcopy(originals[i]); node=d

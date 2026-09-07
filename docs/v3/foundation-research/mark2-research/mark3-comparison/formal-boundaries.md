@@ -74,8 +74,10 @@ identities R1/R2/R3 coexist with two authority/configuration epochs; do not coll
 coalescing trace by giving it only two revision identities. Remaining byte/credit, descendant,
 message multiplicity, retry, cursor and budget domains are explicitly unresolved in the JSON
 specification. Both resolved model configurations must bind them identically before checking.
-For every trace require a reachable positive trigger and a discriminating guard-removal witness;
-a too-small bound that makes a trigger unreachable is incomplete coverage, not a passing trace.
+For each applicable fault schedule require a reachable positive trigger and a discriminating
+guard-removal witness. The valid-join positive control uses the missing/contradictory-join
+negative partner for sensitivity; it does not require a mutant to fail on the same valid input.
+A too-small bound that makes an applicable trigger unreachable is incomplete coverage, not a pass.
 
 Define byte/event credit bounds, control-reserve capacity, cursor wrap abstraction, retry count,
 process descendants and message multiplicity explicitly. Enumerate no-fault, one crash/restart,
@@ -153,7 +155,13 @@ trace alongside the normalized visible trace to make a missing race reviewable.
 ## Required constructed traces and guard-removal tests
 
 These are unrun test designs, not observed counterexamples. Their presence in a JSON/document
-validator does not establish a model result.
+validator does not establish a model result. JSON trace IDs follow table order. Trace 13 is a
+positive mapping control, paired with negative trace 14. Trace 21 (serialized shared-pool
+conservation) is mandatory. Trace 22 applies only if the conserved-rights extension is explicitly
+selected for both boundaries. If it is not selected, report that trace as unrun/not-covered,
+without removing any shared obligation or counting optional rights support as established. All
+other schedules belong to the mandatory baseline; their resolved core/cross-area profile must
+be identical between boundaries. Production adoption of the rights mechanism remains unselected.
 
 | Trace | Required outcome / guard to remove |
 |---|---|
@@ -197,7 +205,7 @@ candidate boundary; the others leave it unestablished and require a stronger met
 incomplete result. Never convert a checker timeout into success or a proof-method failure into
 an invented product fault.
 
-Fail either candidate on an invariant violation, omitted required trace/field, unjustified
+Fail either candidate on an invariant violation, omitted applicable required trace/field, unjustified
 atomicity/fairness assumption, unbounded queue hidden by the bound, vacuous guard mutant or
 lost uncertainty. If a broker interleaving violates an aggregate obligation, or an independent
 composition check cannot establish R without assumptions the implementation cannot enforce,

@@ -104,189 +104,301 @@
       "schedule": "Saturate presentation queue, issue Owner Stop, detach slow view",
       "required_outcome_and_mutant": "Stop admission fence remains enabled; removing reserved control path exposes blockage",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.02",
       "schedule": "Detect cursor gap, receive fresh EVENT before RESET",
       "required_outcome_and_mutant": "Reject delivery ordering; removing gap guard yields an illegal visible trace",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.03",
       "schedule": "Append dispatch intent, remote accepts, receipt lost, restart",
       "required_outcome_and_mutant": "Same effect unknown and reservation retained; removing ambiguity guard duplicates dispatch",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.04",
       "schedule": "Stop selected actor while follow-up queue and relaunch timer exist",
       "required_outcome_and_mutant": "Correct scope fenced, queue disposition explicit; remove fence to reveal relaunch",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.05",
       "schedule": "Revoke at R2 between preference R1 and R3, coalesce notification",
       "required_outcome_and_mutant": "Old epoch rejected; remove independent fence to expose stale authority",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.06",
       "schedule": "Consult under goal/lease A, change lease, receive delayed advice",
       "required_outcome_and_mutant": "Evidence retained, authoritative adoption denied under stale lease",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.07",
       "schedule": "Fork unfinished work, retry, then provider pool resets",
       "required_outcome_and_mutant": "Original preserved and parent allowance conserved; remove lineage/reservation guard",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.08",
       "schedule": "Update crashes after partial activation while remote node is offline",
       "required_outcome_and_mutant": "Per-host unknown/partial state, newest history retained, no unsafe rollback inference",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.09",
       "schedule": "Two writer candidates have valid-looking chains but different fences",
       "required_outcome_and_mutant": "Only current authenticated writer appends; remove writer fence/authentication",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.10",
       "schedule": "PAUSE arrives after plan acceptance but before effect admission/permit issue",
       "required_outcome_and_mutant": "New permit denied immediately; already-issued permits follow recipient-fence trace; remove current-immediate check",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.11",
       "schedule": "Replace process epoch while old worker returns an output",
       "required_outcome_and_mutant": "Evidence quarantined/reconciled; old epoch cannot publish or renew reservation",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.12",
       "schedule": "Broker reports drain or process exit while external effect remains pending",
       "required_outcome_and_mutant": "Distinct states preserved; remove outcome separation to expose false settlement",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.13",
       "schedule": "Valid M1A observation with authenticated complete supplemental intent/attempt join",
       "required_outcome_and_mutant": "Positive mapping control yields the same M1C input; no invented fields or digest inversion",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "positive-control",
+      "profile": "baseline",
+      "paired_trace_ids": [
+        "comparison.trace.14"
+      ],
+      "mutant_requirement": "paired-negative-sensitivity"
     },
     {
       "id": "comparison.trace.14",
       "schedule": "M1A digests lack original key/target/admission or supplemental bindings contradict",
       "required_outcome_and_mutant": "Reject missing/contradictory authenticated join; remove join guard; do not let this case stand in for PAUSE validation",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [
+        "comparison.trace.13"
+      ],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.15",
       "schedule": "Otherwise schema/digest/auth/state/lease-valid record-effect-observation under PAUSE",
       "required_outcome_and_mutant": "Literal E-PAUSED and no new event; retained valid evidence can undergo pure M1C classification without runtime write; remove PAUSE guard",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.16",
       "schedule": "Same command ID and aggregate, changed payload",
       "required_outcome_and_mutant": "Preserve immutable payload-conflict rejection; remove digest comparison to expose false deduplication",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.17",
       "schedule": "Local Stop accepted, delayed permit reaches unfenced remote recipient",
       "required_outcome_and_mutant": "Report exposed in-flight work; after recipient fence installation reject old permit; remove installed-fence guard",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.18",
       "schedule": "Broker crashes between process creation, association and registration",
       "required_outcome_and_mutant": "No process or identifiable contained process; compare at-birth containment; remove ownership admission",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.19",
       "schedule": "Effect and completion record commit, reply lost, recipient relocates",
       "required_outcome_and_mutant": "Query same operation record without reexecuting; remove retry-rendezvous requirement",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.20",
       "schedule": "Record retired, stale client retransmits old request",
       "required_outcome_and_mutant": "Stale rejection or explicit unknown; remove retirement fence to expose duplicate effect",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.21",
       "schedule": "Two goals each reserve six from a pool of ten",
       "required_outcome_and_mutant": "At most ten total admitted; remove pool serialization to expose oversubscription",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.22",
       "schedule": "Rights transfer interrupted, duplicated or restored from stale snapshot",
       "required_outcome_and_mutant": "No duplicated allowance; remove durable conservation guard; offline timeout alone cannot reclaim rights",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "conserved-rights-extension",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.23",
       "schedule": "Head retains sole eligible executor while waiting for consultant",
       "required_outcome_and_mutant": "Visible blocked dependency or released executor, never hidden deadlock; remove wait-for resource check",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.24",
       "schedule": "Stop expires a borrowed consultation while consultant does unrelated work",
       "required_outcome_and_mutant": "Fence that operation and delivery generation; preserve unrelated work; remove scope separation",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.25",
       "schedule": "MRTR returns new wire IDs with unchanged logical operation repeatedly",
       "required_outcome_and_mutant": "Preserve original deadline/round/byte/reservation cap; remove operation-level bound",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.26",
       "schedule": "SDK loses notification before ingestion or parser receives unterminated oversized line",
       "required_outcome_and_mutant": "Gap/resync or typed unknown; bounded framing and independent control progress; remove ingress guard",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     },
     {
       "id": "comparison.trace.27",
       "schedule": "Reset usage, spend again, crash before aggregate report, resume",
       "required_outcome_and_mutant": "Conserve immutable meter segments and unknown remainder; remove reset-boundary accounting",
       "status": "constructed-unrun",
-      "result": null
+      "result": null,
+      "kind": "fault-schedule",
+      "profile": "baseline",
+      "paired_trace_ids": [],
+      "mutant_requirement": "discriminating-guard-removal"
     }
   ],
   "calibrations": [
@@ -312,7 +424,17 @@
       "shared-pool numeric and resource-component domains"
     ],
     "resolved_configuration_digests": null,
-    "per_trace_gate": "Both models use identical resolved profiles. Each required schedule needs a reachable positive trigger, preserved-state witness and discriminating guard-removal failure; unreachable/vacuous cases block completeness.",
+    "per_trace_gate": "For each applicable fault schedule, both models use identical resolved profiles and need a reachable positive trigger, preserved-state witness and discriminating guard-removal failure. Positive control13 establishes successful valid mapping and uses negative partner14 for sensitivity; it does not need an impossible valid-input mutant failure. Rights trace22 applies only to the explicitly selected conserved-rights extension; unselected is reported unrun/not-covered. All shared obligations and baseline pool trace21 remain mandatory.",
     "readiness": "comparison specification ready; model construction requires resolution of listed domains; formal freeze blocked"
+  },
+  "profile_policy": {
+    "baseline": "required for both boundaries; all shared obligations retained",
+    "conserved_rights_extension": "conditional; select identically for both boundaries before executing its schedule",
+    "conserved_rights_status": "unselected-unrun",
+    "mandatory_shared_pool_trace": "comparison.trace.21",
+    "conditional_rights_trace": "comparison.trace.22",
+    "positive_control": "comparison.trace.13",
+    "negative_partner": "comparison.trace.14",
+    "unselected_disposition": "Report not-selected and unrun, never covered; do not remove any shared obligation or mandatory serialized-pool test"
   }
 }

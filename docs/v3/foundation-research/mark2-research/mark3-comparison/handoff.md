@@ -100,8 +100,11 @@ must be checked before release. Cleanup and stop conditions are mandatory.
 3. Resolve [formal-boundaries.md](formal-boundaries.md) and
    [comparison-contract.json](comparison-contract.json) against those results. Both boundaries
    share six M1 obligations and twenty-seven constructed traces. Core/cross-area profiles are
-   standalone; unresolved finite domains must be resolved identically. Each trigger needs a
-   positive reachability witness and discriminating mutant. M1A digest-only observations need
+   standalone; unresolved finite domains must be resolved identically. Applicable fault schedules
+   need positive reachability and discriminating mutants. Positive control13 uses negative
+   partner14; rights trace22 is conditional on the same explicitly selected extension for both
+   boundaries, otherwise unrun/not-covered. Shared-pool trace21 and all shared obligations remain
+   mandatory. M1A digest-only observations need
    authenticated supplemental intent; M1A E-PAUSED refusal is preserved independently of pure
    M1C classification. Distinguish semantic faults, unenforceable assumptions, inadequate proof
    technique and checker limits. No model has run.
@@ -122,6 +125,11 @@ positive/adversarial checks, verifies source bytes and source/claim/build bindin
 canonical preservation, all required coverage, honest unrun states and typed future admissions.
 Synthetic schema fixtures only validate documentation. Any repair creates a new candidate and
 requires both full runs and two independent exact-candidate reviews again.
+
+The earlier research candidate e62a7bb97a4916eae90cbdc1e3e151bafb6181fd passed both full gates,
+but contract review required explicit positive-control pairing and optional-profile applicability.
+This repair does not reuse that candidate's acceptance: both full gates and both reviews must
+attest the new exact commit. Prior reports remain preserved externally.
 
 Final receipts, raw regression logs, independent review reports and completion/publication
 record belong under Git common `research-attestations/mark3-comparison/<candidate>/`. Verify
