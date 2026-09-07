@@ -1,12 +1,60 @@
 {
   "schema_version": 1,
   "goal": "recursion.v3.interface-probes.20260907",
-  "revisions": [{"revision": 1, "at": "2026-09-07T22:45:00Z", "reason": "Owner-approved transition from merged research to isolated testing", "retained": ["All accepted Mark 3 directions and prior research evidence"], "superseded": [], "quarantined": [], "invalidated": []}],
+  "revisions": [
+    {
+      "revision": 1,
+      "at": "2026-09-07T15:41:21-07:00",
+      "reason": "Owner-approved transition from merged research to isolated testing",
+      "retained": [
+        "All accepted Mark 3 directions and prior research evidence"
+      ],
+      "superseded": [],
+      "quarantined": [],
+      "invalidated": [],
+      "clock_note": "Scope commit creation timestamp; replaces an initial placeholder timestamp before any probe execution."
+    },
+    {
+      "revision": 2,
+      "at": "2026-09-07T23:07:26.802956+00:00",
+      "reason": "Installed-harness and Windows ownership traces obtained; synthetic Hermes persistence oracle found inapplicable and repair packet registered",
+      "retained": [
+        "All raw successful and failed runs"
+      ],
+      "superseded": [
+        "Synthetic agent completion implies durable session history"
+      ],
+      "quarantined": [
+        "First Hermes history capability inference"
+      ],
+      "invalidated": []
+    }
+  ],
   "steps": [
-    {"id": "admission", "status": "in_progress", "output": "Machine/build/source/configuration/route eligibility and bounded release packets"},
-    {"id": "probe_tooling", "status": "pending", "output": "Isolated transport, observation, containment and adversarial checks"},
-    {"id": "observed_probes", "status": "pending", "output": "Bounded exact-build interaction/configuration/process traces and cleanup receipts"},
-    {"id": "synthesis", "status": "pending", "output": "Canonical contract/evidence deltas, unresolved assumptions and next construction requests"},
-    {"id": "validation_review_publication", "status": "pending", "output": "Two exact-candidate gates, two independent reviews and verified review-branch publication"}
+    {
+      "id": "admission",
+      "status": "complete_for_mock_routes",
+      "output": "Machine/build/source/configuration/route eligibility and bounded release packets"
+    },
+    {
+      "id": "probe_tooling",
+      "status": "in_progress",
+      "output": "Isolated transport, observation, containment and adversarial checks"
+    },
+    {
+      "id": "observed_probes",
+      "status": "in_progress",
+      "output": "Bounded exact-build interaction/configuration/process traces and cleanup receipts"
+    },
+    {
+      "id": "synthesis",
+      "status": "pending",
+      "output": "Canonical contract/evidence deltas, unresolved assumptions and next construction requests"
+    },
+    {
+      "id": "validation_review_publication",
+      "status": "pending",
+      "output": "Two exact-candidate gates, two independent reviews and verified review-branch publication"
+    }
   ]
 }
