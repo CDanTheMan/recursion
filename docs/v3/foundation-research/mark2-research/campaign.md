@@ -162,3 +162,9 @@ progress. The repaired candidate must pass the full gate twice and both reviewer
 its exact full hash anew before publication. Earlier passes cannot substitute. Publication is
 pending those external attestations; read the actual branch and attestation directory when
 resuming. The original six-hour deadline and zero-new-spend bounds are unchanged.
+
+Final copy audit: the revision-3 candidate passed one full gate and both exact-commit reviews.
+Astra then detected 12 UTF-8 punctuation sequences incorrectly decoded in PRODUCT.md. A lossless
+round-trip repair restores those characters, and the documentation gate adds an encoding guard
+and a synthetic rejection case. This is a candidate repair: two complete gates and both reviews
+must restart on the resulting commit. Source findings, pending decisions and scope are unchanged.

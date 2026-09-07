@@ -285,7 +285,7 @@
     },
     {
       "path": "docs/v3/PRODUCT.md",
-      "git_blob_sha256": "7fa5d61c9727e7f4d3b11c410dc0043011c4217a78d47d6132b584b62cb8d447"
+      "git_blob_sha256": "bbdc27c33d194d51fc9338ebcae94450fc6e281d210a7a56167beecbba5bc241"
     },
     {
       "path": "docs/v3/README.md",
@@ -313,11 +313,11 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/campaign.md",
-      "git_blob_sha256": "22a71efe21defa53bd0e9cf3ab0b75d1dfbc501dac99feba6d72455c5c7c255e"
+      "git_blob_sha256": "a72bac86cd9cbb8c6438adadd81a6d5f479aa04b9da14b8539ad8ab1603985ab"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/check.py",
-      "git_blob_sha256": "7f4c8499112d7691a3145e7479d62afbcd353fc82ba5ac7d4d008b6a69c773d7"
+      "git_blob_sha256": "830fb058f75c1d057566bf55bd6e539a15927c44958f0b95f6041585dccdb349"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/compatibility.json",
@@ -509,7 +509,8 @@
     "Recovery fixtures validate proposed arithmetic only. They do not exercise provider counters, a runtime ledger, process containment or update recovery.",
     "All 25 historical regression commands and their entrypoint blobs remain unchanged. Final receipts and independent reviews are external to the candidate.",
     "Privacy scanning covers all changed artifacts and decoded JSON; it rejects known credentials, private paths/networks/hosts and tagged private provenance. Arbitrary private prose and novel identifiers can evade patterns, so lead and exact-candidate reviewers inspect the publication set. No private prompt corpus is copied into the gate.",
-    "Primary URLs are limited to declared public publisher hosts and cannot contain credentials or query payloads; this does not prove every remote page is accurate, current or permissible for every account."
+    "Primary URLs are limited to declared public publisher hosts and cannot contain credentials or query payloads; this does not prove every remote page is accurate, current or permissible for every account.",
+    "Documentation encoding validation rejects known UTF-8 mojibake and replacement characters; it does not validate natural-language accuracy or every possible character corruption."
   ],
   "publication_policy": {
     "scope": "every changed artifact; raw UTF-8 and recursively decoded JSON strings and keys",

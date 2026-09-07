@@ -117,6 +117,7 @@ def public_text(value, label):
 
 
 def public_artifact(raw, name):
+    need(not re.search(r"\u00e2[\u0080\u20ac\u2020].|\u00c3[\u0080-\u00bf]|\ufffd", raw), "corrupt document encoding in " + name)
     public_text(raw, name)
     if name.endswith(".json"):
         # Raw-byte scanning alone misses escaped names, paths and credentials.
@@ -466,6 +467,7 @@ def adversarial(ev, matrix, trials, decisions, inventory):
     reject(lambda: public_url("https://example.com/reference"), "unregistered primary host")
     reject(lambda: public_url(ev["sources"][0]["url"] + "?private=value"), "source query leakage")
     reject(lambda: public_query("Recursion private task"), "private research query")
+    reject(lambda: public_artifact(chr(8212).encode("utf-8").decode("cp1252"), "synthetic.md"), "corrupt UTF-8 punctuation")
     public_artifact('{"source":"https://git-scm.com/docs/git-worktree","resource":null}', "synthetic.json")
     return len(rejected)
 
