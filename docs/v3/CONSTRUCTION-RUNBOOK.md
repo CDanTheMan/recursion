@@ -27,10 +27,10 @@ must bind the same clean candidate; repairs restart them. Missing receipts requi
 
 ## Mark 2 source-to-construction handoff — 2026-09-07
 
-Use [the current campaign](foundation-research/mark2-research/campaign.md),
+Use [the historical Mark 2 campaign](foundation-research/mark2-research/campaign.md),
 [canonical roadmap](ROADMAP.md) and [eight trial families](foundation-research/mark2-research/experiments.json).
-First run separately authorized small interface probes; then compare the approved proof boundary and its alternative before
-freeze the formal model, compare CPython/Rust/Go, and compare complete JSONL/CAS versus
+First run separately authorized small interface probes; then compare the approved proof boundary
+and its alternative before model freeze. Next compare CPython/Rust/Go and complete JSONL/CAS versus
 SQLite-WAL/CAS storage. Current M1 artifacts are immutable and OR-015 remains blocked.
 
 A probe packet names parent goal, exact disposable repository/host/build, allowed effects and
