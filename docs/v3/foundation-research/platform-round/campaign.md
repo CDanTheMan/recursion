@@ -79,7 +79,7 @@ input/permission tools, Grok ACP/session/fork details, and Hermes RPC control me
 
 The source pass now includes Codex, Claude binary/SDK, Cursor, OpenCode, Gemini CLI, Hermes
 Agent, Grok Build/xAI, Muse Code, DeepSeek Harness and T3 as a composition precedent. Public
-retrieval yielded 29 source records; 12 candidate rows have 120 feature dispositions.
+retrieval yielded 31 source records; 12 candidate rows have 120 feature dispositions.
 No row is an observed integration. Muse developer-page access remains limited after one
 bounded retry; vendor descriptions are not substituted for protocol evidence.
 
@@ -90,3 +90,16 @@ continuous-inference or performance conclusions unsupported by observed evidence
 
 The source narrative is `report-source.md`; JSON is the claim-to-source ledger and typed matrix.
 Preparation gates/reviews remain pending until exact-candidate tool attestations succeed.
+
+## Review repair
+
+Independent contract and evidence reviewers requested changes on the first preparation
+candidate. The follow-up clarifies the required small native loop versus optional expansion,
+removes stale Muse identity uncertainty, and binds every documented capability cell to its
+applicable primary sources. SDK streaming and user-input references were added for direct
+feature evidence. Compaction hooks are explicitly limited to lifecycle observation.
+
+The data gate rejects missing, empty, unknown and non-applicable cell source bindings;
+16 adversarial mutations and the unchanged 25 regression entrypoints are required on the
+final candidate. Both reviewers must assess that exact follow-up commit. The preliminary
+candidate passed its complete gate; it does not count toward the two final-candidate passes.

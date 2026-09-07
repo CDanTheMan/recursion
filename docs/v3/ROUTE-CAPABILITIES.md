@@ -117,6 +117,7 @@ together; documented per-turn limits are not a campaign limit. See
 
 Source refresh: OpenCode 1.18.29, DeepSeek Harness 0.1.3-alpha.1, T3 current source with release
 v0.0.38, Hermes v2026.8.31, Gemini nightly source/package pair and official Grok Build source are
-recorded with immutable pins and limitations. Meta's intended referent remains ambiguous.
+recorded with immutable pins and limitations. The Owner has resolved Meta's intended referent
+to Muse Code; its external integration protocol and route-specific eligibility remain unverified.
 No source inventory grants runtime eligibility. Upgrades require staged semantic replay and
 explicit route-epoch promotion under a still-proposed support window. FND-007/FND-016.

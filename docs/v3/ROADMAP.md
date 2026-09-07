@@ -250,5 +250,7 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    matrix, multi-ARM message semantics, sovereign audit-retention authority and deletion proof
    still require fault tests or Owner decisions. Verifier tiers/receipts are specified but inert
    until the amendment is applied.
-6. A native inner-loop expansion remains an optional spike until it wins a preregistered metric;
-   it cannot replace Recursion's ratified canonical authority boundary without an Owner amendment.
+6. The small native loop and useful native-only workflows are required for the first standalone
+   release (OR-022). Expansion beyond that required loop remains an optional spike until it wins
+   a preregistered metric; it cannot replace Recursion's ratified canonical authority boundary
+   without an Owner amendment.

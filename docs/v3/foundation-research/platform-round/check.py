@@ -88,9 +88,16 @@ def data_gate(matrix, trials):
         need(r["required_probe"] == "trial.integration", "probe link")
         need(len(r["capabilities"]) == 10 and {c["feature"] for c in r["capabilities"]} == FEATURES, "route feature coverage")
         for c in r["capabilities"]:
-            closed(c, "feature status scope")
+            closed(c, "feature status scope sources")
             need(c["status"] in {"documented-mechanism", "unknown"}, "invalid capability evidence status")
             need(type(c["scope"]) is str and "trial.integration" in c["scope"], "capability limitation")
+            if c["status"] == "documented-mechanism":
+                strings(c["sources"])
+                need(len(c["sources"]) == len(set(c["sources"])), "duplicate capability source")
+                need(set(c["sources"]) <= source_ids, "unknown capability source")
+                need(set(c["sources"]) <= set(r["sources"]), "capability source not route-applicable")
+            else:
+                need(c["sources"] == [], "unknown capability has no supporting claim source")
     strings(matrix["search_log"])
     strings(matrix["limitations"])
     closed(trials, "schema_version status hard_floors priorities scenarios trials results_available")
@@ -130,6 +137,11 @@ def adversarial(matrix, trials):
     b = copy.deepcopy(trials); b["priorities"].reverse(); mutants.append((matrix, b))
     b = copy.deepcopy(trials); b["trials"][0]["required_authorization"] = ""; mutants.append((matrix, b))
     b = copy.deepcopy(trials); b["extra"] = True; mutants.append((matrix, b))
+    # Codex streaming is documented. Exercise missing, empty, unknown and unrelated bindings.
+    a = copy.deepcopy(matrix); del a["route_candidates"][1]["capabilities"][0]["sources"]; mutants.append((a, trials))
+    a = copy.deepcopy(matrix); a["route_candidates"][1]["capabilities"][0]["sources"] = []; mutants.append((a, trials))
+    a = copy.deepcopy(matrix); a["route_candidates"][1]["capabilities"][0]["sources"] = ["missing"]; mutants.append((a, trials))
+    a = copy.deepcopy(matrix); a["route_candidates"][1]["capabilities"][0]["sources"] = ["platform.source.gemini-auth"]; mutants.append((a, trials))
     for m, t in mutants:
         try:
             data_gate(m, t)

@@ -370,6 +370,30 @@
       "evidence": "Documents durable workflow/step state, default SQLite and production Postgres recommendation.",
       "limitation": "A workflow library choice cannot silently preselect Recursion's physical store or own its canonical authority.",
       "revalidate": "Before probe/admission or on interface, build, configuration, terms or account-context change."
+    },
+    {
+      "id": "platform.source.claude-sdk-input",
+      "title": "Handle approvals and user input",
+      "publisher": "Anthropic",
+      "date_or_version": "mutable documentation; exact implementation pin pending",
+      "retrieved": "2026-09-06",
+      "url": "https://code.claude.com/docs/en/agent-sdk/user-input",
+      "section": "Detect input; handle tool approvals and clarifying questions",
+      "evidence": "The canUseTool callback handles permission requests and AskUserQuestion, pausing the query for a response.",
+      "limitation": "Earlier permission decisions can bypass this callback. Python requires streaming input kept open; cancellation and persistence need tests.",
+      "revalidate": "Before probe/admission or on interface, build, configuration, terms or account-context change."
+    },
+    {
+      "id": "platform.source.claude-sdk-stream",
+      "title": "Stream responses in real-time",
+      "publisher": "Anthropic",
+      "date_or_version": "mutable documentation; exact implementation pin pending",
+      "retrieved": "2026-09-06",
+      "url": "https://code.claude.com/docs/en/agent-sdk/streaming-output",
+      "section": "Enable streaming; StreamEvent and partial messages",
+      "evidence": "Documents incremental SDK response events and partial-message options.",
+      "limitation": "Token deltas cover the main session; subagents use complete messages. Event buffering does not establish latency, cancellation or recovery guarantees.",
+      "revalidate": "Before probe/admission or on interface, build, configuration, terms or account-context change."
     }
   ],
   "route_candidates": [
@@ -396,52 +420,62 @@
         {
           "feature": "streaming",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "forks",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         }
       ],
       "required_probe": "trial.integration",
@@ -470,52 +504,80 @@
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "questions",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "approvals",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "interruption",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "forks",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "compaction",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.codex-server"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -546,52 +608,77 @@
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-cli"
+          ]
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-cli",
+            "platform.source.claude-hooks"
+          ]
         },
         {
           "feature": "queued_messages",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-cli"
+          ]
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-cli"
+          ]
         },
         {
           "feature": "forks",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-cli"
+          ]
         },
         {
           "feature": "compaction",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "PreCompact/PostCompact hooks expose lifecycle observation; arbitrary external compact control is unproven. Full Recursion behavior requires trial.integration.",
+          "sources": [
+            "platform.source.claude-hooks"
+          ]
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-cli"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -615,58 +702,82 @@
       "sources": [
         "platform.source.claude-sdk",
         "platform.source.claude-plan",
-        "platform.source.claude-legal"
+        "platform.source.claude-legal",
+        "platform.source.claude-sdk-input",
+        "platform.source.claude-sdk-stream"
       ],
       "capabilities": [
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-sdk-stream"
+          ]
         },
         {
           "feature": "questions",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-sdk-input"
+          ]
         },
         {
           "feature": "approvals",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-sdk-input"
+          ]
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-sdk"
+          ]
         },
         {
           "feature": "forks",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-sdk"
+          ]
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.claude-sdk"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -694,52 +805,72 @@
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.cursor-acp"
+          ]
         },
         {
           "feature": "questions",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.cursor-acp"
+          ]
         },
         {
           "feature": "approvals",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.cursor-acp"
+          ]
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.cursor-acp"
+          ]
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.cursor-acp"
+          ]
         },
         {
           "feature": "forks",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         }
       ],
       "required_probe": "trial.integration",
@@ -769,52 +900,76 @@
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.opencode-server"
+          ]
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.opencode-server"
+          ]
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.opencode-server"
+          ]
         },
         {
           "feature": "resume",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "forks",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.opencode-server"
+          ]
         },
         {
           "feature": "compaction",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.opencode-server",
+            "platform.source.opencode-plugins"
+          ]
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.opencode-server",
+            "platform.source.opencode-plugins"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -844,52 +999,68 @@
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.gemini-cli"
+          ]
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.gemini-cli"
+          ]
         },
         {
           "feature": "forks",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.gemini-extensions"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -918,52 +1089,82 @@
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "questions",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "approvals",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "queued_messages",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "active_steering",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "interruption",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "forks",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "compaction",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.hermes-rpc"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -993,52 +1194,70 @@
         {
           "feature": "streaming",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.grok-headless"
+          ]
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.grok-headless"
+          ]
         },
         {
           "feature": "forks",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.grok-reference"
+          ]
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.grok-reference"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -1067,52 +1286,62 @@
         {
           "feature": "streaming",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "forks",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         }
       ],
       "required_probe": "trial.integration",
@@ -1141,52 +1370,68 @@
         {
           "feature": "streaming",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.deepseek"
+          ]
         },
         {
           "feature": "forks",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.deepseek"
+          ]
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "documented-mechanism",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": [
+            "platform.source.deepseek"
+          ]
         }
       ],
       "required_probe": "trial.integration",
@@ -1214,52 +1459,62 @@
         {
           "feature": "streaming",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "questions",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "approvals",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "queued_messages",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "active_steering",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "interruption",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "resume",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "forks",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "compaction",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         },
         {
           "feature": "commands_plugins",
           "status": "unknown",
-          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration."
+          "scope": "Mechanism only; full Recursion behavior and extension composition require trial.integration.",
+          "sources": []
         }
       ],
       "required_probe": "trial.integration",
