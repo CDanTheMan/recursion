@@ -1,15 +1,35 @@
 ---
 title: Recursion v3 decision register and owner queue
 status: evidence-reconciled-draft
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 source: archive/session-transcript-2026-09-02.md plus owner direction 2026-09-03
 ---
 
 # Recursion v3 session decision register
 
+## Owner platform clarification — 2026-09-06
+
+Provenance: the Owner's explicit platform-clarification message in this private research task,
+following `Recursion Brainstorming.md`. The publication-safe requirement digest and input hash
+are in the [platform campaign](foundation-research/platform-round/campaign.md).
+These are accepted product requirements; they do not enact runtime or constitutional changes.
+
+| ID | Accepted Owner direction | Supersession and remaining work |
+|---|---|---|
+| OR-021 | The first usable release is the new standalone architecture under `docs/v3`; earlier brainstorming v2 means this milestone. Recursion is the common configurable platform across models, harnesses, subscriptions, tools, workflows and machines; terminal first, dedicated GUI later. | Resolves release naming; preserves incremental construction and comprehensive release acceptance. Developers lead audience validation, with novice usability and eventual organization needs represented. |
+| OR-022 | Native and upstream execution are equally important release requirements, independently useful on eligible routes, with combined workflows. Every reasoning role has an explicit execution/accounting path; upstream-only configurations need no hidden API connection; ordinary runtime work needs no continuous inference. | Supersedes optional-small-native-loop interpretation of OR-011 and September 5 proposals. Native-loop implementation, certified routes and verifier classes remain unproved; OR-018/019 kernel/ownership remains. |
+| OR-023 | All ten CLI controls are required; maximize useful feature coverage through shared runtime, adapters, supported upstream extensions, native loop and combinations. Configuration/plugins are foundational, including approachable presets, detailed provenance/composition/lifecycle and native/upstream implementations. | Supersedes treating a basic wrapper or command-only bridge as the release capability ceiling. Exact composition schema, compatibility tests and support window need evidence. |
+| OR-024 | Default ranking is responsiveness, subscription efficiency, then task completion, subject to correctness, authorization, resource limits and recoverability. Measure the complete workflow and expose meaningful tradeoffs. | Refines OR-017's equal-standing default and older time-secondary prose. Preserve privacy/quality floors, full-vector reporting, unavailable denominators and no hidden scalar weights. |
+| OR-025 | Windows/Linux remote control, compatible placement, distributed workflow stages and recorded-work recovery are first-release requirements; task identity, permissions, interactions, accounting, artifacts and verification stay coherent. | macOS is a test opportunity. GPU/approved-cloud resources need capability profiles; distributed inference, enterprise HA/tenancy and a dedicated GUI have separate later milestones. Does not authorize node access or runtime deployment. |
+
+The historical foundation decision JSON remains the September 5 snapshot. Resolved portions
+are superseded by these rulings; model/broker proof scope, exact engine certification,
+configuration mechanics, verifier classes and update guarantees remain pending. See the
+[next research brief](foundation-research/platform-round/research-brief.md).
+
 ## Foundation proposals awaiting GRILLME — 2026-09-05
 
-The canonical accepted Owner rulings above are unchanged. The structured
+Historical September 5 snapshot, superseded in part by OR-021–OR-025 above. The structured
 [foundation decisions](foundation-research/decisions.json) and ranked
 [GRILLME packet](foundation-research/grillme.md) contain ten **pending** proposals:
 model integration boundary; governed engine floor; public authentication promise; optional setup;

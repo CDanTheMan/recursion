@@ -1,10 +1,24 @@
 ---
 title: Recursion v3 research and construction roadmap
 status: evidence-reconciled-roadmap-proposal
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 research and construction roadmap hypothesis
+
+## First usable platform milestone — 2026-09-06
+
+OR-021–OR-025 require the new standalone architecture, a small native loop, independently
+useful upstream execution and combined workflows. Native loop, ten terminal controls,
+configuration/plugins, setup/repair, baseline compaction and Windows/Linux worker recovery
+are first-release behavior, even when earlier internal prototypes are smaller.
+
+Use the [platform roadmap](foundation-research/platform-round/architecture-roadmap.md):
+small integration probes inform contract assumptions before formal-model freeze; formal model,
+language comparison and storage comparison remain ordered. Advanced context/routing,
+expanded engine/OS certification, dedicated GUI, enterprise infrastructure and distributed
+model inference retain separate later milestones. Research completion does not mark a runtime
+milestone complete or remove OR-015's migration blocker.
 
 ## Foundation priority update — 2026-09-05
 

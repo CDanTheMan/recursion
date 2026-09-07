@@ -1,10 +1,24 @@
 ---
 title: Recursion v3 plugins and editions direction
 status: accepted-direction-with-open-trust-research
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 plugins and editions hypothesis
+
+## Platform plugin requirement — accepted 2026-09-06
+
+OR-023 makes configurable extension behavior foundational. Investigate one user-facing schema
+with distinct native-loop and supported upstream implementations, declaring capability/version
+requirements, supplying component, settings translation/loss, grants, resource cost and
+conformance tests. Hooks, MCP, server interfaces and upstream plugins are supported integration
+candidates; arbitrary plugin-runtime emulation is still unproved.
+
+Approachable presets and detailed controls must explain effective settings, conflicts,
+engine/host changes, update timing and recovery. Installing or loading upstream extensions is
+an admitted effect; a plugin's origin does not widen authority. The previous command-only bridge
+proposal is a starting point, not a ceiling on first-release useful coverage. See the
+[configuration and plugin contract](foundation-research/platform-round/interaction-contract.md).
 
 ## Upstream compatibility and support policy — proposed
 

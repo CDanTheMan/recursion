@@ -1,15 +1,40 @@
 ---
 title: Recursion v3 product specification direction
 status: accepted-direction-with-open-research
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 product hypothesis
 
+## Accepted first usable platform release — 2026-09-06
+
+OR-021–OR-025 clarify the release under `docs/v3`; earlier brainstorming "v2" means this
+milestone. Recursion is the common configurable agent platform across models, harnesses,
+subscriptions, tools, workflows and execution machines. The terminal exposes the initial
+platform; the dedicated graphical application follows later.
+
+Both a small native model-and-tool loop and supported upstream harness execution are release
+requirements. Either works independently when its configured route supports the workflow;
+combined workflows retain coherent task state and configuration. Upstream-only installations
+must provide explicit execution/accounting for every reasoning role without a hidden API key
+or separate model connection. Ordinary persistent runtime work requires no continuous inference.
+
+All ten terminal controls, useful engine-specific extensions, configuration/presets/provenance,
+plugins with native/upstream implementations, guided setup/import/repair, compaction and
+Windows/Linux remote control/execution/recovery require a working minimum. Developers lead
+initial audience validation, with Lucas as the first validation user; novice usability and
+eventual organization needs remain architectural inputs. macOS is an additional test opportunity.
+
+The [repository map](foundation-research/platform-round/repository-map.md) distinguishes
+implemented substrate, inert fixtures, specified requirements and missing proof. The broad
+platform ambition is carried through [six research deliverables](foundation-research/platform-round/research-brief.md);
+no framework, language, store or complete integration is selected by this ruling.
+
 ## Audience and execution-mode findings — 2026-09-05
 
-Lucas-first validation remains the accepted scope. A proposed next learning cohort is developers
-performing bounded repository tasks with inspectable diffs and recoverable interruptions. Casual
+Historical September 5 finding, refined by OR-021 above: Lucas-first validation remains the
+starting point. Developers are now the selected initial audience, performing bounded repository
+tasks with inspectable diffs and recoverable interruptions. Casual
 users need unassisted setup, understandable permissions/cost and recoverable failures; organization
 operators additionally need identity, audit, secret and support controls. Hosted tenancy is a
 separate deferred authority/isolation design. Enterprise spending and viral adoption remain
@@ -18,8 +43,8 @@ hypotheses; no commercial tier policy or compliance claim follows. FND-008/FND-0
 One Recursion CLI can serve native and upstream-engine modes, with visible capability limits.
 The product's stable promise is Recursion-owned goals, authority, evidence and recovery; universal
 upstream feature parity and subscription portability are unproved. Proposed route-specific
-authentication wording and the next external cohort remain pending in
-[foundation decisions](foundation-research/decisions.json). See the
+authentication wording still needs route-specific evidence. The historical cohort question in
+[foundation decisions](foundation-research/decisions.json) is resolved by the clarification above. See the
 [audience job analysis](foundation-research/evidence.json), `analysis.foundation.audiences`.
 
 ## Thesis
@@ -91,7 +116,8 @@ Public usability remains an explicit design requirement. Users should be able to
 
 ## Optimization target
 
-OR-017 requires v3 to consider the complete optimization vector equally behind non-tradeable
+OR-024 refines OR-017 with responsiveness, subscription efficiency and task completion as the
+default ranking. Preserve the complete optimization vector behind non-tradeable
 authority, safety, privacy, effect-correctness and quality floors. It includes verified quality,
 recovery/replay, owner review, quota/tokens/money, context/cache efficiency, latency/throughput,
 host resources, terminal interaction, portability/configurability, code/maintenance surface and

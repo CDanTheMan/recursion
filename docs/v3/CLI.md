@@ -1,10 +1,26 @@
 ---
 title: Recursion v3 CLI direction
 status: accepted-surface-with-open-command-research
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 CLI hypothesis
+
+## First-release capability coverage — accepted 2026-09-06
+
+OR-023 requires streaming output, questions, approvals, queued messages, active steering,
+interruption, resume, forks, compaction controls and custom commands/plugins. See their
+[observable behavior and ownership](foundation-research/platform-round/interaction-contract.md).
+Probe the shared runtime, adapter, supported upstream extension, native loop and combinations
+before treating a simple wrapper's missing feature as a platform limit. Preserve engine-specific
+features through explicit versioned extensions; unsupported route combinations remain visible.
+
+Configuration must cover engines, tools, context, memory, routing, delegation, verification,
+scheduling, placement and resources. Account, project, profile, workflow and task composition
+needs explicit precedence/merge rules and ceilings, effective-value provenance and lifecycle.
+The hierarchy below is the existing starting contract; profile/workflow/account relationships
+are proposed additions to validate before schema freeze. Setup/import/preview/guided repair
+share one change transaction; first-auth and offline recovery stay model-free.
 
 ## One CLI over native and upstream loops — proposed accommodation
 

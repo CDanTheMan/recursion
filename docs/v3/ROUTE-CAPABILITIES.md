@@ -1,10 +1,24 @@
 ---
 title: Recursion v3 provider-route capability matrix
 status: reconstructed-current-observation
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 provider-route capability matrix
+
+## Platform integration evidence — 2026-09-06
+
+The [platform route records](foundation-research/platform-round/integration.json) refresh
+selected mechanisms and explicitly track the broader frontier set: Codex, Claude Code/SDK,
+Cursor, OpenCode, Gemini, Hermes Agent, DeepSeek Harness, Grok Build/xAI and Muse Code.
+T3 Code is inspected as an integration/composition precedent. These product candidates
+are distinct from the research-worker routes recorded below.
+
+Provider, engine, integration interface, authentication, billing and host are separate fields.
+Technical documentation, observed behavior and intended usage/distribution eligibility have
+separate status. Supported extension mechanisms are investigated before declaring a wrapper
+limitation final. Every reasoning role requires a route; native and upstream eligibility are
+evaluated independently. No live engine or account eligibility is certified by this source pass.
 
 This matrix records campaign observations, not entitlement, price, privacy, cache, subscription
 debit or future availability. Model, provider, engine, account, capacity pool, credential
