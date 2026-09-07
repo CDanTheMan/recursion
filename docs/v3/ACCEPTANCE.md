@@ -1,10 +1,36 @@
 ---
 title: Recursion v3 acceptance hypothesis
 status: hypothesis
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 acceptance hypothesis
+
+## Mark 2 research and contract readiness — 2026-09-07
+
+Foundation verdict: sufficient source-grounded design for bounded interface probes and the first
+proof-boundary decision. Complete contract readiness remains conditional: exact route eligibility,
+ten-control composition, all-role quota closure, broker proof split and failure-specific recovery
+guarantees are unresolved. No live integration, performance improvement or release is certified.
+MKR-022/MKR-023/MKR-024.
+
+The new [campaign gate](foundation-research/mark2-research/check.py) binds the actual frozen start,
+allowed paths, registries, source/feature/decision/trial edges, completed answer capture, immutable
+history and unchanged 25-command M1/v2 regression inventory. It rejects malformed or unsupported
+evidence promotion and exercises adversarial documentation/arithmetic fixtures. A passing gate
+proves document consistency and preserved regressions; it does not run the integration probes.
+
+Before formal freeze, retain the six prior obligations and resolve the new assistant/consultation,
+Stop/relaunch, configuration/fork, update and relative-budget projections. Before first release,
+all seven critical names need an eligible documented and observed configuration, all ten platform
+controls, and Windows/Linux recovery evidence. A wrapper-only absence is insufficient grounds to
+drop a requirement; source code alone is insufficient grounds to claim it passed.
+
+Every future trial reports requested versus observed support, failures, unavailable counters,
+whole-workflow consumption and independent artifact quality. Recovery passes only with separately
+assessed executable, history, newest-work and resumability outcomes. Exact candidate validation
+and two independent reviews must be repeated after repairs; final attestations remain outside
+the candidate. OR-015 and current operational authority remain unchanged.
 
 ## Mark 2 Owner direction — 2026-09-06
 

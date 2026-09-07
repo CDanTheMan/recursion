@@ -39,19 +39,19 @@
   "inputs": [
     {
       "path": "CONTROL_PLANE.md",
-      "sha256": "10a1a8bae850880e1829cab7d343e4a4538ff7287fbabbd1a8237da3035c8643"
+      "sha256": "cb82c4a8b2ae7c80fb4b9556a4db681faedaf48b08e4b562e1491e198a5ef0b3"
     },
     {
       "path": "CLAUDE.md",
-      "sha256": "e2c8bbe7fe665647ae1f773257f13581d6cd53d229a4ec9ff4d72b091cb673d5"
+      "sha256": "f71cc06934a0d1eea217b8999aa500b15797929ff71c3e4732e3183c6ebdca75"
     },
     {
       "path": "ANCHOR.md",
-      "sha256": "aaf33a7ef097955ea188f79f8149e134485a3d015b09f4ab6c470290fdc757f0"
+      "sha256": "b76b08c41f0a0f25f13ffbe9bf4f07b8d7eeda2ebd576e9ba392ab63308a102e"
     },
     {
       "path": "state/goals/goal-recursion-v2-execution-fabric.md",
-      "sha256": "b3f2681b0dd00d2baf0c84f63a7db35576f969ca937d007ac2b519c2518a5970"
+      "sha256": "94461d79de2359ad341bf3e452714d2cd4b86d4faa83be43d9846b8562951d40"
     },
     {
       "path": "docs/v3/prompts/standalone-harness-foundation-deep-research.md",
@@ -67,11 +67,11 @@
     },
     {
       "path": "docs/v3/DECISION-REGISTER.md",
-      "sha256": "a08a2015053fe29475e7fe466ac7375d24dc87b2343dc366f076d627aafb9d00"
+      "sha256": "d3c86842d4e734b91e677f373d6d83e67cc8df597424730872a0e2a2540022d9"
     },
     {
       "path": "docs/v3/foundation-research/platform-round/research-brief.md",
-      "sha256": "fd63deb58f6f2556c21d95ca43f8dbde2c51997a0dbdfe90c66fe969fc0de82e"
+      "sha256": "871913161d1ce532c46cce9d44bcd3967a9c30de122187aa715a84b0d9aefeda"
     },
     {
       "path": "docs/v3/foundation-research/platform-round/repository-map.md",
@@ -83,7 +83,7 @@
     },
     {
       "path": "docs/v3/foundation-research/platform-round/integration.json",
-      "sha256": "1e48d73c2f2e1269ccca7c441cc5f293d2ddc807a1c99447aca30803070ee02b"
+      "sha256": "1a76d9a6df7d14c962763c6f3205f243ed2ab77192af5d4ff5ba1ccbb4ece4e7"
     },
     {
       "path": "docs/v3/foundation-research/platform-round/trials.json",
@@ -103,7 +103,8 @@
     "experiments.json",
     "decisions.json",
     "grillme.md",
-    "check.py"
+    "check.py",
+    "validation-inventory.json"
   ],
   "observed_integration_runs": []
 }

@@ -1,10 +1,66 @@
 ---
 title: Recursion v3 interactive terminal and persistent session runtime
 status: accepted-direction-with-open-research
-last-updated: 2026-09-03
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 interactive terminal and persistent session runtime
+
+## Mark 2 control contract — proposed 2026-09-07
+
+The ten controls remain required across the platform. The canonical command includes command ID,
+target task/session/attempt/turn, expected epoch/config revision, authority and delivery policy.
+Persist acceptance before presentation; report received, delivered, settled, rejected or uncertain
+as distinct dispositions. A transport acknowledgment never proves semantic compliance.
+MKR-011/MKR-012; [feature-level source bindings](foundation-research/mark2-research/compatibility.json).
+
+| Control | Observable contract and decisive negative trace |
+|---|---|
+| streaming | Ordered task/turn events with bounded client credit; slow client receives replay or RESET + GAP without blocking canonical writes |
+| questions | Durable question ID, target waiter, expiry and answer/cancel; reconnect or delayed answer cannot target a replacement question |
+| approvals | Exact action/arguments/scope and current grant; reuse valid prior authorization, reject stale or changed-action replies |
+| queued_messages | Durable enqueue/edit/remove before delivery; crash after dispatch before acknowledgment cannot duplicate input |
+| active_steering | Target current attempt/turn and report actual delivery; queued follow-up remains explicitly different |
+| interruption | Distinct Stop mode/scope plus admission fence; report surviving or uncertain work |
+| resume | Validate checkpoint, effective config, route, grants and unsettled effects before continuation |
+| forks | Preserve original unfinished work and separate derived version; conserve parent allowance and disclose chosen timing |
+| compaction | Inspect/request/tune only supported transforms; retain directives, waiters, evidence and fallback rehydration |
+| commands_plugins | Namespace, supplying component, schema/config revision and authority visible; reject collisions and lossy behavior claims |
+
+| Stop mode | Boundary and scope | Required evidence |
+|---|---|---|
+| Aggressive | Forcefully interrupt selected agent without waiting for its current operation; fence further selected-agent dispatch | Local termination/control observation and uncertain in-flight effects; descendants are listed separately, not silently included |
+| Full | Stop selected agent and its owned subagents, shells, monitors and relaunchers; scope is a rooted ownership set | Every local owned process settled or reported unresolved; remote hosts need separate receipts |
+| Lazy | Close admission and stop at the next observable current operation boundary (tool completion, protocol turn boundary or validated checkpoint) | Boundary identity and deadline; waiting/timeout visible, configured escalation explicit |
+
+Aggressive can sacrifice the current operation. Full also fences supervisors and returning workers
+so killing a PID cannot cause an unnoticed restart. Lazy never measures hidden reasoning or
+claims an invisible train of thought completed. These future controls do not change current
+immediate operational PAUSE. A shared server may own unrelated sessions: revoke the selected
+session's capability and use a documented session primitive; killing unrelated work is not an
+automatic consequence of Full. If containment cannot isolate the requested scope, report it.
+
+Windows Job Objects and Linux cgroup v2 are candidate process/accounting boundaries, with
+breakaway, alternate process creation, cgroup migration and privilege escape as negative traces.
+systemd restart policy must be fenced through its owner, not only its main PID. MCP/ACP cancel,
+Codex interrupt and socket closure are protocol observations; none proves external rollback.
+Remote acceptance without receipt remains ambiguous under M1C, forbidding duplicate retry.
+SRC-V3-172 through SRC-V3-179; MKR-011.
+
+A preserved fork records source HEAD, index, tracked dirty bytes, scoped untracked/ignored
+artifacts, context/evidence/config revision, source cursor, lineage and budget split. Acquire a
+cooperative snapshot boundary or validate a repeated manifest around capture; a changed source
+forces retry/refusal of that snapshot, not a universal dirty-tree ban. Treat symlinks, binaries,
+submodules, large/ignored files and excluded secrets explicitly. No cleanup, stash push,
+truncation or merge is implied. Preserve an anchored immutable snapshot before derived writes.
+Conversation fork, worktree creation and filesystem snapshot are three distinct operations.
+SRC-V3-144/SRC-V3-195/SRC-V3-206/SRC-V3-207.
+
+The configured notice-before or disclosure-and-review-after policy records source state,
+capture boundary, preserved original and derived paths, exclusions and subsequent divergence.
+A sibling receives a separately reserved share, not a copy of the parent's allowance.
+Probes must demonstrate original bytes unchanged, coherent context/artifact binding, duplicate
+command idempotency and rejection of stale leases under concurrent edits.
 
 ## Engine process and remote-operation distinctions
 

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "status": "pending-owner-answers",
+  "decisions": [
+    {
+      "id": "decision.mark2.proof-boundary",
+      "question": "Should the first formal model use the smallest aggregate plus a separate bounded broker refinement, or include a bounded broker directly?",
+      "why_consequential": "Determines where queue, relaunch, RESET, consultation and update/Stop obligations are proved before model freeze.",
+      "options": [
+        {
+          "id": "aggregate-refinement",
+          "label": "Small aggregate plus explicit broker refinement",
+          "tradeoff": "Keeps canonical state space small; every broker assumption must have bounded executable traces and a refinement mapping."
+        },
+        {
+          "id": "broker-first-model",
+          "label": "Bounded broker inside first model",
+          "tradeoff": "Exposes cross-boundary races in one model; increases state space and abstraction work."
+        }
+      ],
+      "recommendation": "aggregate-refinement",
+      "reason": "Preserves existing M1 obligations while testing concrete process and protocol counterexamples at an explicit boundary. Move a broker event into the model if its refinement cannot be stated or falsified independently.",
+      "source_ids": [
+        "SRC-V3-144",
+        "SRC-V3-172",
+        "SRC-V3-173",
+        "SRC-V3-176",
+        "SRC-V3-211",
+        "SRC-V3-222"
+      ],
+      "claim_ids": [
+        "MKR-011",
+        "MKR-018",
+        "MKR-023"
+      ],
+      "next_test": "experiment.mark2.simulation",
+      "owner_answer": null,
+      "status": "pending"
+    },
+    {
+      "id": "decision.mark2.delegated-amendments",
+      "question": "Which persistent-assistant decision classes may amend GoalSpec, beyond choices already permitted inside existing grants?",
+      "why_consequential": "Configurable assistant rights are accepted, but current GoalSpec amendments remain Owner-only; changing that boundary requires a separately bounded constitutional/M1 proposal.",
+      "options": [
+        {
+          "id": "owner-amendments",
+          "label": "Retain Owner-only GoalSpec amendments",
+          "tradeoff": "Assistants can consult and make already-granted routine choices; strategic scope changes still wait for Owner."
+        },
+        {
+          "id": "bounded-amendment-classes",
+          "label": "Propose an explicit delegated amendment whitelist",
+          "tradeoff": "May reduce Owner interruptions, but requires exact classes, ceilings, receipts, revocation tests and a separately authorized contract amendment."
+        }
+      ],
+      "recommendation": "owner-amendments",
+      "reason": "Meets persistent identity and configurable routine rights without silently changing immutable contracts. Use consultation evidence to identify any specific amendment class worth delegating later.",
+      "source_ids": [
+        "SRC-V3-155",
+        "SRC-V3-156",
+        "SRC-V3-196"
+      ],
+      "claim_ids": [
+        "MKR-009",
+        "MKR-010"
+      ],
+      "next_test": "experiment.mark2.assistants",
+      "owner_answer": null,
+      "status": "pending"
+    }
+  ],
+  "not_owner_questions": [
+    "All ten questionnaire answers and the seven critical names remain accepted.",
+    "Personal inventory is intentionally unspecified; future run packets supply actual authorized resources.",
+    "Language, store, framework, numerical presets and recovery compatibility windows remain research comparisons.",
+    "Eligibility or missing-control evidence must become a concrete release tradeoff before requesting any scope reduction. No reduction is proposed or approved here."
+  ]
+}

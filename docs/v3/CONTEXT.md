@@ -1,10 +1,37 @@
 ---
 title: Recursion v3 context, cache, and compaction hypothesis
 status: hypothesis
-last-updated: 2026-09-03
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 context, cache, and compaction hypothesis
+
+## Mark 2 continuity and value — research synthesis 2026-09-07
+
+Keep the non-droppable capsule and one compaction governor per route epoch. Assistant memory
+adds explicit source/audience/revision/expiry, including revoked instructions and pending
+questions/approvals. A transform may preserve reference integrity while losing semantic quality;
+deterministic validation and independent task-quality assessment are separate requirements.
+A good summary never becomes the only retained copy of its evidence. MKR-005/MKR-019.
+
+Compare native-only, deterministic-only and coordinated hybrid continuation rather than selecting
+a universal compaction default. Stable rendered prefixes, tool schemas, model/settings and eligible
+breakpoints matter; current OpenAI API docs include model-specific cache write charges as well
+as read discounts. They do not establish ChatGPT subscription debit. Claude's query-pipeline
+usage includes subagents/compaction but excludes some helper calls; cumulative streaming totals
+must not be summed across results. SRC-V3-193/SRC-V3-220.
+
+The proposed ordinary behavior remains no periodic model keepalive. Warm affinity may improve
+latency, but compare cold restart, reconstruction and no-future-work before adopting refresh.
+Preserve fresh directives even when changing the prefix forfeits a cache hit. LongMemEval supplies
+a sourced memory rubric, not a coding or authority benchmark; test knowledge updates, temporal
+recall and abstention alongside exact control references (SRC-V3-189).
+
+A handoff reports source/candidate/config/goal versions, last settled operation, uncertain effects,
+pending interactions, dirty artifact manifest, adopted/rejected decisions, available evidence and
+next bounded action. Count repeated instructions, failed transforms, hydration, verification,
+recovery and human corrections in the full workflow. No context-size, token-saving or quality
+advantage is established by this campaign.
 
 ## Foundation compaction and cache disposition — 2026-09-05
 
@@ -91,7 +118,7 @@ Named policies:
 
 - `native`;
 - `deterministic-only`;
-- `hybrid` (recommended default);
+- `hybrid` (candidate for comparison; no universal default selected);
 - `aggressive`;
 - `manual`;
 - `off`.

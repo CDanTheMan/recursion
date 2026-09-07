@@ -1,6 +1,6 @@
 # Mark 2 research campaign
 
-2026-09-06 (Owner timezone). Status: admitted; research in progress, no integration trials run.
+2026-09-06 (Owner timezone). Status: synthesis prepared; exact-candidate gates/review pending externally. No integration trials run.
 Integrator and sole writer: Astra. Parent: `goal-recursion-v2-execution-fabric` (active).
 GoalSpec: `recursion.v3.foundation.mark2.research.20260906`, version 1.
 
@@ -48,7 +48,7 @@ login/change, install, node enrollment, paid experiment, migration, deployment o
   Exact Cursor Grok model/effort/privacy/included-pool eligibility is not established; do not
   invoke or reconfigure it. Two Terra reviews are the permitted fallback, with same-provider limits.
 
-## PlanRevision 1
+## PlanRevision 1 — historical, superseded by revision 2
 
 Frozen goal and inputs retained. No superseded, invalidated or quarantined findings yet.
 Exactly one plan phase is in progress: existing evidence and bounded discovery.
@@ -85,3 +85,50 @@ review attestations stay outside the candidate. No runtime certification follows
 If interrupted before completion, inspect this plan, manifest, Git log, evidence gap records and
 review channel; continue the earliest incomplete phase. Unrun probes and unavailable counters
 remain explicit. No completed campaign, integration or product milestone is inferred from time spent.
+
+## PlanRevision 2 — current
+
+All six discovery packets and focused primary-source reconciliation are complete. Astra integrated
+80 primary-source records, 24 registered conclusions, 13 requested entries/23 paths/130 control
+cells and eight unrun experiment families into canonical documents. The two consequential Owner
+decisions remain pending; no completed answer was reopened. This is research completion, not
+integration, model, implementation, performance or release certification.
+
+| Phase | Current disposition |
+|---|---|
+| Preflight/freeze | complete; actual start preserved and no later work reset |
+| Existing evidence/discovery | complete; read-only Luna waves, at most two concurrent |
+| Follow-up/reconciliation | complete; Astra reopened consequential primary sources and corrected stale interpretations |
+| Canonical synthesis | complete; six deliverables, limits and decisive next tests linked in report-source.md |
+| Gate/review | in progress; freeze candidate, complete gate twice and obtain two independent exact-commit reviews |
+| Publication | pending; only the exact passing/reviewed candidate may receive a normal branch push |
+
+The current phase is gate/review. Earlier plan status is historical. Discovery follow-ups stayed
+within the 30-minute packet ceiling; the final source-specific packets used a 20-minute ceiling.
+The value packet was completed by Astra alongside independent discovery. Workers made no durable
+writes. A worker's observation of parent commits/dirty synthesis was expected and was not treated
+as a clean-candidate review. Native Terra high remains the admitted two-reviewer fallback;
+same-provider review cannot establish cross-provider independence.
+
+Source reconciliation rejected the earlier Cursor CLI-backed/third-party-BYOK conflation, resolved
+Meta Muse Code identity, replaced a failed old Hermes path with a new separately pinned source,
+read the June 15 Claude SDK policy update, and corrected TUF 1.0.35 to retrieved 1.0.36. Grok,
+Gemini and OpenCode richer interfaces were inspected before assigning remaining control gaps.
+The correction log retains both interpretation and disposition. No historical evidence changed.
+
+Frozen input digests are SHA-256 of Git blobs at the actual start, not platform-normalized checkout
+bytes. The first manifest's checkout-byte digests were corrected to that declared basis before
+validation. This changes no input file or start commit. The validation inventory preserves the
+25 exact regression commands and entrypoint blobs. A fresh baseline run returned 25 zero exits;
+it did not invoke providers or certify integrations.
+
+Capacity recheck at 2026-09-07 05:03 UTC showed the included weekly window 2% used, with no paid
+credits and no reset consumed. The original deadline remains 10:23:21 UTC; no limit expansion.
+No authentication, route/model configuration, autonomy flag, service or operational PAUSE changed.
+
+Final attestations are deliberately outside the candidate. The gate writes complete command
+receipts and artifact hashes under the Git common directory at
+`research-attestations/mark2/<candidate>/`; independent reviewer reports and the publication
+receipt belong there too. Read that location via `git rev-parse --git-common-dir`.
+If it is absent in another clone, revalidate the candidate rather than inferring a pass.
+The candidate's content cannot attest to reviews that occur after its commit.

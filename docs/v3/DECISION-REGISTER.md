@@ -1,11 +1,25 @@
 ---
 title: Recursion v3 decision register and owner queue
 status: evidence-reconciled-draft
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 source: archive/session-transcript-2026-09-02.md plus owner direction 2026-09-03
 ---
 
 # Recursion v3 session decision register
+
+## Mark 2 research disposition — 2026-09-07
+
+The [new campaign](foundation-research/mark2-research/campaign.md) executed the six research
+packets and proposes canonical mechanics without creating new Owner rulings. OR-021 through
+OR-035 remain the completed direction record. [Pending consequential choices](foundation-research/mark2-research/decisions.json)
+are limited to the first aggregate/broker proof boundary and any delegated GoalSpec amendment
+classes. Recommendations remain unanswered; current Owner-only amendments and M1 stay unchanged.
+
+The first [GRILLME](foundation-research/mark2-research/grillme.md) recommends the smallest aggregate
+plus explicit bounded broker refinement, with a broker-inclusive model as the alternative.
+Persistent assistants may make already-authorized routine decisions and consult across sessions;
+a new GoalSpec-amendment class requires a separate bounded proposal. No personal inventory,
+language/store selection or critical-name scope reduction is requested here.
 
 ## Mark 2 answer capture — 2026-09-06
 

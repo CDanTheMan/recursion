@@ -1,10 +1,38 @@
 ---
 title: Recursion v3 research and construction roadmap
 status: evidence-reconciled-roadmap-proposal
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 research and construction roadmap hypothesis
+
+## Mark 2 continuation sequence — 2026-09-07
+
+The current [campaign record](foundation-research/mark2-research/campaign.md) and
+[decision-first report](foundation-research/mark2-research/report-source.md) are the continuation
+entrypoints. Historical research and completed Mark 2 answer capture retain their original
+status. MKR-021/MKR-022.
+
+| Order | Bounded output | Gate before proceeding |
+|---|---|---|
+| 1. Small interface probes | Exact builds and eligibility; richer SDK/server/ACP/extension traces for seven critical names and remaining requested entries | Authorized disposable scope, explicit all-role pool closure, truthful missing controls; source-only evidence cannot pass |
+| 2. Formal model | Selected aggregate/broker boundary plus six existing and Mark 2 obligations | Counterexamples resolved without silent M1 changes; explicit flow bounds/fairness and unchanged OR-015 |
+| 3. Language comparison | Same frozen vectors in CPython, Rust and Go | Windows/Linux correctness/fault equivalence, resource/build/maintenance evidence; no language chosen in advance |
+| 4. Storage comparison | Complete JSONL/CAS versus SQLite-WAL/CAS systems | Count all bytes, replay/GC/backup/crash/locking behavior; no store chosen in advance |
+| 5. First usable construction | Native loop, upstream-only/combined role closure, persistent assistants, ten controls, config/plugins, setup/update/recovery | Complete accepted platform behavior and independent exact-candidate gates; small prototypes do not redefine release |
+| 6. Value and expanded products | Measured continuity, lean verification, remote placement and optional advanced UI/enterprise work | Full-workflow benefit and removal criteria; no inherited performance claim |
+
+Reuse protocol schemas, OS containment, source-grounded lifecycle patterns and maintained SDKs
+where they preserve required semantics. Adapt their authority/usage/history gaps at the common
+boundary. Build only missing canonical admission, evidence and reconciliation behavior.
+Remove a framework/adapter layer that cannot preserve grants, imposes unbounded idle work, hides
+consumption or adds no demonstrated contract/quality benefit. A2A/Orleans/Cordis and update
+frameworks remain comparisons, not selected dependencies.
+
+The earliest resource-dependent packet is a 30-minute, at-most-two-case integration probe with
+actual host/build/fixture, no new metered spend, admitted included-pool reserve and human review
+budget recorded before execution. It may begin with zero-inference capability discovery.
+This campaign supplies the design, not permission to install, log in, enroll nodes or run providers.
 
 ## Mark 2 Owner direction — 2026-09-06
 

@@ -1,10 +1,50 @@
 ---
 title: Recursion v3 performance and resource hypothesis plan
 status: experiment-plan
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 performance and resource hypothesis plan
+
+## Mark 2 preregistration and practical resources — 2026-09-07
+
+[Eight experiment families](foundation-research/mark2-research/experiments.json) extend the six
+platform families with assistant lifecycle/consultation and update/recovery. Retain website,
+bug-fix, interrupted-refactor and upstream-only tasks; add a proposed research workflow with
+browser/MCP and an eligible versioned Perplexity comparator. All designs are unrun.
+MKR-019/MKR-020; no language/store/framework or numerical product minimum is selected.
+
+The independent unit is a unique task; retries, model calls, consultations and reviewer votes
+are nested observations. Freeze task/evaluator/route/model/host/config versions, randomize paired
+order and retain failed/censored tasks. Pilot variance informs a separately preregistered
+confirmatory size and practical margins before held-out outcomes. Do not tune the benchmark
+after seeing which treatment wins.
+
+Count initial work, every failed attempt, compaction and helpers, deterministic and model
+verification, recovery, human review, escaped defects and later corrections. Report tokens,
+subscription allowance change and API money separately, with source/window/uncertainty. A null
+counter is unavailable, not free. Assess final artifacts blind to treatment; calibrated model
+graders supplement concrete outcomes and human adjudication. METR's selection/time-measurement
+limits and Anthropic's resource-enforcement study are direct reasons to match full workflows,
+not transferable speedup estimates (SRC-V3-190 through SRC-V3-192).
+
+Candidate experiment profiles, explicitly **unmeasured and not product minima**:
+
+| Profile | Guaranteed / maximum resources | Intended bounded workload |
+|---|---|---|
+| Controller design | 2 / 2 vCPU; 2 / 4 GiB RAM; 10 GiB free disk | Deterministic control, 100 dormant identities, five views; no engine/local model |
+| Worker design | 4 / 4 vCPU; 8 / 12 GiB RAM; 20 GiB free disk | One coding harness plus public build/test/browser fixture; controller overhead separate |
+
+Record actual available resources, enforcement method, filesystem, network and review capacity
+before a future run. CPU/RSS, idle wakeups, process/handle count, storage growth/writes and network
+transfer are part of the result. Compare 0/10/100 active/idle/disabled identities or manifests;
+disabled paths must execute no plugin/model work. A personal inventory is unnecessary for design.
+
+Correctness, authorization/privacy, resource and recovery floors qualify candidates first.
+Among qualified candidates preserve responsiveness → subscription efficiency → completion.
+Verification presets must expose tests run, evidence-supported fix confidence, regression result
+and demonstrated benefit. A lean preset is rejected if it shifts defects or review cost downstream.
+More supervisors, larger context, popular frameworks and cache refresh remain hypotheses.
 
 ## Mark 2 Owner direction — 2026-09-06
 

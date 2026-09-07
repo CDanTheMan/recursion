@@ -1,10 +1,29 @@
 ---
 title: Recursion v3 telemetry and optimization hypothesis
 status: hypothesis
-last-updated: 2026-09-03
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 telemetry and optimization hypothesis
+
+## Mark 2 accounting observations — proposed 2026-09-07
+
+A usage record binds scope/role/attempt, provider/account pool, executing harness/interface/build,
+host, config revision, unit/quantum, observation source/time/window, cumulative-versus-delta
+semantics and uncertainty. Normal and recovery consumption have separate monotonic ledgers;
+shared-pool reservations prevent child/fork duplication. Provider resets affect availability,
+not already-spent task allowance. MKR-016/MKR-020.
+
+Claude `model_usage` is estimated query-pipeline usage, includes subagents/compaction, excludes
+outside helpers such as the permission classifier/token counting, and is cumulative across
+streaming turns (SRC-V3-220). Reconcile the latest total and crash/reset offsets; summing every
+result double-charges. Other harness token/quota observations need their own adapters.
+Missing data cannot support a claim of savings or a credible strict reservation.
+
+Stop telemetry distinguishes request, acknowledgment, local settlement, remote enforcement and
+external effect uncertainty. Update telemetry distinguishes available/staged/activated/per-host
+landed, readable history, newest-work preservation and resumability. Evidence is attributable
+without exporting private prompts, credentials, paths, account IDs or infrastructure details.
 
 ## Accounting and observation provenance
 

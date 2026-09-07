@@ -1,10 +1,29 @@
 ---
 title: Recursion v3 construction runbook
 status: proposed-procedure-not-authorization
-last-updated: 2026-09-03
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 construction runbook
+
+## Mark 2 source-to-construction handoff — 2026-09-07
+
+Use [the current campaign](foundation-research/mark2-research/campaign.md),
+[canonical roadmap](ROADMAP.md) and [eight trial families](foundation-research/mark2-research/experiments.json).
+First run separately authorized small interface probes; then resolve the proof boundary and
+freeze the formal model, compare CPython/Rust/Go, and compare complete JSONL/CAS versus
+SQLite-WAL/CAS storage. Current M1 artifacts are immutable and OR-015 remains blocked.
+
+A probe packet names parent goal, exact disposable repository/host/build, allowed effects and
+paths, all-role eligible pool, deadline, resource ceilings, review reserve, cleanup and
+machine-checkable acceptance. It must distinguish source documentation, internal adaptation,
+synthetic validation and observed integration. No implementation or live trial is authorized by
+this research runbook. Do not activate operational scripts to publish research.
+
+To continue this campaign, inspect clean branch ancestry and the campaign manifest first.
+Final gate/reviewer/publication receipts are stored outside the candidate in the Git common
+directory under `research-attestations/mark2/<candidate>/`. If those local receipts are absent,
+rerun the prescribed gate and exact-candidate review; do not infer success from a commit title.
 
 ## Current handoff after foundation research — 2026-09-05
 

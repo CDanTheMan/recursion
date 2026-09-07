@@ -1,11 +1,26 @@
 ---
 title: Recursion v3 evidence-grounded design workspace
 status: evidence-reconciled-design-and-frontier-research-foundation
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 authority: non-normative until ratified
 ---
 
 # Recursion v3 evidence-grounded design workspace
+
+## Mark 2 research continuation — 2026-09-07
+
+Start with [the campaign record](foundation-research/mark2-research/campaign.md) and
+[decision-first synthesis](foundation-research/mark2-research/report-source.md). The current
+research binds 13 requested integrations, richer supported interfaces, all six packets and eight
+unrun experiment families to canonical documents. [The two consequential Owner choices](foundation-research/mark2-research/grillme.md)
+remain pending; all ten prior answers are complete.
+
+The foundation supports bounded probes and a model-boundary decision. Complete route/contract
+readiness remains conditional; no runtime, performance or migration result is claimed.
+Historical snapshots below retain their original status. Source-documented, locally observed,
+inferred, unsupported and unknown behavior must remain distinguishable. Read canonical
+[product](PRODUCT.md), [execution](EXECUTION-FABRIC.md), [controls](TERMINAL-RUNTIME.md),
+[configuration](CLI.md), [recovery/model](ARCHITECTURE.md) and [roadmap](ROADMAP.md) for current mechanics.
 
 ## Mark 2 Owner direction — 2026-09-06
 

@@ -1,18 +1,54 @@
 ---
 title: Recursion v3 product specification direction
 status: accepted-direction-with-open-research
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 product hypothesis
 
-## Mark 2 Owner direction — 2026-09-06
+## Mark 2 capability map â€” research synthesis 2026-09-07
+
+The first usable release includes native, independently useful upstream-only and combined
+workflows. The accepted ranking is responsiveness, subscription efficiency, then completion,
+subject to correctness, authorization, resource limits and recoverability. This research does
+not narrow the seven critical names or reopen the ten completed answers. Mechanisms below are
+proposals; source support and unrun tests are bound in [evidence](foundation-research/mark2-research/evidence.json).
+MKR-001/MKR-008/MKR-022.
+
+| Direction | Required capability and responsible component | Configuration and evidence | Decisive next test / milestone |
+|---|---|---|---|
+| Q1 / OR-026 | Shared route registry and deterministic setup detect existing installs; adapter supplies version, auth, billing and control capabilities | Installation owner, pin, route descriptor, managed/manual updates; 13 entries and 23 paths in [matrix](foundation-research/mark2-research/compatibility.json) | Interface/eligibility probe before model freeze; seven names required at first release |
+| Q2 / OR-027 | Persistent assistant identity projects profiles, sessions and Head/ARM/worker leases; runtime owns consultation and idle lifecycle | Memory audience/freshness, decision classes, route/role/pool; MKR-009/MKR-010 | Assistant lifecycle and consultation family; authority amendment decision before freeze |
+| Q3 / OR-028 | Shared terminal/interaction store and process broker implement all ten controls, three Stops and preserved forks | Turn targeting, Stop scope, disclosure timing, lineage and reservation split; MKR-011/MKR-012 | Negative control/fork traces on Windows/Linux and required upstream routes |
+| Q4 / OR-029 | Capability compiler and native/upstream plugin adapters preserve behavior, report losses and support local execution | Four incompatibility responses; two revision propagation modes; no hidden fallback; MKR-013/MKR-014 | Configuration/plugin family including browser/MCP research workflow |
+| Q5 / OR-030 | Context governor and accounting ledger retain handoff quality and all-role consumption | Capsule validity, compactor ownership, per-role pool and unavailable counters; MKR-002/MKR-019 | Upstream-only full workflow with API credentials absent; continuation fault probes |
+| Q6 / OR-031 | Verifier service produces tests run, supported fix confidence, regressions and demonstrated benefit | Risk/independence class and lean reporting preset; MKR-020 | Blind artifact assessment plus full verification/rework cost |
+| Q7 / OR-032 | Recovery coordinator preserves uncertainty and enforces relative additional allowance | Destination, automation, exact fraction/unit, cumulative reservations; MKR-016 | Repeated-failure, unknown-counter and shared-pool accounting family |
+| Q8 / OR-033 | Release manager and broker distinguish six update modes and four restoration outcomes | Installation ownership, release/state compatibility, per-host landing and resume/hold; MKR-015/MKR-017 | Update/Stop ordering, crash and partition trials |
+| Q9 / OR-034 | Context and workflow services reduce repeated instructions and escaped defects where measured | Cold/warm/no-future-work; changed instructions and complete cost; MKR-019/MKR-020 | Paired direct-engine versus platform continuation/performance trials |
+| Q10 / OR-035 | Deterministic resource governor admits representative profiles and operator hard ceilings | CPU/RAM/disk/network/queue/review/pool bounds; personal inventory intentionally unspecified | Calibrate minimum/useful profiles after baseline; never infer requirements from this workstation |
+
+Required compatibility names map to researched entries: Grok â†’ Grok Build; Cursor â†’ first-party
+SDK/ACP and independent ACP paths; Gemini â†’ Gemini CLI; Claude â†’ Claude Code/SDK; Hermes â†’
+Nous Research Hermes Agent; OpenCode â†’ Anomaly OpenCode; ChatGPT â†’ eligible Codex sign-in path.
+Codex remains its own requested entry. BYOK is a category; Muse Code is Meta's terminal beta;
+DeepSeek Harness and Antigravity local/managed paths are separately identified. Grok Bot and
+Pi are assistant references; Perplexity is a prospective research-quality comparator.
+
+Every requirement has three implementation locations: the common deterministic service owns
+identity, admission, state and evidence; a native loop implements reasoning/tool behavior; an
+upstream adapter composes a supported harness interface and extensions. A source-documented
+route with missing behavior is not a complete release configuration. Inspect richer interfaces,
+then expose the gap and next test; a still-missing critical name requires an Owner release
+decision. No such omission is approved here.
+
+## Mark 2 Owner direction â€” 2026-09-06
 
 OR-026 through OR-035 extend the release direction: seven launch-critical compatibility names (Grok, Cursor, Gemini, Claude, Hermes, OpenCode, ChatGPT), persistent assistants across sessions and goals, local plugin execution, configurable update/recovery behavior and quality-preserving efficiency. Missing critical compatibility requires an Owner release decision. Exact routes and guarantees remain research work. Use the [Mark 2 handoff](foundation-research/mark2/handoff.md); product requirements must not be narrowed to one operator's current hardware or accounts.
 
-## Accepted first usable platform release — 2026-09-06
+## Accepted first usable platform release â€” 2026-09-06
 
-OR-021–OR-025 clarify the release under `docs/v3`; earlier brainstorming "v2" means this
+OR-021â€“OR-025 clarify the release under `docs/v3`; earlier brainstorming "v2" means this
 milestone. Recursion is the common configurable agent platform across models, harnesses,
 subscriptions, tools, workflows and execution machines. The terminal exposes the initial
 platform; the dedicated graphical application follows later.
@@ -34,7 +70,7 @@ implemented substrate, inert fixtures, specified requirements and missing proof.
 platform ambition is carried through [six research deliverables](foundation-research/platform-round/research-brief.md);
 no framework, language, store or complete integration is selected by this ruling.
 
-## Audience and execution-mode findings — 2026-09-05
+## Audience and execution-mode findings â€” 2026-09-05
 
 Historical September 5 finding, refined by OR-021 above: Lucas-first validation remains the
 starting point. Developers are now the selected initial audience, performing bounded repository
