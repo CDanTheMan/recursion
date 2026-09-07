@@ -61,10 +61,13 @@ state incompatibility, recommend combinations, no action, notify and recommend. 
 incompatibility marker is required in every case. Interpreting no action as no proactive
 notification/repair/rerouting is provisional; attempted invocation behavior remains unresolved.
 
-The Stop family preserves three different scopes/boundaries: Aggressive targets the selected
-agent, Full includes its subagents/shells/monitors, Lazy stops after an observable current
-operation boundary. An invisible train of thought cannot be a measured checkpoint. Relate these
-to the existing PAUSE proposal without changing current PAUSE or collapsing them into one cancel.
+The Stop family preserves three different scopes/boundaries: Aggressive forcefully interrupts
+the selected agent without waiting for its current operation; Full includes its
+subagents/shells/monitors; Lazy stops after an observable current operation boundary. Aggressive
+does not establish that external effects were undone or an unreachable host stopped: actual
+settlement, remote enforcement and reporting remain research obligations. An invisible train of
+thought cannot be a measured checkpoint. Relate these to the existing PAUSE proposal without
+changing current PAUSE or collapsing them into one cancel.
 Fork preflight is awareness, not a universal dirty-tree refusal. Preserve original unfinished
 work and a separate derived version, with the chosen disclosure timing. No destructive cleanup,
 silent truncation, automatic merge or universal snapshot baseline is selected.

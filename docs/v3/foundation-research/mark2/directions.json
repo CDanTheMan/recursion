@@ -178,7 +178,7 @@
       "status": "accepted-direction",
       "accepted": [
         "Distinct configurable Steer/Queue actions with immediate corresponding feedback.",
-        "Aggressive Stop targets the selected agent; Full Stop includes its subagents, shells and monitors; Lazy Stop waits for the current tool/reasoning boundary.",
+        "Aggressive Stop forcefully interrupts the selected agent without waiting for its current operation; Full Stop includes its subagents, shells and monitors; Lazy Stop waits for the current tool/reasoning boundary. Actual settlement, unreachable-host enforcement and external effects require truthful reporting and further research.",
         "Inspect actual source state before forking; preserve two worktrees or file versions, with configured notice before work or continuation followed by disclosure/review."
       ],
       "selected_defaults": [],
