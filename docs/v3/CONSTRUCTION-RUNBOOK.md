@@ -6,12 +6,61 @@ last-updated: 2026-09-07
 
 # Recursion v3 construction runbook
 
+## Mark 3 comparison continuation - 2026-09-07
+
+Start from the published candidate's
+[handoff](foundation-research/mark2-research/mark3-comparison/handoff.md),
+[GoalSpec](foundation-research/mark2-research/mark3-comparison/goal.json) and
+[probe records](foundation-research/mark2-research/mark3-comparison/probes.json).
+They bind the frozen start and preserve historical records. External attestations under
+`research-attestations/mark3-comparison/<candidate>/` in the Git common directory establish the
+exact validated/reviewed commit; missing attestations require revalidation, not removal of
+accepted Owner directions.
+
+The first construction request is a bounded interface/admission packet, followed by the smallest
+discriminating interaction/configuration and process probes. Freeze actual executable, protocol,
+model/effort, auth class, billing pool, host/OS, effective revision, fixture/evaluator digests,
+allowed effects, included-capacity reservation, counters, cleanup, deadline and acceptance gate.
+The source pins in research are not installed builds. Null admission fields mean do not run.
+The [future admission schema](foundation-research/mark2-research/mark3-comparison/probe-admission-schema.json)
+requires exact byte/round/queue/spool/cache/process/global-key bounds and destination/capture/
+redaction/retention policies, including MCP headers. Its synthetic validator fixtures establish
+data-shape checks only. Real authority, source/build equivalence, included-capacity evidence,
+cross-field resource limits and fixture effects still need the later packet's admission gate.
+Select at most two cells and six executions per packet; do not expand into a Cartesian trial.
+
+Preserve the formal model -> language -> complete storage sequence with interface probes before
+formal freeze and whole-system optimization alongside it. Do not activate deployed Recursion,
+change PAUSE/config/auth/routing, implement product/model/benchmark code, install dependencies or
+publish operational state under this research packet. No new consequential GRILLME decision is
+currently established; retain technical assumptions as probe questions.
+
+
+## Current Mark 3 integration and research handoff — 2026-09-07
+
+Use [Mark 3 handoff](foundation-research/mark2-research/mark3/handoff.md) and
+[approved answer records](foundation-research/mark2-research/mark3/directions.json). Both prior Owner choices
+are resolved. Refresh and compare primary mechanisms; admit bounded interface probes; compare
+the approved aggregate/refinement split with the broker-inclusive alternative before model
+freeze; then compare languages and complete storage systems. Whole-system research proceeds
+alongside, with twelve named areas and shared cross-area failures in eight existing families.
+
+A future research/construction packet must state goal, exact inputs/builds, scope, authority,
+privacy, permitted effects, actual capacity, time/usage ceilings, cleanup, verification and
+independent review. This integration does not launch provider trials, install tools, enroll
+nodes, change operating permissions or implement product features. Preserve source-only,
+modeled, observed, measured and unresolved statuses.
+
+Mark 3 exact-candidate gate, review and publication attestations belong in the Git common
+directory at `research-attestations/mark3/<candidate>/`. Two complete gate runs and both reviews
+must bind the same clean candidate; repairs restart them. Missing receipts require revalidation.
+
 ## Mark 2 source-to-construction handoff — 2026-09-07
 
-Use [the current campaign](foundation-research/mark2-research/campaign.md),
+Use [the historical Mark 2 campaign](foundation-research/mark2-research/campaign.md),
 [canonical roadmap](ROADMAP.md) and [eight trial families](foundation-research/mark2-research/experiments.json).
-First run separately authorized small interface probes; then resolve the proof boundary and
-freeze the formal model, compare CPython/Rust/Go, and compare complete JSONL/CAS versus
+First run separately authorized small interface probes; then compare the approved proof boundary
+and its alternative before model freeze. Next compare CPython/Rust/Go and complete JSONL/CAS versus
 SQLite-WAL/CAS storage. Current M1 artifacts are immutable and OR-015 remains blocked.
 
 A probe packet names parent goal, exact disposable repository/host/build, allowed effects and
@@ -38,7 +87,7 @@ fairness cases, and leave immutable M1 schemas/receipts unchanged. Continue form
 language-neutral vectors/CPython-Rust-Go comparison → JSONL/CAS versus SQLite-WAL/CAS.
 A mapping conflict needs a separate repair proposal; OR-015 remains blocked. FND-001–FND-003.
 
-Use [GRILLME](foundation-research/grillme.md) to record pending Owner decisions before compiling
+Use the current [Mark 3 dispositions](foundation-research/mark2-research/mark3/directions.json) and return only new consequential Owner decisions before compiling
 the next accepted GoalSpec/DAG. This research supplies designs and local docs validation only;
 it does not authorize model construction, provider trials, deployment or publication.
 

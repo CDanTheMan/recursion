@@ -6,6 +6,81 @@ last-updated: 2026-09-07
 
 # Recursion v3 performance and resource hypothesis plan
 
+## Mark 3 comparison: complete-stack measurement - 2026-09-07
+
+The [comparison coverage](foundation-research/mark2-research/mark3-comparison/coverage.json) and
+[eight bounded run designs](foundation-research/mark2-research/mark3-comparison/probes.json)
+retain the accepted ranking, hard floors, human outcomes and all six cross-area cases. Compare
+A demand activation, B residency and a narrowly justified C durable-scheduling treatment with
+the same capabilities and workflow. No winner or numeric default has been measured. CMP-014, CMP-018.
+
+Measure canonical append and control acknowledgment alongside terminal frame/input latency,
+CPU/RSS/wakeups/handles/network/disk and queue high-water. Separate manifest reads, resolution,
+installation attempts, imports, activation and first-use latency. Installed disabled must have
+no plugin effects, while inventory cost is still reported. Idle identities and views cannot
+silently trigger model calls. Upstream unbounded queues or buffer sizes are implementation
+counterexamples to investigate, not suitable resource defaults.
+
+Use unique tasks as the independent unit; attempts/messages are nested. Freeze fixture/evaluator,
+route/build/config/host/resource/capacity and cold/warm order before outcomes. Retain failed and
+censored attempts, all helpers, verification, recovery, human review and downstream corrections.
+Report coordination burden, continuity, clarity, Owner control, quality and access to specialized
+assistance. API token/cache counters and subscription debit remain separate measurements. Pilot
+variance cannot certify superiority; confirmatory margins and sample size require a new run
+record. Every probe remains unrun with unavailable admissions explicit.
+
+Residency and durability are independent treatments. Compare cold activation, bounded warm
+retention and pressure eviction while holding recovery mechanism fixed; then compare queryable
+receiver records against workflow assistance at fixed residency. Vary distinct pool keys and
+configuration churn alongside 0/10/100 identities. Record memory-time, pool misses, cold-start
+amortization and reconstruction/verification cost; per-key limits do not bound total pools.
+CMP-029.
+
+Freeze OS, sink type/drain rate, logging and instrumentation mode. Node documentation shows
+Windows pipe writes can block where TTY writes are asynchronous; POSIX differs. Event-loop
+utilization is not CPU utilization, and samplePerIteration delay measurements differ from timer
+sampling. Report heap/external memory, process private/resident memory, owned-group totals and
+host pressure separately; shared RSS and worker-thread process RSS must not be summed blindly.
+Installed-disabled probes separate manifest inventory from the subsequent no-work interval.
+
+Use a bounded externally offered control schedule and retain intended arrival, actual send,
+admission, acknowledgment, append and rendered times. Generator lateness and refusals stay in
+the record; keep realistic sequential human workflows as a separate treatment. Freeze sampling
+overhead, number of cells/executions and unfinished-task handling before outcomes. Screen
+deterministic dimensions first rather than multiplying every fixture by every configuration.
+
+Measure active coordination/review/correction time separately from waiting and overlapping
+sessions. After interruption, test comprehension of current goal, adopted decision versus
+advice, unresolved effects, next permitted action and specialized help. Counterbalance task
+variants to limit learned-solution carryover; subjective workload is separate from time and
+correctness. Unique tasks, resource windows and machine restarts have different analysis units.
+Account-wide subscription deltas require competing-activity/reset/precision attribution, not
+only a capacity lease. CMP-029. Cache states require observed counters or a documented disabled
+mode; new keys and TTL waits alone cannot certify cold state. CMP-034.
+
+
+## Mark 3 comparative depth and required capabilities — 2026-09-07
+
+OR-039 requires [twelve areas and six shared cross-area fault cases](foundation-research/mark2-research/mark3/research-plan.json)
+within the eight existing experiment families. The plan contains concrete alternatives, source
+anchors, assumptions to challenge, metrics and disposition rules; all trials remain unrun.
+A topic marked researched must link competing complete designs, primary/source-code evidence,
+counterexamples, relevant measurements or preregistration, and a reasoned adopt/adapt/reject/
+unresolved disposition for a mechanism or default.
+
+Compare direct eligible harness controls, lean configured implementations and rich activated
+implementations. A no-specialist or direct-harness experimental control is not a proposal to
+remove required platform communication. Capability availability, task activation, default and
+kernel/service/plugin placement are separate axes. More quota may be justified by reduced
+Owner burden, better continuity, control, quality or specialized assistance; retain OR-024's
+ranking and floors without inventing a new scalar weighting.
+
+Use representative independent research, collaborative feature work, and questionnaire-assistant/
+Head exchange alongside the four retained scenarios. Add slow/multiple views, attach/detach,
+stale advice, revocation/cached continuation, auxiliary quota loss, plugin/browser revisions,
+disk pressure and reconnect faults selectively. Include full normal, failed, verification,
+recovery and human-review costs. Bound case selection; do not multiply every dimension.
+
 ## Mark 2 preregistration and practical resources — 2026-09-07
 
 [Eight experiment families](foundation-research/mark2-research/experiments.json) extend the six

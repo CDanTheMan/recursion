@@ -6,6 +6,73 @@ last-updated: 2026-09-07
 
 # Recursion v3 plugins and editions hypothesis
 
+## Mark 3 comparison: lifecycle and isolation choices - 2026-09-07
+
+Compare immutable snapshots with lazy isolated workers, trusted typed in-process contributors,
+and capability-scoped worker/WASI components. These are placement choices within the required
+capability set, not permission to remove rich functionality from a lean installation. Track
+availability, task activation, default profile and placement independently. CMP-007, CMP-008, CMP-009, CMP-010, CMP-011.
+
+Proposed lifecycle receipts distinguish manifest known, dependency eligible, admitted,
+loaded/imported, activated, draining, deactivated, failed and unknown cleanup. Inspect manifests
+without importing changeable code. No-action and installed-disabled paths must execute no
+plugin import/install/subprocess/network/credential/model effects. Manifest enumeration still
+has measurable disk/CPU cost. A missing dependency is a typed blocker; first-use installation
+requires its own authority. OpenCode's current loader and VS Code's lazy host are useful
+precedents, but their hook/dispose behavior is not a Recursion settlement contract.
+
+Configuration compilation is an unprivileged deterministic adapter. The kernel admits the
+candidate snapshot and current grants. A worker process is not by itself a security sandbox;
+WASI host imports also need explicit capabilities. Preserve local plugin execution and all four
+incompatibility responses with a semantic loss map for tools/results/resources/UI/auth/lifecycle.
+No chosen source license establishes service entitlement or Marketplace redistribution rights.
+
+Keep legacy MCP 2025-11-25 and current 2026-07-28 behavior separate. Current requests carry
+protocol version and client capabilities independently of connection state; optional clientInfo
+is descriptive metadata, not an authenticated principal. Bind authentication separately. Explicit handles can
+still name server application state. Compare scoped reusable processes, legacy per-context
+connections and bounded pools. Pool keys include principal, privacy domain, revision and
+context-isolation contract, with global key/memory limits. Sampling is deprecated in the current
+version; preserve eligible legacy compatibility, but do not follow direct-provider migration
+advice by adding an unapproved API dependency to upstream-only workflows. CMP-019.
+
+Multi-round InputRequired responses end a wire request; new wire IDs retain one logical
+operation's deadline, round/byte bound and parent reservation. Echo opaque requestState only if
+present; omit it when absent. InputRequests-only continuation remains supported. Opaque state requires
+server-side integrity, principal/expiry and method-parameter checks; integrity alone does not
+establish single-use effects. The pinned Python SDK leaves retry orchestration to its caller.
+Revalidate effective capabilities rather than assuming the SDK's connection-time snapshot
+narrows dynamically. Treat self-reported clientInfo, Mcp-Name resource/tool/prompt identifiers
+and mirrored Mcp-Param-* argument headers with body-equivalent privacy controls. URL elicitation acceptance is not completed authentication. CMP-019.
+
+Current cache hints prohibit caching input_required and complete results of retries carrying
+inputResponses/requestState. They cannot
+declassify private output or permit stale authorization. Stream closure signals cancellation,
+not external settlement; reconnect must reestablish notification subscriptions. A bounded vendor
+notification queue may evict facts before application ingress; authoritative facts need a query/
+gap-recovery path. Keep HTTP authentication, stdio credentials, resources, elicitation, UI,
+legacy transport behavior and semantic loss explicit. CMP-020, CMP-022.
+[Source bundles and limits](foundation-research/mark2-research/mark3-comparison/evidence.json).
+
+
+## Mark 3 capability availability and activation — 2026-09-07
+
+OR-039 makes configuration and plugin compatibility central architectural priorities.
+Separate a supported capability from its installation dependencies, activation for a task,
+default setting and placement in kernel/service/plugin. Lean configurations may defer optional
+loading or place it elsewhere; they cannot silently erase accepted capabilities from the release.
+Preserve rich configurations, local execution and all four incompatibility response modes.
+
+Compare manifest-based lazy loading, isolated plugin workers and harness-specific adapters,
+measuring installed-but-disabled import, connection, process, memory and inference costs.
+Plugin boundaries are not automatically faster, safer or cheaper. Compare semantic behavior,
+dependency/isolation failure, configuration propagation and rollback alongside resource use.
+
+MCP coverage includes tools, resources, prompts and host interaction, capability/schema
+negotiation, discovery, context cost, connections/subscriptions where supported, cancellation,
+authentication and accounting. A common protocol name does not prove equivalent host behavior.
+Measure explicit composition losses and retain Owner-visible explanations without hidden fallback.
+
 ## Behavioral portability and incompatibility — proposed 2026-09-07
 
 MKR-014 replaces a metadata-only notion of conversion with a capability-specific loss map.

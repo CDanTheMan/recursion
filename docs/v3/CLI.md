@@ -6,6 +6,49 @@ last-updated: 2026-09-07
 
 # Recursion v3 CLI hypothesis
 
+## Mark 3 comparison: revision delivery and revocation - 2026-09-07
+
+A proposed `EffectiveConfigRevision` envelope contains effective digest, preference revision,
+authority epoch, changed field classes, application boundary, propagation target and causation.
+The unprivileged compiler produces it; the kernel validates identity/scope/grants and current
+admission. Both recorded propagation modes remain available. These are probe/schema proposals,
+not modifications to immutable M1 objects. CMP-010.
+
+Ordinary preference notifications may coalesce. Revocation and tighter identity, credential,
+egress, privacy or resource rules advance a separate monotonic authority fence that cannot be
+coalesced away. Every new dispatch rechecks it, even if an active session has not reached its
+preference-application boundary. In-flight effects retain their original epoch and report
+settled/unknown outcomes; revocation does not pretend rollback. Test R1 preference, R2 revocation,
+R3 preference with only R3 notification delivered. Stale R1 authority must still be rejected.
+
+The terminal shows requested versus effective revision, provenance, affected sessions and
+application/cleanup failures. A resumed provider session that requires roots/tools/configuration
+to be resent cannot silently retain stale values. Numeric epoch representation, notification
+encoding and default application boundaries remain for the model and interface probes.
+
+Track compiled, validated, staged and effective revisions per recipient. Envoy xDS supplies a
+counterexample to treating ACK as effective application: individual resources can be accepted
+without successful overall activation, and a NACK can coexist with partial acceptance. A
+connection nonce is not a durable revision. An activation barrier may protect dependencies but
+cannot delay the authority fence. Recheck disclosure/hydration against recipient, purpose,
+artifact digest and a current policy freshness floor. Cached bytes and propagated trace baggage
+do not grant authority. These are adaptation requirements, not a selected control service.
+CMP-022.
+
+
+## Mark 3 configuration and working relationship — 2026-09-07
+
+OR-038/039 require configurable rich collaboration and lean operation. Show capability
+availability, task activation, selected default and kernel/service/plugin placement as separate
+facts. Existing preferences and natural-language intent can specify the working relationship;
+do not require extra forms or repetitive approvals for routine authorized decisions.
+
+A user can inspect effective settings, enter an assistant/Head conversation, steer ongoing
+work and issue the selected Stop mode through persistent views. A status question need not
+cancel a task. A request changing accepted outcomes, authority, privacy or resource ceilings
+still follows Owner amendment rules. Configurable notification and activation mechanics remain
+research choices, evaluated for comprehension and full workflow cost.
+
 ## Effective configuration revisions — proposed 2026-09-07
 
 MKR-013 retains the existing hierarchy while making merge operators explicit. Preferences use

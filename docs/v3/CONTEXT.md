@@ -6,6 +6,62 @@ last-updated: 2026-09-07
 
 # Recursion v3 context, cache, and compaction hypothesis
 
+## Mark 3 comparison: cache validity and endpoint distinctions - 2026-09-07
+
+Compare provider session/prefix affinity, deterministic content-addressed evidence capsules,
+and coordinated hybrid compaction. Provider caches optimize processing; canonical context and
+current authority determine validity. Cache hits cannot validate a grant, evidence freshness,
+subscription debit or cross-provider reuse. An application capsule key binds authorized source,
+goal/context/configuration revisions and current authority epoch; recheck authority before
+hydration and effects. A preference coalescing stream cannot erase revocation. CMP-010, CMP-016.
+
+Current OpenAI API documentation distinguishes GPT-5.6-and-later minimum-lifetime options from
+older retention controls; routing keys do not guarantee a hit. Anthropic documents hierarchical
+prefix invalidation and model-dependent effort/thinking changes. Google's current Interactions
+endpoint supports implicit caching; explicit named caches belong to the separate generateContent
+API. Do not copy a cache flag or billing rule between endpoints or into an OAuth harness without
+route evidence. [Dated source bundles](foundation-research/mark2-research/mark3-comparison/evidence.json)
+retain the inspected pages; no provider cache experiment ran.
+
+The decisive continuity probe includes changed directives, stale tool/resource results,
+compaction, session loss and no-future-work counterfactuals. Count cache writes/reads, every
+compactor/refresh/retry/output, verification and human correction, using unknown for unavailable
+counters. No model keepalive, paid explicit cache treatment or default TTL is authorized by this
+research. Non-droppable references, privacy-scoped artifacts and one authoritative compaction
+transition remain requirements independently of cache policy.
+
+Separate reusable evidence bytes from their newly admitted capsule envelope. Record each
+transformation's immediate inputs, transformation/schema version, relevant environment/tool
+bindings and actual output digest. Content addressing alone cannot detect inconsistent cached
+intermediate model outputs. Compare exact dependency-trace validation and Salsa-style unchanged
+value backdating against full rebuild. Untracked filesystem/environment inputs, provisional
+cycles and semantic-similarity substitutions are outside that guarantee. A cached verification
+is historical evidence unless the current acceptance policy explicitly admits reuse. CMP-028.
+
+Classify provider-cache treatments as documented disabled, observed first-write/reuse or unknown.
+A new key/session or elapsed minimum TTL does not certify cold state; priming belongs in full
+workflow cost. Current OpenAI pages disagree on 50 versus 80 breakpoint lookbacks, so no bound
+is adopted. OpenAI cached tokens still count toward API TPM, Claude cache reads usually do not
+count toward ITPM with a documented model exception, and Gemini generateContent counts cached
+tokens in limits. None of those rules establishes subscription debit. CMP-034.
+
+
+## Mark 3 continuity through collaborative work — 2026-09-07
+
+OR-038/039 require intent and decision continuity across questionnaire assistance, Head
+consultation, autonomous research and collaborative development. Exact accepted answers retain
+their provenance outside summaries; proposed wording must not become an accepted instruction
+through compaction, quotation or peer advice.
+
+Compare provider prompt caches separately from Recursion-owned evidence/context reuse.
+Cross-route reuse and savings need evidence. Stress revoked instructions, changed configuration,
+consultation replies, warm-session reuse and compaction/replay gaps together. Count rediscovery,
+refresh/write/miss costs, quality loss, repeated explanations and downstream corrections.
+
+Claude's documented conversational classifier boundary may disappear when its source message
+is compacted (SRC-V3-224). That is a bounded source-level reason to retain authority outside
+conversation; it does not establish every tool or effect is mediated by a deny rule.
+
 ## Mark 2 continuity and value — research synthesis 2026-09-07
 
 Keep the non-droppable capsule and one compaction governor per route epoch. Assistant memory

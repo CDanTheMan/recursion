@@ -1,10 +1,73 @@
 ---
 title: Recursion v3 interaction surfaces and collaborative ARM topology
 status: accepted-direction-with-open-research
-last-updated: 2026-09-03
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 interaction surfaces and collaborative ARM topology
+
+## Mark 3 comparison: consultation and protocol placement - 2026-09-07
+
+Compare Head relay, direct addressed consultation and a shared room with one bounded step lease
+using the same questionnaire-assistant-to-Head fixture. Each preserves attribution, permitted
+context/evidence exchange and Owner observation, participation, steering and Stop. Direct
+addressing is the first probe target, not a mandated default. Relay can duplicate reasoning;
+shared discussion adds conflict/cycle handling. Human coordination burden and final answer
+quality belong in the comparison. CMP-012.
+
+Use an application-owned consultation envelope and durable event stream across all topologies.
+ACP is a client-agent session adapter; A2A is an optional opaque remote-task bridge. Neither
+protocol's session/context identifier replaces GoalSpec, current role lease or parent accounting.
+Protocol acceptance, delivery, answer and authoritative adoption are separate receipts. A2A
+send idempotency is optional, so the outer command identity must handle duplicates. ACP
+load/resume and additional-root behavior must be bound to negotiated capabilities.
+
+Owner views render the same durable events with speaker, role, route, goal/context revision,
+evidence and adoption state. A host-generated permission reply records its actual principal;
+it must not imply human observation. Stale turn/lease answers and inputs receive typed conflicts.
+A slow or absent view cannot block Stop, canonical append or recovery. Control ingress has
+reserved bounded capacity; presentation may coalesce only after durable append. Replay gaps
+require RESET before new EVENT delivery. CMP-013, CMP-014.
+
+The detailed [bounded probe plans](foundation-research/mark2-research/mark3-comparison/probes.json)
+retain all ten terminal controls, preserved forks, three Stops and remote uncertainty. No
+synthetic document check or protocol method name establishes observed interaction support.
+
+Keep logical consultation, reply-delivery generation, operation ownership and authoritative
+adoption lifetimes distinct. A logical wait must not occupy the only executor needed by its
+consultant or block a read pump that must receive the answer. Reply aliases are useful prior art
+for invalidating future delivery, but do not cancel remote computation or erase already received
+messages. Full Stop of a borrowed consultant operation preserves unrelated persistent-assistant
+work. Owner views expose expiry, stale advice, missing evidence and the next permitted action.
+CMP-021.
+
+Reserve end-to-end control progress before SDK ingestion, through framing/parser, transport
+window, dispatcher, canonical writer and rendering. A bounded SDK notification queue can drop
+a fact before Recursion sees it; require a sequence/query recovery path or keep it unknown.
+Cancellation signals cannot serve as evidence of termination. Record offered arrival, submission,
+canonical acceptance, recipient fence installation, cancellation delivery and settlement
+separately so stalled generators and sinks cannot hide Owner-visible delay. CMP-020.
+
+
+## Required visible assistant-to-Head workflow — 2026-09-07
+
+OR-038 requires an Owner to work with a questionnaire assistant that can consult Head directly,
+exchange relevant questions/answers/evidence, and return clarification to the ongoing
+conversation. The Owner can observe who requested, replied and adopted a decision; participate,
+redirect and stop the exchange. Head integrates exact approved answers and continues research
+toward concrete architecture and bounded delegation.
+
+This capability can cross compatible model/harness sessions, terminal views and configured
+execution nodes. Preserve goal/version, current grants and leases, decision provenance,
+causation and shared accounting. A view is an authorized projection, not process ownership.
+Show accepted, delivered, adopted/declined/expired and settled/unknown states truthfully.
+Consultation is not permission to amend GoalSpec or direct a peer outside existing grants.
+
+Compare Head-routed, direct addressed and shared-discussion implementations under the same
+required behavior. No topology, channel or transport is universally selected by OR-038.
+Research chooses mechanisms, activation and defaults while retaining the accepted communication
+capability and meaningful Owner control. Cognitive/coordination burden and clarity are outcomes,
+not costs to leave outside a narrow quota benchmark.
 
 ## Visible work without fabricated activity — research proposal
 
@@ -73,7 +136,7 @@ Head remains aware through canonical events and monitoring, not by copying every
 into Head's model context. Direct ARM access therefore reduces conversational bottlenecks
 without making the ARM independent of the constitutional hierarchy.
 
-## Multi-ARM collaboration hypothesis
+## Required multi-ARM collaboration; topology comparisons
 
 The referenced product is the official [SpaceXAI Grok Bot](https://docs.x.ai/grok-bot/overview),
 opened 2026-09-03. Its documentation defines a Bot as one persistent named agent, says multiple
@@ -84,17 +147,17 @@ safe for Recursion. The public [installer repository](https://github.com/grok-bo
 describes a separate “Chief of Staff” role;
 Recursion does not adopt that role because Lucas rejected a distinct AI ARM Manager.
 
-Three topologies should be compared:
+Compare these topologies while preserving the required communication capability:
 
 1. **Head-routed room:** Head owns the shared conversation lease, solicits named ARM input and
-   commits one reconciled transition. This remains the simplest default.
+   commits one reconciled transition. This remains a candidate default to compare, not the sole required path.
 2. **Event-mediated peers:** ARMs exchange typed requests and evidence through the kernel while
    one named ARM may hold a bounded, expiring coordination lease for each cross-ARM workflow
    step. The owner has accepted this topology when the lease cannot change room membership,
    overall goal, authority envelope, conflict policy or ARM lifecycle.
-3. **Direct peer delegation:** an ARM delegates to or directs another ARM. This is rejected by
-   default unless authority, budget accounting, deadlock handling and one-writer ownership can
-   be proved without creating a hidden executive tier.
+3. **Direct peer delegation:** an ARM delegates to or directs another ARM. Any such delegation requires existing grants and evidence for authority, budget
+   accounting, deadlock handling and one-writer ownership without a hidden executive tier.
+   Direct consultation does not imply peer command authority; OR-037 adds no amendment rights.
 
 A workflow `supervisor` may be a temporary coordinator role held by Head or a named ARM inside
 one GoalSpec. It is not a new constitutional AI ARM Manager and may not acquire portfolio

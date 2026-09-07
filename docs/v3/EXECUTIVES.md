@@ -6,6 +6,56 @@ last-updated: 2026-09-07
 
 # Recursion v3 executive model
 
+## Mark 3 comparison: advice, adoption and routine delegation - 2026-09-07
+
+The consultation envelope proposed for probes binds request/causation/correlation, requester and
+recipient logical identities and leases, goal/task/version, permitted context/evidence revisions,
+response schema, expiry, depth/cycle limit, route/session/node and parent reservation. Durable
+states distinguish requested, accepted/rejected, delivered, answered/declined/blocked, and
+adopted/expired. Effect settlement is a separate state. See
+[interaction surfaces](INTERACTION-SURFACES.md) for the topology comparison. CMP-012, CMP-013.
+
+The questionnaire assistant can consult Head and specialists inside existing grants. Head and
+ARM retain their recorded decision rights; only the current authorized lease holder accepts
+its authoritative transition. A changed lease can make a delayed answer ineligible for adoption
+while preserving it as attributable evidence. Owner answers remain distinct from advice and
+editorial synthesis. Routine assignment, research organization and tactical replanning do not
+require renewed approvals; actual GoalSpec amendments remain Owner-only under OR-037.
+
+Persistent identity is independent of warm process/session state. Compare reconstruction,
+residency and bounded specialist activation with the same goal continuity and human-quality
+rubric. Every auxiliary call is part of the parent workflow allowance. A provider reset or a
+reconstructed assistant does not renew it. No idle inference loop is required to retain identity.
+
+A suspended consultation releases the serial executive/transport executor; inspect a resource
+wait-for graph as well as participant cycles. Durable consultation identity survives the reply
+delivery generation, while current lease/goal authority controls adoption. Expired delivery
+cannot start a fresh turn without new admission. Full Stop distinguishes an owned child from a
+borrowed operation on a persistent consultant doing unrelated work. Stop the latter operation
+and its effects without terminating unrelated work. Received stale advice remains attributable;
+data dropped before receipt must remain explicitly missing. CMP-021.
+
+
+## Approved routine delegation and visible consultation — 2026-09-07
+
+OR-037 retains Owner-only actual GoalSpec amendments with substantial routine delegation.
+Within existing grants an assistant may organize research, consult, assign eligible workers,
+compare alternatives and replan tactics. Accepted intent, deliverables, acceptance requirements,
+authority, privacy exposure and resource ceilings remain Owner amendments. Communication or a
+peer recommendation is not Owner approval; authorized routine decisions need no repetitive approval.
+
+OR-038 requires a questionnaire assistant to consult Head and bring clarifications back while
+the Owner observes attributable exchanges, participates, redirects or stops. Distinguish
+request/response from adoption and accepted decision. Use current role leases, permitted
+context, goal version and shared reservations; a persona, message or persistent session
+cannot enlarge authority. Sessions, views, models and nodes may differ.
+
+The assistant experiment compares effective implementations and configurations, including
+human coordination burden and specialized help. It cannot remove required communication,
+delegation or interaction after a narrow quota comparison. If representative workflows need
+actual amendments and suffer avoidable interruptions, identify precise classes for a later
+bounded proposal; no such class is granted now.
+
 ## Persistent assistants and consultation — proposed 2026-09-07
 
 MKR-005/MKR-009/MKR-010 propose an addressable `AssistantIdentity` projection with a stable ID,
@@ -42,10 +92,10 @@ exchange can carry this envelope; it does not supply Recursion's authority rules
 
 Decision rights remain configurable product scope. Routine choice inside an existing grant can
 use its current lease holder. A new class that amends GoalSpec or reallocates cross-goal authority
-needs the explicit pending amendment choice in [decisions](foundation-research/mark2-research/decisions.json).
+requires a separate bounded Owner amendment proposal under OR-037; no new amendment class is approved.
 Current Owner-only amendments remain in force. No per-message Owner approval is added to already
 authorized routine decisions. The assistant trial compares direct execution, one bounded
-consultation and a resident assistant; additional supervisors must earn their total cost.
+consultation and a resident assistant. Compare their total costs and human benefits while preserving required communication and delegation; no mandatory supervisor count is selected.
 
 ## Mark 2 Owner direction — 2026-09-06
 

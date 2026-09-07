@@ -7,16 +7,73 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 ratified architecture target
 
-## Mark 2 model and recovery boundary — proposed 2026-09-07
+## Mark 3 comparison: canonical state and scheduling boundary - 2026-09-07
 
-The recommended proof boundary is the smallest aggregate plus an explicit bounded broker
-refinement; a bounded broker in the first model remains a consequential Owner choice.
+The [comparative dossier](foundation-research/mark2-research/mark3-comparison/architectures.md)
+compares demand-activated services, a resident session hub and durable workflow assistance
+against the same authority contract. These are candidate arrangements, not selected languages,
+stores or frameworks. Residency and durability are independent axes: compare bounded warm
+pools within A/B, then hold residency constant when comparing receiver-owned operation records
+against workflow assistance. Demand activation is the first probe target; no runtime winner
+has been measured. CMP-001, CMP-005, CMP-006, CMP-014, CMP-029.
+
+The proposed effect path is authenticated command -> current authority/identity/reservation
+admission -> atomic canonical intent/receipt -> broker dispatch -> recipient observation ->
+reconciliation. Commit and dispatch are separate failure boundaries. Persist a stable operation
+identity before dispatch. A receipt of a command, queue drain, process exit and settled external
+effect remain separate states; unknown effects retain their reservations. Only one component
+owns retry for an operation. Timers and workflow journals may propose wakeups, but each wakeup
+rechecks current authority, PAUSE, ownership and remaining allowance without model inference.
+
+A service/actor journal is subordinate adapter state. It cannot accept GoalSpec amendments,
+become a competing writer, renew budgets or decide that an external effect succeeded. Reconcile
+it against the canonical ledger after restart. T3's atomic command pattern is useful, but its
+runtime receipt bus is test-only and its inspected queues are unbounded. Temporal activity
+cancellation is cooperative; Orleans reminders skip missed ticks; Restate's invoker fence and
+journal acknowledgement distinguish attempt state from external completion. Those limits must
+be preserved when adapting the mechanisms. No runtime reuse is selected here.
+
+The [formal-boundary specification](foundation-research/mark2-research/mark3-comparison/formal-boundaries.md)
+provides shared observations, six cross-contract obligations, original and cross-area bounds,
+coupling assumptions, constructed traces and guard-removal criteria for OR-036. Neither
+model has been implemented or checked. Include relevant broker state when independent
+composition is inadequate; do not weaken an obligation to preserve a small state count.
+OR-015's common-writer migration blocker and immutable M1 contracts remain unchanged. CMP-015.
+The M1A observation cannot supply M1C's original key, target and complete admission by inverting
+digests; require an authenticated supplemental join. M1A's PAUSE-sensitive observation refusal
+remains operative even though pure M1C trace classification can inspect retained evidence.
+Distinguish semantic counterexamples from inadequate auxiliary state or checker limits; neither
+an unproved mapping nor a timeout is a passing model. CMP-027.
+
+
+## Approved proof boundary and comparative obligation — 2026-09-07
+
+OR-036 accepts the smallest aggregate plus explicit independently checkable bounded broker
+refinement. Investigate both that split and a broker-inclusive model sufficiently to compare
+coverage and complexity on identical required behavior, bounds, fairness assumptions and fault
+traces. Ease or speed alone cannot remove necessary execution behavior.
+
+Before freeze, the model and refinement together must cover the six M1 obligations and
+process ownership, consultation, queue saturation, RESET/replay, relaunch, configuration and
+update/Stop interactions. Include relevant broker state directly whenever separate checking is
+inadequate or a bounded interleaving violates an aggregate obligation. Retain counterexamples
+and mapping obligations. Whole-system optimization proceeds alongside this work; probes still
+precede model freeze, then language comparison, then storage comparison. OR-015 is unchanged.
+
+OR-039 requires comparing complete architectures, component placement and dependency costs,
+including rich/lean and disabled configurations. A rejected framework, topology or default must
+be replaced with an approach preserving the accepted capability. See [Mark 3 research plan](foundation-research/mark2-research/mark3/research-plan.json).
+
+## Mark 2 model and recovery mechanics — updated by OR-036
+
+The approved proof boundary is the smallest aggregate plus an explicit bounded broker
+refinement; a bounded broker in the first model remains a required technical comparison.
 Neither option selects language/storage/frameworks or changes M1. Preserve the six existing
 obligations: M1A-to-M1C effect identity projection; separate work/writer/process/PAUSE fence
 namespaces; one canonical writer; current-immediate PAUSE; partition/termination ambiguity;
 and bounded broker flow/replay with RESET. Add assistant/consultation flow, revision propagation,
 coherent forks, update admission and cumulative recovery reservations as proposed obligations.
-MKR-018; [pending decisions](foundation-research/mark2-research/decisions.json).
+MKR-018 is the historical recommendation, now accepted with qualifications by OR-036; [current decisions](foundation-research/mark2-research/mark3/directions.json).
 
 | Alternative | Reuse/adaptation benefit | Limit and removal criterion |
 |---|---|---|
@@ -62,8 +119,8 @@ No universal mode is selected. Configured automatic actions use existing authori
 adding repeated Owner confirmations. Every mode preserves newer history; omission of “save” is
 not permission to delete work.
 
-Canonical event order resolves Stop/update races. Stop accepted first fences later work; an
-update already past an external activation boundary cannot claim cancellation reversed it.
+Canonical event order resolves admission order; Stop fences new permits. A previously issued
+permit may activate after local Stop until the recipient fence is installed; cancellation is not rollback.
 Persist the operation identity, mark uncertain activation, reconcile the boot receipt and reject
 returning workers with stale release/lease/config epochs. Full Stop includes owned relaunchers;
 Lazy uses a visible bounded operation boundary. Current operational PAUSE remains unchanged.

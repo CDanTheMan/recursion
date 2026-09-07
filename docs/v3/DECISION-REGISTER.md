@@ -7,13 +7,43 @@ source: archive/session-transcript-2026-09-02.md plus owner direction 2026-09-03
 
 # Recursion v3 session decision register
 
-## Mark 2 research disposition — 2026-09-07
+## Mark 3 comparison disposition - 2026-09-07
+
+OR-036 through OR-039 remain accepted. The
+[comparison dossier](foundation-research/mark2-research/mark3-comparison/architectures.md)
+recommends demand activation as the first probe target while retaining resident and durable
+scheduling alternatives. This is a bounded research disposition, not a new Owner ruling or a
+language/store/framework choice. No consequential new GRILLME decision is established; no new
+Owner answer is recorded. Historic pending fields remain preserved snapshots. Technical
+assumptions proceed to probes under the existing scope and do not reopen routine delegation.
+
+
+## Mark 3 Owner rulings — 2026-09-07
+
+Both Mark 2 decisions are now approved with qualifications. [Current dispositions](foundation-research/mark2-research/mark3/directions.json)
+and [exact supplied passages](foundation-research/mark2-research/mark3/owner-answers.md) supersede the historical
+pending records without rewriting their evidence. The accepted foundation is verbatim; the
+vision extension and research specification are editorial compilations of requested direction.
+
+| ID | Accepted Owner direction | Supersession and remaining work |
+|---|---|---|
+| OR-036 | Start with the smallest aggregate plus explicit independently checkable bounded broker refinement; compare both boundaries deeply and include necessary broker state when separate checking is inadequate. | Resolves decision.mark2.proof-boundary. Required probes and comparative refinement checks remain; model adequacy is not certified. |
+| OR-037 | Retain Owner-only actual GoalSpec amendments with substantial authorized routine delegation; test avoidable interruptions before proposing exact future delegated amendment classes. | Resolves decision.mark2.delegated-amendments. No amendment classes are delegated; current authority and immutable M1 stay unchanged. |
+| OR-038 | Task-aligned autonomy and collaboration retain initiative within agreed boundaries, intent, feedback and Owner inspection/steering/Stop. Communication, delegation and interaction are required, with visible questionnaire-assistant-to-Head exchange across sessions and nodes. | Clarifies OR-027 and the interactive foundation. The representative questionnaire-assistant/Head workflow is required, not observed. |
+| OR-039 | Configuration, compatibility and deep whole-system optimization are central. Preserve required capabilities while comparing mechanisms, activation, defaults and kernel/service/plugin placement, including rich/lean and disabled costs and complete human/workflow benefits. | Clarifies OR-023/024/034/035. Measurements select mechanisms and defaults, not deletion of accepted capabilities; no new numerical weighting or product implementation is selected. |
+
+Only a later evidenced, consequential choice should return to the Owner. Do not re-ask either
+approved recommendation or the ten completed answers. Technical companion recommendations remain
+proposals unless separately accepted. The [follow-up plan](foundation-research/mark2-research/mark3/research-plan.json)
+records twelve areas, cross-area failure cases and the unchanged eight experiment families.
+
+## Mark 2 research disposition — historical snapshot before Mark 3
 
 The [new campaign](foundation-research/mark2-research/campaign.md) executed the six research
 packets and proposes canonical mechanics without creating new Owner rulings. OR-021 through
 OR-035 remain the completed direction record. [Pending consequential choices](foundation-research/mark2-research/decisions.json)
 are limited to the first aggregate/broker proof boundary and any delegated GoalSpec amendment
-classes. Recommendations remain unanswered; current Owner-only amendments and M1 stay unchanged.
+classes. Those recommendations were unanswered at that snapshot; OR-036/037 above now resolve them. Current Owner-only amendments and M1 stay unchanged.
 
 The first [GRILLME](foundation-research/mark2-research/grillme.md) recommends the smallest aggregate
 plus explicit bounded broker refinement, with a broker-inclusive model as the alternative.

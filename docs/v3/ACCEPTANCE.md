@@ -6,11 +6,54 @@ last-updated: 2026-09-07
 
 # Recursion v3 acceptance hypothesis
 
+## Mark 3 comparison readiness gate - 2026-09-07
+
+CMP-018: the foundation is ready for bounded admission/probe construction and deeper formal
+mapping work. It is not ready for production acceptance, formal-model freeze, language/store
+selection or common-writer migration. Current source evidence supports contract refinements;
+no live integration, resource benchmark or formal proof was produced.
+
+The [new campaign gate](foundation-research/mark2-research/mark3-comparison/check.py) checks the
+frozen start, path/identity preservation, source/claim bindings, twelve-area comparison, eight
+unrun probe families, both formal boundaries and honest evidence states. It retains the unchanged
+25-command regression inventory and meaningful historical and new adversarial cases. Final
+acceptance requires two complete passes and two independent reviews of the identical clean
+candidate, with attestations under the Git common directory. A repair invalidates prior final
+passes/reviews for publication. These documentation results do not certify runtime behavior.
+
+The next runtime gate must demonstrate all-role native/upstream/combined closure, ten controls,
+three Stops, queue and ownership settlement, configuration fences, plugin/MCP semantic
+portability, preserved forks, six update modes, remote uncertainty and cumulative recovery
+bounds on exact admitted builds. Failed or unknown required capabilities remain visible; a quota
+benchmark cannot delete them. OR-036 and OR-037 are accepted directions, not pending questions.
+
+
+## Mark 3 accepted choices and additional evidence gates — 2026-09-07
+
+OR-036/037 resolve both Owner decisions. Model freeze still requires interface probes and
+combined coverage of all obligations under the approved aggregate/refinement boundary, with
+the broker-inclusive model compared on the same traces, bounds and fairness assumptions.
+If separate checking is inadequate, relevant broker state belongs in the model. Do not
+weaken M1, treat approval as proof, or mark OR-015 resolved.
+
+OR-038 requires the questionnaire-assistant/Head workflow across compatible sessions and
+configured nodes. Test attributable request/response/adoption, exact accepted answers versus
+proposals, Owner observation/participation/steer and all three Stop modes. Inject late, duplicate,
+conflicting and revoked messages, cycles, slow/detached views, node partitions and hidden
+helper consumption. Show current identities, permissions, decision provenance and one shared
+accounting lineage without leaking context outside the viewer's grant.
+
+OR-039 requires evidence for both rich and lean configurations: availability, activation,
+default and kernel/service/plugin placement are separate. Disabled-cost checks cannot pass
+by deleting an accepted capability. Compare Owner comprehension, coordination burden,
+intent continuity, control, specialized help and quality with the original performance/usage
+vector. No runtime outcome is certified by the [Mark 3 documentation gate](foundation-research/mark2-research/mark3/check.py).
+
 ## Mark 2 research and contract readiness — 2026-09-07
 
-Foundation verdict: sufficient source-grounded design for bounded interface probes and the first
-proof-boundary decision. Complete contract readiness remains conditional: exact route eligibility,
-ten-control composition, all-role quota closure, broker proof split and failure-specific recovery
+Foundation verdict: sufficient source-grounded design for bounded interface probes under the
+approved proof-boundary direction. Complete contract readiness remains conditional: exact route eligibility,
+ten-control composition, all-role quota closure, adequacy of the approved broker refinement and failure-specific recovery
 guarantees are unresolved. No live integration, performance improvement or release is certified.
 MKR-022/MKR-023/MKR-024.
 
@@ -54,7 +97,7 @@ A limited adapter cannot count as proof of complete product feature coverage.
 
 The campaign's [check.py](foundation-research/check.py) must bind the frozen start and exact clean
 candidate, validate the complete allowlisted diff and unchanged M1/protected bytes, close record
-schemas/IDs/links/coverage, preserve pending Owner answers, scan the publication set and rerun
+schemas/IDs/links/coverage, preserve historical answers and bind later explicit dispositions, scan the publication set and rerun
 the M1/v2 regression entrypoints. Two passes and independent review bind the same final commit;
 a later receipt or repair creates a new candidate. This docs gate is not product certification.
 

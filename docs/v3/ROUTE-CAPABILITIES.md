@@ -6,9 +6,65 @@ last-updated: 2026-09-07
 
 # Recursion v3 provider-route capability matrix
 
+## Mark 3 comparison route delta - 2026-09-07
+
+The [current overlay](foundation-research/mark2-research/mark3-comparison/route-deltas.json)
+preserves all 13 entries, 23 paths and 130 controls through its immutable baseline and explicit
+field overrides. Current Codex docs supersede the blanket App Server experimental limitation:
+they describe stable stdio for deep integration, with WebSocket and individual
+methods separately experimental. Source pin `0b9b5ecff3b5951bc6c86c40aa91da3f7d6e86b1` binds the
+inspected turn/thread schemas. No binary was run. CMP-017; SRC-V3-252.
+
+`turn/steer` requires the expected active turn ID. `thread/shellCommand` is explicitly a
+user-initiated unsandboxed path; it must not become a general autonomous tool through the normal
+thread sandbox assumption. Resume/fork/configuration and all helper usage remain exact-route
+probes. ChatGPT sign-in, API-key billing, enterprise tokens and experimental externally managed
+tokens are distinct; OAuth does not grant a general native API path.
+
+Grok's pinned ACP dispatcher exposes `x.ai/interject`; its handler returns queued after ignoring
+the channel-send result, and stranded input can become a new prompt turn. Replace the earlier
+undiscovered-wire limitation with source-located extension and unproven delivery/turn targeting.
+ACP initialization itself can run cleanup, indexing and auth/trust migration, so a future
+handshake needs an isolated home/workspace and explicit effects allowance. CMP-030.
+
+Keep first-party Cursor ACP, local/cloud SDK and the independent adapter distinct. Official SDK
+1.0.31 declares optional steer with complete_delivered versus revert_to_followup ownership
+outcomes; the independent 0.9.1 adapter pins SDK 1.0.28 without that public declaration. SDK
+callback tools run in the host without interactive approval, retries default on for headless
+embedding, and main-loop restrictions must be reapplied on resume and do not confine all task
+subagents. The adapter's Apache license does not license modifications to the Anysphere SDK;
+its attribution patch leaves modified-combination distribution unresolved. CMP-031.
+
+Route admission includes every resolved helper and fallback. Hermes auxiliary calls can bypass
+an explicit-provider restriction on selected errors; Gemini next-speaker/loop checks and model
+availability policy add conditional calls; OpenCode title/small-model selection can differ from
+the main model. Its slash-template shell substitution precedes command.execute.before, so that
+hook is not a universal pre-effect fence. Compare confined rich server/SDK adapters with bounded
+separately admitted upstream sessions. No silent route fallback or extra API credential is
+allowed by the upstream-only requirement. CMP-032.
+
+Durable meter segments must survive Claude reset commands and budget-counter reset, Grok
+new-process resume, Cursor delayed billing and unattributed usage. A zero-dollar value can mean
+plan-included or BYOK use, and missing crash totals stay unknown. CMP-033. Every role retains
+proposed native/upstream-only/combined accounting paths; eligibility and runtime support remain
+unproven. Historical rows remain snapshots; the explicit overlay owns these superseding deltas.
+
+
+## Mark 3 source-only control refinements - 2026-09-07
+
+The [companion audit](foundation-research/mark2-research/mark3/companion-review.json) adds five bounded failure
+cases without changing the historical 13-entry matrix or claiming installed-build conformance.
+Gemini headless ask decisions are denied (SRC-V3-225); interactive permission availability must
+be bound to the actual mode. The documented Hermes Buzz ACP host can answer requests itself
+despite manual configuration (SRC-V3-228); record the actual approving principal and host path.
+Pi queue/abort ordering and Hermes redirect-to-background behavior (SRC-V3-226 and SRC-V3-227) require
+composed Stop probes. A similar method name or visible prompt schema does not certify the
+platform control or grant boundary. No new launch-critical name or Owner scope change follows.
+
+
 ## Mark 2 verified source matrix — 2026-09-07
 
-[The current machine-readable matrix](foundation-research/mark2-research/compatibility.json)
+[The preserved Mark 2 matrix](foundation-research/mark2-research/compatibility.json)
 contains all 13 requested entries, 23 explicit paths and 130 feature cells. Every path separates
 provider, executing harness, supported interface, auth, billing, host, version and intended
 distribution. Every control cell names its applicable path and primary evidence. All runtime
@@ -27,7 +83,7 @@ conformance and tested-build fields remain unproven/null; no live provider trial
 | Claude Code | Streaming SDK/CLI, deferred questions and feature-gated interrupt receipts; usage excludes some helpers, OAuth distribution rules separate |
 | Gemini CLI | Experimental ACP/headless plus internal core adaptation; confirmation bus is tool approval, core compression is not complete external parity |
 | Antigravity | Local Python SDK/harness versus managed API sandbox have different authentication, billing, host and lifecycle |
-| Codex | App Server has rich turn/thread controls; command/WebSocket transport is experimental and documented unsuitable for production use |
+| Codex | Current stdio App Server integration is distinct from experimental WebSocket/methods; exact build, sandbox-sensitive commands and helper accounting require probes |
 | OpenCode | Server/SDK/ACP with questions, fork/abort/summarize; pending question map is in memory, prompt_async is not proven active steering |
 
 MKR-001 through MKR-007 and MKR-023/MKR-024 are registered research conclusions.
