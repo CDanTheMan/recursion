@@ -1,10 +1,51 @@
 ---
 title: Recursion v3 executive model
 status: accepted-direction-with-open-research
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 executive model
+
+## Persistent assistants and consultation — proposed 2026-09-07
+
+MKR-005/MKR-009/MKR-010 propose an addressable `AssistantIdentity` projection with a stable ID,
+display name, project memberships, profile revision and permitted memory references. It links
+sessions and role runs; it neither replaces `ExecutiveProfile`, `ArmRun` or `GoalSpec` nor creates
+another executive tier. A profile supplies reusable settings, a session carries one interaction
+history, and each role run retains one current goal version, lease, grant and reservation.
+Switching models, hosts or sessions preserves the assistant identity without carrying stale authority.
+
+| State | Durable behavior | Inference/resource behavior |
+|---|---|---|
+| Active | Current role/session, lease, config and pending interactions visible | Only admitted work calls models; every helper is attributed |
+| Idle | Identity and validated references retained | No model heartbeat; resident process optional and measured |
+| Suspended | Checkpoint and unresolved effects retained | Resume revalidates route, auth, config, memory and budget |
+| Disabled | Identity remains inspectable; optional features off | No plugin import, model call or speculative work |
+| Revoked | New admission fenced immediately; stale replies rejected | Existing effect settlement is explicit, not assumed |
+| Terminated | History and final disposition retained by policy | No relaunch without a new admitted run |
+
+Memory is scoped personal/project/goal/session, with source, audience, revision, validity and
+expiry. Source revocation invalidates derived memory even when a provider session cached it.
+Shared browser logins or a shared Hermes home are not isolation. Hermes freezes memory per
+session and profile cloning excludes history/state; Grok Bot shares an account computer; Pi
+provides session trees. These are useful mechanisms with different semantics, not complete
+assistant implementations. SRC-V3-156/SRC-V3-157/SRC-V3-194/SRC-V3-195.
+Orleans provides a virtual-actor comparison, but its runtime and persistence costs remain
+unselected dependencies (SRC-V3-197).
+
+A consultation request binds parent goal/task, requester and recipient role leases, decision
+class, permitted context capsule, response schema, expiry, depth/cycle bound and shared budget.
+The receiver may answer, decline or return a typed blocker. The caller records whether advice
+was adopted and its evidence; a message is never itself a grant or authoritative decision.
+A late reply is retained as evidence but cannot act under a revoked epoch. A2A task/artifact
+exchange can carry this envelope; it does not supply Recursion's authority rules (SRC-V3-196).
+
+Decision rights remain configurable product scope. Routine choice inside an existing grant can
+use its current lease holder. A new class that amends GoalSpec or reallocates cross-goal authority
+needs the explicit pending amendment choice in [decisions](foundation-research/mark2-research/decisions.json).
+Current Owner-only amendments remain in force. No per-message Owner approval is added to already
+authorized routine decisions. The assistant trial compares direct execution, one bounded
+consultation and a resident assistant; additional supervisors must earn their total cost.
 
 ## Mark 2 Owner direction — 2026-09-06
 
@@ -115,7 +156,8 @@ This separation preserves project personalization without creating an immortal p
 
 Both Head and ARM use configurable model suites rather than a universal ladder. Candidate suites may include architecture, security, backend, frontend, mechanical refactoring, documentation, compaction, integration, and verification.
 
-Routing is quality-first adaptive by default for the private deployment:
+Routing first enforces the quality and authority floors, then follows OR-024: responsiveness,
+subscription efficiency and completion. Adaptive choices inside those bounds are proposed:
 
 1. Establish the task's quality floor, privacy class, tool needs, and continuity risks.
 2. Select the least scarce eligible route expected to meet that floor.

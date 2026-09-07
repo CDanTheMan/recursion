@@ -1,10 +1,45 @@
 ---
 title: Recursion v3 execution fabric hypothesis
 status: hypothesis
-last-updated: 2026-09-03
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 execution fabric hypothesis
+
+## Role execution and accounting closure — proposed 2026-09-07
+
+MKR-002/MKR-008 extend the existing Route/WorkPacket projection, not the M1 wire schema.
+Admission resolves every model-using dependency before starting the workflow:
+
+| Role | Native execution path | Upstream-only execution path | Accounting binding |
+|---|---|---|---|
+| Head/ARM planning | Admitted native model call | Eligible bounded harness session producing a validated proposal | Goal pool and planning reservation |
+| Implementation | Native model/tool loop | Supported upstream session and scoped tools | Task attempt plus descendant reservations |
+| Review | Separate eligible native verifier | Clean eligible harness verifier session | Review reserve and exact independence class |
+| Summarization/memory | Deterministic extraction or explicitly bound model | Harness-native transform or eligible summarizer session | Context-service reservation, including failed transforms |
+| Recovery analysis | Deterministic reconciliation or admitted model | Eligible recovery session only within the remaining cap | Cumulative recovery ledger |
+| Setup assistance | Deterministic wizard first; optional admitted model | Optional eligible setup session | Explicit setup allowance; never necessary to boot |
+| Consultation | Admitted role session | Eligible assistant/harness session | Parent consultation/depth budget |
+| Learned routing/retrieval | Optional explicit model route | Eligible bound helper session | Router/retrieval reservation; deterministic alternative when equivalent |
+| Hidden auxiliaries | Explicitly catalogued classifier/title/vision/helper | Harness feature enabled only with an eligible documented path | Same explicit pool ledger; unknown usage is not zero |
+
+Each binding records role/run/goal version, provider/model, executing harness, interface/build,
+credential reference, billing pool/unit, host, effective config, tools/grants, verification class,
+observation source and conservative reservation rule. Included subscription capacity and API
+spending are distinct units. Provider reset timestamps change availability, not task budgets.
+Internal child usage must be counted once without losing parent lineage.
+
+An upstream-only configuration must complete the required dependency closure with direct API
+credentials absent. A helper that discovers a different provider, asks for a second key or
+silently uses a metered pool fails admission. Unknown counters require a documented conservative
+bound or a visible blocked configuration; they cannot become zero-cost calls. Same-provider
+review is usable only under its permitted independence class. See the source-specific limits
+in [the integration matrix](foundation-research/mark2-research/compatibility.json).
+
+Ordinary persistence, scheduling, health observations, queueing, configuration compilation,
+accounting and status are deterministic and event driven. Model inference is invoked for bounded
+semantic work. A provider session can accelerate continuation; it is not the canonical writer,
+authority source or scheduler. Native and upstream implementations share the same integrity path.
 
 ## Native and delegated engine accommodation — proposed
 

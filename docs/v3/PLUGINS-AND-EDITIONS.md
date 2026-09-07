@@ -1,10 +1,57 @@
 ---
 title: Recursion v3 plugins and editions direction
 status: accepted-direction-with-open-trust-research
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 plugins and editions hypothesis
+
+## Behavioral portability and incompatibility — proposed 2026-09-07
+
+MKR-014 replaces a metadata-only notion of conversion with a capability-specific loss map.
+Local execution remains required; it separately declares dependency availability, network,
+credential, host permission and inference requirements. No inference or installation occurs
+during deterministic capability resolution.
+
+| Surface | Preserved meaning | Concrete adapter limit |
+|---|---|---|
+| Tools | Input/output schemas, typed results, provenance, effect class, grant, idempotency | MCP annotations are untrusted; dropping output schemas/resource links is a recorded loss |
+| Resources | URI/version/digest, audience and subscription behavior | MCP context inclusion is host-controlled; a browser snapshot is an observation |
+| Prompts/skills | Versioned instruction contribution and invocation rules | Model-selected instructions are not deterministic commands or grants |
+| Hooks | Timing, blocking, mutation, failure and cleanup semantics | PreToolUse, compaction and lifecycle hooks differ by host; file ingestion may bypass them |
+| Authentication | Credential source, audience, scope, expiry and grant | MCP HTTP tokens, stdio environment, browser cookies and app permissions are different authorities |
+| UI | Target/session identity and input/output contract | Terminal, host widgets, browser tabs and CDP child targets are not interchangeable |
+| Memory | Explicit context reference, freshness and authority boundary | Persistent browser profiles and conversation state do not become canonical memory |
+| Dependencies | Artifact/lock digest, install owner, executable, network needs | Playwright browser/extension and OpenCode startup Bun installs are admitted effects |
+| Lifecycle | Ownership, disposal, restart, epoch and settlement | Cordis cleanup and cancellation do not compensate external effects |
+
+Primary mechanisms: SRC-V3-171/SRC-V3-177 through SRC-V3-183/SRC-V3-198/SRC-V3-202.
+Chrome debugger permission and child-target handling need separate checks; a closed tab or
+revoked extension grant must not trigger relogin, reattachment or rerouting silently.
+
+All four accepted responses retain an inspectable incompatibility marker with requested
+capability, adapter/version, missing requirement, translation loss and effective config:
+
+| Response | Proposed behavior on attempted invocation |
+|---|---|
+| state_incompatibility | Return a typed refusal and leave the marker visible |
+| recommend_combinations | Refuse effects and display compatible combinations and their losses |
+| no_action | Return a deterministic no-effect receipt; no proactive notification, repair or substitution |
+| notify_and_recommend | Same no-effect refusal plus configured notification and compatible suggestions |
+
+A request reaching an incompatible route records `status=incompatible, attempted=false,
+effect=none`, meaning no execution was attempted. It may append the local canonical request and
+refusal receipt; it performs no plugin import, process/model/tool start, auth, installation,
+network repair, reroute, quota use or spend. A failure after an admitted effect instead reports
+failed/cancelled/uncertain and cannot reuse this no-effect status. Recommendations never activate
+themselves. This is a proposed resolution of the handoff's invocation ambiguity, not a new Owner
+answer.
+
+Rich SDK/server/protocol/extension composition is preferred when it meets concrete semantics.
+A wrapper remains useful when its declared losses satisfy the workflow. Local browser execution,
+a local model and offline operation are independent capabilities. Native and upstream paths
+share the same grants and configuration revision rules in [CLI](CLI.md); plugin output enters
+as a proposal/observation and cannot write canonical state directly.
 
 ## Mark 2 Owner direction — 2026-09-06
 

@@ -23,7 +23,8 @@
     { "prefix": "APC", "start": 1, "end": 10, "reserved": [] },
     { "prefix": "FHR", "start": 1, "end": 20, "reserved": [] },
     { "prefix": "XFR", "start": 1, "end": 1, "reserved": [] },
-    { "prefix": "FND", "start": 1, "end": 18, "reserved": [] }
+    { "prefix": "FND", "start": 1, "end": 18, "reserved": [] },
+    { "prefix": "MKR", "start": 1, "end": 24, "reserved": [] }
   ],
   "foreignRegistries": [
     {

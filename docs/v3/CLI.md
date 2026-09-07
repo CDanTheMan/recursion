@@ -1,10 +1,45 @@
 ---
 title: Recursion v3 CLI direction
 status: accepted-surface-with-open-command-research
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 CLI hypothesis
+
+## Effective configuration revisions — proposed 2026-09-07
+
+MKR-013 retains the existing hierarchy while making merge operators explicit. Preferences use
+keyed override; hard authority, egress and budget ceilings intersect; plugin sets merge by stable
+ID with conflict rejection; credentials require explicit authority and cannot be selected by a
+generic most-specific-wins rule. Profiles and workflow templates compile into a revision and do
+not introduce funds or principals. Each field displays requested value, effective value,
+source scope/template, merge operator, reason, application boundary and blocked status.
+
+An edit binds expected old digest, proposed new digest, principal/grant, canonical sequence,
+field lifecycle and the chosen propagation mode. Persist an application receipt per session.
+Authority revocation fences new effects immediately; it does not pretend that an already-started
+effect switched grants or stopped. Other changes apply at declared live/checkpoint/restart
+boundaries. This resolves the active-session ambiguity without mutating in-flight credentials.
+
+| Session state | Update outstanding sessions | New sessions only |
+|---|---|---|
+| Active | Mark pending; safe live fields apply, other fields await a settled checkpoint/restart | Keep existing revision; immediate revocations still fence |
+| Queued with SessionId already created | Recompile before dispatch; stale compilation cannot run | Keep existing revision and revalidate current authority |
+| Idle | Apply live/checkpoint-safe fields; restart-required fields remain pending | Keep revision until a separate requested update |
+| Suspended | Recompile and validate on resume; missing capability blocks | Restore old revision only if still authorized and compatible |
+| New root or child session | Compile activated revision intersected with parent scope/budget | Compile activated revision intersected with parent scope/budget |
+| Existing descendant of older session | Its own application boundary/receipt is required | Retain its revision; no retroactive grant widening |
+
+For this proposal, creation means the canonical SessionId creation sequence, including a newly
+spawned child. A queued task without a session is new when assigned one; a new turn or resume on
+an existing session is not a new session. Concurrent edit/spawn order follows canonical sequence.
+An old parent's context may be retained, but cannot authorize stale credentials or larger grants.
+No permanent live linkage or universal inheritance operator is selected.
+
+The UI previews affected sessions and fields before an admitted edit and makes delayed/blocked
+application visible afterward. Cursor SDK resume options and ACP additional roots illustrate why
+settings cannot be assumed to survive reattachment (SRC-V3-152/SRC-V3-176). The configuration
+trial exercises all states, both modes, revocation and concurrent spawn with exact receipts.
 
 ## Mark 2 Owner direction — 2026-09-06
 

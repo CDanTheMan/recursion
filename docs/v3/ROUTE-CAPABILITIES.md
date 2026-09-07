@@ -1,10 +1,51 @@
 ---
 title: Recursion v3 provider-route capability matrix
 status: reconstructed-current-observation
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 ---
 
 # Recursion v3 provider-route capability matrix
+
+## Mark 2 verified source matrix — 2026-09-07
+
+[The current machine-readable matrix](foundation-research/mark2-research/compatibility.json)
+contains all 13 requested entries, 23 explicit paths and 130 feature cells. Every path separates
+provider, executing harness, supported interface, auth, billing, host, version and intended
+distribution. Every control cell names its applicable path and primary evidence. All runtime
+conformance and tested-build fields remain unproven/null; no live provider trial occurred.
+
+| Requested entry | Current source-grounded path and consequential limit |
+|---|---|
+| BYOK | Category for explicit API/provider bindings; native loop remains to be built, key possession does not determine billing |
+| ChatGPT OAuth | Eligible user sign-in through Codex; not general native OpenAI API entitlement |
+| Hermes | TUI gateway, HTTP/SSE and ACP differ; auxiliary provider discovery, frozen memory and clone exclusions need closure |
+| DeepSeek Harness | Cordis/core Agent service provides steer/inject/lifecycle mechanisms; developer preview and disposal semantics require adaptation |
+| Muse Code | Meta terminal beta identity resolved; macOS/Linux described, external embedding/eligibility still unknown |
+| Grok Build | ACP/native extensions expose questions and compaction; internal buffered interjection needs wire discovery; hooks generally fail open |
+| Cursor first-party | Official local SDK plus ACP and separate cloud path; local steer and cloud follow-up differ; runtime options must be reapplied on resume |
+| Cursor third-party | Independent SDK-backed ACP adapter 0.9.1, distinct from BYOK; permission retry may repeat an entire turn with broader policy |
+| Claude Code | Streaming SDK/CLI, deferred questions and feature-gated interrupt receipts; usage excludes some helpers, OAuth distribution rules separate |
+| Gemini CLI | Experimental ACP/headless plus internal core adaptation; confirmation bus is tool approval, core compression is not complete external parity |
+| Antigravity | Local Python SDK/harness versus managed API sandbox have different authentication, billing, host and lifecycle |
+| Codex | App Server has rich turn/thread controls; command/WebSocket transport is experimental and documented unsuitable for production use |
+| OpenCode | Server/SDK/ACP with questions, fork/abort/summarize; pending question map is in memory, prompt_async is not proven active steering |
+
+MKR-001 through MKR-007 and MKR-023/MKR-024 are registered research conclusions.
+The [source register](SOURCE-REGISTER.md) and [evidence records](foundation-research/mark2-research/evidence.json)
+preserve exact pins, response digests, locators, contradictions and next tests. Documentation
+version and inspected source commit are separate from an installed binary version.
+
+Every candidate begins with existing-installation/owner detection, then supported schema/version
+inspection. Managed installation, pinning and requested repair are required future capabilities;
+this campaign performed none. Distribution eligibility is separately checked for personal
+upstream use, hosted unmodified binaries, redistributable SDK apps and managed APIs. License
+permission for source reuse never supplies account entitlement.
+
+A missing control triggers richer interface/extension investigation and a bounded probe.
+An internal source function is an adaptation candidate, not automatically a supported wire API.
+A native hook that fails open cannot replace the kernel's authority fence. No silent model,
+credential, host or billing fallback can repair incompatibility. The seven critical names remain
+release requirements; these source findings do not certify them.
 
 ## Mark 2 Owner direction — 2026-09-06
 

@@ -1,11 +1,120 @@
 ---
 title: Recursion v3 ratified architecture target
 status: owner-ratified-target-non-operative-until-amendment
-last-updated: 2026-09-06
+last-updated: 2026-09-07
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
 
 # Recursion v3 ratified architecture target
+
+## Mark 2 model and recovery boundary — proposed 2026-09-07
+
+The recommended proof boundary is the smallest aggregate plus an explicit bounded broker
+refinement; a bounded broker in the first model remains a consequential Owner choice.
+Neither option selects language/storage/frameworks or changes M1. Preserve the six existing
+obligations: M1A-to-M1C effect identity projection; separate work/writer/process/PAUSE fence
+namespaces; one canonical writer; current-immediate PAUSE; partition/termination ambiguity;
+and bounded broker flow/replay with RESET. Add assistant/consultation flow, revision propagation,
+coherent forks, update admission and cumulative recovery reservations as proposed obligations.
+MKR-018; [pending decisions](foundation-research/mark2-research/decisions.json).
+
+| Alternative | Reuse/adaptation benefit | Limit and removal criterion |
+|---|---|---|
+| Small aggregate + broker refinement | Reuse M1 vectors; keep OS/protocol details in bounded adapters | Reject the split if an assumption cannot be mapped to executable counterexamples or admits stale effects |
+| Bounded broker in first model | Queue/relaunch/update races visible in one state space | Reject unnecessary state if equivalent refinement detects the same failures with less complexity |
+| Durable workflow/virtual actor framework | Reuse timers, activation and continuation mechanisms | Must not replace canonical identity/writer/grants; remove if runtime coupling or idle cost buys no measured requirement |
+| Cordis/SDK/plugin composition | Reuse lifecycle and rich harness controls | Preserve authority outside fail-open hooks and destructive upstream lifecycle operations |
+| New canonical integrity layer | Own missing admission, evidence, accounting and projection semantics | Implement only after probes/model/language/store comparisons; do not duplicate useful upstream loops |
+
+A2A, Orleans and Cordis supply distinct mechanisms, not a selected runtime
+(SRC-V3-183/SRC-V3-196/SRC-V3-197). The common-writer migration blocker OR-015 is unchanged.
+The comparison sequence remains small probes → formal model → CPython/Rust/Go → complete
+JSONL/CAS versus SQLite-WAL/CAS store comparison.
+
+## Six update modes and observable landing — proposed 2026-09-07
+
+MKR-015/MKR-017 retain compatible rollback as a candidate recovery strategy while separating
+four outcomes: working executable, readable history, preserved newest work and resumable tasks.
+
+`current tasks` is the nonterminal set with admitted packets before the canonical update-request
+sequence, including waiting work, leased descendants and external attempts. Queued requests
+without admission are outside that snapshot. `everything` is all admitted work/processes/monitors
+under the selected scope and release epoch, including descendants and enrolled remote work;
+it is not every process on the machine. Minimum deterministic Owner-control and maintenance
+services remain separately identified. Only an explicit update-mode maintenance grant permits
+the updater to run after work admission closes; it is not a general worker or model exception.
+
+`lands` requires verified artifact identity/policy, activation or boot, and a typed per-host
+receipt binding ReleaseId, protocol/schema epoch, state/checkpoint version and host. Downloaded,
+staged or installed-but-not-activated is pending. Required offline hosts remain unknown; aggregate
+landing requires all required receipts unless a separately explicit policy defines a reduced set.
+
+| Mode | Admission and transition | After landing |
+|---|---|---|
+| interrupt_save_update_resume | Close old-epoch admission; request bounded checkpoints; stage/activate compatible candidate | Resume only validated checkpoints; ambiguous effects stay held |
+| interrupt_update_stop_tasks | Close admission; interrupt current tasks and retain all history/artifacts even without runnable checkpoints | Tasks stay stopped; no implicit resume |
+| wait_current_tasks | Freeze new old-epoch admission; drain the fixed current-task set, holding later requests | Activate only when snapshot set is terminal; timeout is waiting/escalation, not success |
+| auto_update_off | No automatic staging/activation; candidate metadata may be visible | Existing release continues |
+| notify_escalate_owner | Record verified candidate and notification; do not interrupt or update automatically | Existing release continues pending Owner decision |
+| stop_everything_wait_update | Stop/fence all scoped work and relaunchers; use only the explicit maintenance lane to stage/activate | Hold work until the configured resume policy permits it; offline Stop remains unknown |
+
+No universal mode is selected. Configured automatic actions use existing authorization without
+adding repeated Owner confirmations. Every mode preserves newer history; omission of “save” is
+not permission to delete work.
+
+Canonical event order resolves Stop/update races. Stop accepted first fences later work; an
+update already past an external activation boundary cannot claim cancellation reversed it.
+Persist the operation identity, mark uncertain activation, reconcile the boot receipt and reject
+returning workers with stale release/lease/config epochs. Full Stop includes owned relaunchers;
+Lazy uses a visible bounded operation boundary. Current operational PAUSE remains unchanged.
+
+| Failure | Truthful guarantee / hold condition | Compared recovery strategies |
+|---|---|---|
+| Candidate unavailable, foreign install owner or offline host | No overwrite/landing claim; record deferred or unknown | Wait, requested repair or separately authorized isolated instance |
+| Bad signature/hash/expiry/version mix | Reject candidate; preserve verified running release and reason | New authenticated release; never disable rollback/freeze checks |
+| Staging failure before activation | Old active release remains; incomplete candidate quarantined | Idempotent restage only after effect identity is reconciled |
+| Activation/reboot crash | Active version unknown until boot receipt; tasks held | Retained compatible instance, repair-forward or isolation |
+| Schema contraction or incompatible checkpoint | Starting old code does not prove readable/newest state | Expand/contract compatibility, repair-forward or separate instance |
+| Post-activation regression | New events/artifacts remain retained in lineage | Compatible rollback only when old code can read current state; otherwise isolate/repair |
+| Remote acceptance then timeout | M1C ambiguous effect; no duplicate/dependent dispatch | Reconcile same operation; compensation is a separate authorized effect |
+| Optional component failure | Keep canonical recovery and Owner control usable | Disable/isolate component; do not claim full feature recovery |
+| Missing retained executable or exhausted recovery budget | Explicit hold; no invented fallback or new funds | Wait/escalate under configured policy |
+
+TUF 1.0.36 secures metadata selection, not activation or migration. An intentional older binary
+must be delivered through an authorized valid release selection; bypassing rollback protection
+is not the recovery design. systemd-sysupdate supplies atomic retained instances but can prune
+them; AWS redeployment creates a new deployment of an old revision. OpenStack's schema design
+illustrates why destructive contraction changes compatibility, by inference. Pilot recovery
+research motivates testing recovery itself. None proves rollback of arbitrary tool effects.
+SRC-V3-184 through SRC-V3-188.
+
+## Relative recovery ledger — proposed 2026-09-07
+
+For each task/goal scope and separately metered unit, record normal consumption `N` before the
+shutdown boundary, configured exact fraction `p/q`, cumulative committed recovery `C` and
+outstanding recovery reservations `R`. Use integer counters in a declared quantum (tokens,
+micro-units of one allowance, or one currency's minor unit), not floating-point percentages.
+
+`B = floor(p * N / q)`; a new credible upper-bound reservation `x` requires
+`C + R + x <= B` and every parent/pool/resource ceiling. Charge actual usage once and release
+only reconciled unused reservation. An ambiguous outcome retains its reservation. A provider
+whose usage cannot be bounded before dispatch cannot satisfy a strict cap merely by reporting
+an estimate afterward. MKR-016.
+
+Repeated shutdowns, worker/model changes, daemon restart and provider allowance reset never reset
+`C` or `R`. Additional verified normal work after resume may increase the next boundary's
+cumulative `N`; recovery consumption itself does not enlarge the baseline. Zero prior use gives
+zero automatic allowance. Unknown prior use/counter resets block new consumption reservations in that unit until
+reconciled; they are not zero. Deterministic boot, replay, status and evidence preservation remain
+available under their independent authority/resource limits without model consumption. Cross-goal borrowing needs an explicit transfer and shared pools
+also enforce aggregate reservations. Combined caps are componentwise; no silent conversion among
+tokens, quota and currencies.
+
+The accepted illustrations remain 100,000 prior tokens at 10% → 10,000 extra tokens, and 10% of
+one allowance at 10% → one additional percentage point of that same allowance. No universal
+fraction or promise that provider counters expose this precision is selected. The local campaign
+gate tests arithmetic fixtures only; [the update/recovery family](foundation-research/mark2-research/experiments.json)
+preregisters actual counter and failure tests, all unrun.
 
 ## Mark 2 Owner direction — 2026-09-06
 
