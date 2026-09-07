@@ -130,4 +130,3 @@ claim that any cross-task messages or runtime experiments occurred in the questi
 The receiving integration preserves meaningful Owner visibility, participation, steering and
 revocation. Changes to accepted intent, deliverables, acceptance, authority, privacy exposure or
 resource ceilings remain Owner amendments; routine choices do not require repetitive approvals.
-
