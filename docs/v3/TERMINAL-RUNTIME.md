@@ -6,6 +6,22 @@ last-updated: 2026-09-03
 
 # Recursion v3 interactive terminal and persistent session runtime
 
+## Engine process and remote-operation distinctions
+
+Native Windows/Linux remain acceptance targets. Broker-owned processes, daemon-owned canonical
+state and detachable views are already specified; attaching a view must not require another
+model request. Terminal bytes do not establish structured turn identity, billing completeness,
+effect mediation or rollback. A restricted passthrough route cannot silently replace a governed
+adapter. Preserve separate process/daemon, stream cursor, input lease and canonical fence domains.
+FND-003/FND-004.
+
+Current upstream documentation includes Codex remote operation on connected Windows/Mac hosts.
+Cursor Remote Control, Cloud Agents and My Machines have different start/host requirements.
+Observe, attach, resume, steer, start, approve and unattended boot need separate capability records.
+Sleeping hosts, stream loss and partial descendant termination remain explicit fault cases;
+reconnection alone does not reauthorize work. See [compatibility](foundation-research/compatibility.json)
+and `experiment.foundation.remote`. FND-013.
+
 ## Product ruling
 
 The v3 CLI is interactive, not only a collection of one-shot commands. It must support several

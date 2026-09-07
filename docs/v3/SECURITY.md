@@ -6,6 +6,32 @@ last-updated: 2026-09-03
 
 # Recursion v3 security and sovereignty hypothesis
 
+## Foundation engine-control and credential boundary
+
+The resource performing an effect must enforce the relevant grant/fence; approval callbacks,
+event visibility, process kill and signatures are insufficient by themselves. Cover shell
+descendants, independent network actions, internal retries, stale packets, revocation and uncertain
+receipts. Missing required control means narrower admitted scope or refusal, including for a
+native Recursion loop. FND-003/FND-005.
+
+Keep API/BYOK, SDK authentication and native binary login as separate routes. Current Anthropic
+guidance permits a conditioned unmodified-binary route with user-owned native authentication while
+restricting third-party login/token intermediation. Verify intended distribution and billing before
+public support claims. Do not infer universal OAuth permission from Codex technical interfaces.
+The [source-bound compatibility record](foundation-research/compatibility.json) is research evidence,
+not credential handling code or an entitlement certificate. FND-006.
+
+Claude Code print mode may load repository hooks and MCP configuration without a trust dialog
+(SRC-V3-139). Proposed adapters must enumerate and admit that configuration before startup.
+Native permission handling (SRC-V3-140/SRC-V3-143) remains distinct from Recursion grants and
+resource containment; neither a resumed plan mode nor an inherited session grant authorizes
+canonical work. This is an adapter requirement, not an execution performed by this campaign.
+
+Single-authority multi-node recovery is distinct from hosted multi-tenant isolation. Model
+offline revocation, split brain and reconnect revalidation before deployment claims. Imported
+commands/plugins retain independent grants and cannot inherit authority from source reputation.
+See [red designs](foundation-research/evidence.json). FND-013/FND-016.
+
 ## Security objective
 
 Protect owner identity, privacy, source, data, credentials, machines, and publication authority without turning open-source software into a service that can lock its owner out. Security controls become mandatory where one identity, process, plugin, or node crosses into another trust domain. Local owners retain the ability to configure and run their own software.

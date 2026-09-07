@@ -1,10 +1,39 @@
 ---
 title: Recursion v3 acceptance hypothesis
 status: hypothesis
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 acceptance hypothesis
+
+## First usable platform release — accepted 2026-09-06
+
+OR-021–OR-025 require native-only, upstream-only and combined workflows. Test every required
+reasoning role without hidden connections, the ten terminal controls alone and in combination,
+effective configuration/plugins/setup/updates, context fidelity and Windows/Linux remote
+recovery. The four scenarios are website preview, bug fix, interrupted refactor and a workflow
+with only an eligible upstream harness configured. Each must bind exact artifacts, gates,
+usage evidence and unresolved outcomes. Initial macOS support is not presumed.
+
+The [preregistered platform trials](foundation-research/platform-round/trials.json) are designs,
+not results. Their documentation gate is [platform check.py](foundation-research/platform-round/check.py);
+it binds a new candidate separately from the frozen September 5 foundation attestation.
+A limited adapter cannot count as proof of complete product feature coverage.
+
+## Foundation research acceptance boundary
+
+The campaign's [check.py](foundation-research/check.py) must bind the frozen start and exact clean
+candidate, validate the complete allowlisted diff and unchanged M1/protected bytes, close record
+schemas/IDs/links/coverage, preserve pending Owner answers, scan the publication set and rerun
+the M1/v2 regression entrypoints. Two passes and independent review bind the same final commit;
+a later receipt or repair creates a new candidate. This docs gate is not product certification.
+
+Before formal-model freeze, the effect/epoch/writer/PAUSE/partition/broker obligations in
+`analysis.foundation.model` need explicit model adapters and counterexamples. Before governed
+engine admission, prove declared resource mediation and truthful capability refusal under
+`experiment.foundation.adapter`; observational callbacks alone cannot pass. Before optimization
+claims, execute separately authorized comparisons with quality floors and complete cost accounting.
+FND-001–FND-005/FND-011.
 
 ## Principle
 

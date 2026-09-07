@@ -1,10 +1,41 @@
 ---
 title: Recursion v3 plugins and editions direction
 status: accepted-direction-with-open-trust-research
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 plugins and editions hypothesis
+
+## Platform plugin requirement — accepted 2026-09-06
+
+OR-023 makes configurable extension behavior foundational. Investigate one user-facing schema
+with distinct native-loop and supported upstream implementations, declaring capability/version
+requirements, supplying component, settings translation/loss, grants, resource cost and
+conformance tests. Hooks, MCP, server interfaces and upstream plugins are supported integration
+candidates; arbitrary plugin-runtime emulation is still unproved.
+
+Approachable presets and detailed controls must explain effective settings, conflicts,
+engine/host changes, update timing and recovery. Installing or loading upstream extensions is
+an admitted effect; a plugin's origin does not widen authority. The previous command-only bridge
+proposal is a starting point, not a ceiling on first-release useful coverage. See the
+[configuration and plugin contract](foundation-research/platform-round/interaction-contract.md).
+
+## Upstream compatibility and support policy — proposed
+
+Provider adapters, engine adapters and Recursion plugins have different ownership and billing
+boundaries. Proposed initial command imports are schema-declared and namespaced; execution of
+arbitrary upstream plugin environments remains deferred. Retain independent grants, digest-bound
+manifests, no-import disabled paths, staged/fenced reload and adapter-free boot/recovery. FND-016.
+
+A proposed support window is the current certified build plus one previous certified build.
+Discover and diff upstream source/schema/default tools/terms; stage, replay-test, quarantine,
+explicitly promote at a route-epoch boundary and retain a tested rollback. A security emergency
+may require refusing new admissions; it does not justify silent policy expansion. Signatures,
+SBOMs and protocol versions do not prove semantic compatibility. Pending
+`decision.foundation.updates` and `decision.foundation.plugin-bridge`; no updates were installed.
+
+One product with optional profiles remains the direction. The three audiences introduce research
+questions, not commercial editions, tenant isolation or compliance certification. FND-008.
 
 ## Boundary
 

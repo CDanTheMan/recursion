@@ -1,10 +1,37 @@
 ---
 title: Recursion v3 executive model
 status: accepted-direction-with-open-research
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 executive model
+
+## Upstream-only reasoning closure — accepted 2026-09-06
+
+OR-022 requires an explicit eligible route and accounting path for planning, implementation,
+review, summarization and recovery analysis. This includes Head/ARM reasoning and any optional
+model-based router, setup or context service. An upstream-only installation cannot require a
+secret direct API connection. Profile, logical actor, engine session and model remain distinct.
+
+The deterministic scheduler stores roles, reserves shared capacity and invokes inference only
+when needed. A clean reviewer session on one engine is not cross-provider independence; preserve
+the required verification class, blocked state or explicitly permitted downgrade. No hidden
+review route or continuous supervisor inference may be assumed. Mechanics and falsifiers are
+in the [interaction contract](foundation-research/platform-round/interaction-contract.md).
+
+## Model allocation and persistent actors — research disposition
+
+Head/ARM/worker are durable roles, not model names. A stronger model does not gain a broader
+grant; failover, delegation, authority escalation and lease-holder replacement remain distinct.
+Direct Owner-to-ARM interaction is retained. Event-driven actors and deterministic health/status
+checks do not imply continuously running model requests. FND-014.
+
+Astra/Sol/Luna and public-only Muse examples are proposed experimental treatments, subject to
+exact route/privacy/capacity admission. Compare single-agent, simpler delegation, all-frontier and
+mixed fleets at the same total budget, including retries, compaction and human review. Escalation
+should be bounded and triggered by evidence, not a mandatory tour through model tiers.
+`experiment.foundation.delegation` and `decision.foundation.escalation` remain pending; controlled
+studies do not establish a universal fleet win. FND-015.
 
 > **Ratified target, pending constitutional application.** `OR-018` and `OR-019` select these
 > Recursion-owned roles, but they are not the operative repository constitution. Until the

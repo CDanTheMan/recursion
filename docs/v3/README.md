@@ -1,11 +1,45 @@
 ---
 title: Recursion v3 evidence-grounded design workspace
 status: evidence-reconciled-design-and-frontier-research-foundation
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 authority: non-normative until ratified
 ---
 
 # Recursion v3 evidence-grounded design workspace
+
+## Platform clarification and next research — 2026-09-06
+
+Start with the [platform research brief](foundation-research/platform-round/research-brief.md)
+and [actual repository map](foundation-research/platform-round/repository-map.md). OR-021 through
+OR-025 record the Owner's clarified first usable v3 release: native and upstream execution,
+combined workflows, upstream-only role accounting, ten terminal controls, fundamental
+configuration/plugins and Windows/Linux recovery. Earlier brainstorming "v2" means this new
+architecture. The graphical application is later.
+
+The new [interaction contract](foundation-research/platform-round/interaction-contract.md),
+[integration evidence](foundation-research/platform-round/integration.json),
+[trials](foundation-research/platform-round/trials.json) and
+[architecture roadmap](foundation-research/platform-round/architecture-roadmap.md) organize
+the next round. These are source research and proposed tests, not runtime certification.
+The September 5 foundation artifacts below remain historical evidence; their optional-native
+and equal-default-priority wording is superseded by the clarified Owner requirements.
+
+## Foundation research reading route — 2026-09-05
+
+Read the [foundation synthesis](foundation-research/synthesis.md), then the prioritized
+[GRILLME packet](foundation-research/grillme.md). [Evidence](foundation-research/evidence.json)
+covers every handoff idea; [compatibility](foundation-research/compatibility.json) separates
+native Recursion behavior from upstream-engine behavior; [experiments](foundation-research/experiments.json)
+are designs only. [Campaign](foundation-research/campaign.md) records scope, provenance and gates.
+
+M1A, M1B and M1C are merged at the verified baseline
+`a7cd9458d37f3090079930bf8d79ffd77c4f73e4`. Historical “local only” or “future M1”
+descriptions below describe their original campaigns. Their pure/inert scope is unchanged.
+The next construction prerequisite is the integration mapping before E-FHAR2-101, followed
+by formal model, language-neutral comparison and storage comparison. FND-001–FND-003.
+The historical foundation additions were pending GRILLME at that snapshot. OR-021–OR-025
+resolve the portions identified above; remaining implementation choices stay pending.
+Research does not complete a runtime milestone.
 
 Recursion v3 is hypothesized as a provider-neutral autonomous-development harness and integration system. It preserves the proven v2 execution and safety invariants while making the main assistant, ARM executives, provider routes, context flow, plugins, nodes, and operator experience first-class parts of one coherent product.
 

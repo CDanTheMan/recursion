@@ -1,11 +1,42 @@
 ---
 title: Recursion v3 ratified architecture target
 status: owner-ratified-target-non-operative-until-amendment
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
 
 # Recursion v3 ratified architecture target
+
+## Platform execution requirement — 2026-09-06
+
+OR-021/OR-022 require independently useful native and upstream execution in the first usable
+release, plus combined workflows. A small native loop is required behind the existing typed
+boundary; the privileged kernel remains small under OR-018. Reusing libraries is permitted.
+An embedded upstream SDK that owns the agent loop is upstream execution in this taxonomy.
+
+Every reasoning role resolves an explicit eligible execution/accounting path. The deterministic
+runtime must boot, store, schedule, supervise processes, account and expose status without
+continuous inference; an upstream-only workflow must not implicitly require a native planner,
+reviewer, summarizer or recovery model. See the proposed
+[ownership and interaction contract](foundation-research/platform-round/interaction-contract.md).
+The current constitution and immutable M1 boundaries are unchanged.
+
+## Foundation integration boundary — proposed 2026-09-05
+
+OR-018/OR-019 remain accepted. Standalone recovery and a complete native sampling loop are
+different commitments. Recursion owns canonical authority/recovery in both native and delegated
+execution. An upstream engine may own sampling, native tools and session state through an optional
+typed adapter. The [ownership matrix](foundation-research/compatibility.json) records each layer;
+neither terminal attachment nor an SDK transfers canonical ownership. FND-004–FND-006.
+
+Before formal-model freeze, make the M1A-to-M1C effect identity projection explicit; distinguish
+work lease, writer fence, process/daemon and PAUSE/admission epochs; preserve one canonical writer,
+current-immediate PAUSE and unresolved effects after partition/termination. Broker flow/replay is
+either bounded model state or an explicit adapter obligation. See
+`analysis.foundation.model` and `decision.foundation.model-boundary` in the
+[foundation evidence](foundation-research/evidence.json) and [decisions](foundation-research/decisions.json).
+These model-level mappings preserve immutable M1 contracts and the blocked OR-015 boundary.
+A failed mapping requires a separately scoped repair proposal, not a silent schema change. FND-002/FND-003.
 
 > **Ratified target, not operative authority.** `OR-018` and `OR-019` select the hierarchy and
 > Recursion-owned Option 2 boundary below. The
@@ -128,8 +159,9 @@ Recursion v3 is its own harness at the orchestration and product-contract level.
 ratified construction architecture is a Recursion-owned deterministic contract/event kernel
 with compatibility adapters around existing loops. Codex, Cursor, Claude Code, Gemini CLI,
 OpenCode, Hermes, and future harnesses remain optional peer engines behind the same contracts.
-A Recursion-owned native agent turn loop is a separately measured capability, not a prerequisite
-for calling v3 a native harness or for building the first kernel.
+A small Recursion-owned native agent turn loop is required for the first usable release under
+OR-022. It need not precede the first bounded kernel prototype; its implementation and performance
+must be measured independently from the upstream adapters.
 
 Every engine adapter negotiates a versioned capability descriptor for thread/turn identities,
 stream ordering, tool-intent and settlement boundaries, approval bridging, interrupt semantics,
@@ -149,9 +181,8 @@ proposals. The exact code-informed evidence and falsifiers are in
 [FRONTIER-HARNESS-EVIDENCE.md](FRONTIER-HARNESS-EVIDENCE.md) and the second-tranche
 [evidence packet](FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md).
 
-The product direction still permits a larger native harness later. It earns that scope only by
-demonstrating a required quality, continuity, security or resource improvement that external
-engines plus adapters cannot supply. See the compared options and falsifiers in
+Expansion beyond the required small native loop must earn its scope by a required capability or
+measured quality, continuity, security or resource improvement. See the compared options and falsifiers in
 [ARCHITECTURE-OPTIONS.md](ARCHITECTURE-OPTIONS.md).
 
 “Optimized” remains an objective, not a measured property. Implementing Option 2 is conditional
@@ -233,8 +264,8 @@ not measured conclusions.
 
 No language is selected. CPython, Rust and Go are equal-entry post-M1A comparators on the same
 reducer/replay/fault workload. JSON/JSONL is the inspectable initial local
-protocol encoding; binary framing, SQLite and a native model loop must each demonstrate a
-non-dominated improvement without a hard-floor regression before adoption.
+protocol encoding; binary framing, SQLite and proposed native-loop optimizations must each
+demonstrate a non-dominated improvement without a hard-floor regression before adoption.
 
 ## Constitutional reconciliation required
 

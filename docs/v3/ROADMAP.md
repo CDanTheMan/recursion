@@ -1,10 +1,38 @@
 ---
 title: Recursion v3 research and construction roadmap
 status: evidence-reconciled-roadmap-proposal
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 research and construction roadmap hypothesis
+
+## First usable platform milestone — 2026-09-06
+
+OR-021–OR-025 require the new standalone architecture, a small native loop, independently
+useful upstream execution and combined workflows. Native loop, ten terminal controls,
+configuration/plugins, setup/repair, baseline compaction and Windows/Linux worker recovery
+are first-release behavior, even when earlier internal prototypes are smaller.
+
+Use the [platform roadmap](foundation-research/platform-round/architecture-roadmap.md):
+small integration probes inform contract assumptions before formal-model freeze; formal model,
+language comparison and storage comparison remain ordered. Advanced context/routing,
+expanded engine/OS certification, dedicated GUI, enterprise infrastructure and distributed
+model inference retain separate later milestones. Research completion does not mark a runtime
+milestone complete or remove OR-015's migration blocker.
+
+## Foundation priority update — 2026-09-05
+
+Git evidence verifies merged M1A/M1B/M1C at
+`a7cd9458d37f3090079930bf8d79ffd77c4f73e4`; this corrects earlier local-only status prose.
+No runtime milestone is completed by this research. Next: resolve the model integration mapping,
+run the bounded formal model, freeze language-neutral vectors and compare CPython/Rust/Go,
+then compare JSONL/CAS and SQLite-WAL/CAS before canonical-state construction. FND-001/FND-002.
+
+CLI capability extensions, native/upstream engine boundaries, setup and update support are
+compatible proposals. Compaction/cache/fleet/resource benefits require later experiments.
+Hosted tenancy, commercial tiers and graphical/media expansion remain deferred. OR-015 and
+constitutional activation are not unblocked. The [GRILLME queue](foundation-research/grillme.md)
+contains pending choices without changing accepted priorities.
 
 ## Delivery model
 
@@ -222,5 +250,7 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    matrix, multi-ARM message semantics, sovereign audit-retention authority and deletion proof
    still require fault tests or Owner decisions. Verifier tiers/receipts are specified but inert
    until the amendment is applied.
-6. A native inner-loop expansion remains an optional spike until it wins a preregistered metric;
-   it cannot replace Recursion's ratified canonical authority boundary without an Owner amendment.
+6. The small native loop and useful native-only workflows are required for the first standalone
+   release (OR-022). Expansion beyond that required loop remains an optional spike until it wins
+   a preregistered metric; it cannot replace Recursion's ratified canonical authority boundary
+   without an Owner amendment.

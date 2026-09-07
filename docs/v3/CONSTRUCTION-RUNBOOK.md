@@ -6,6 +6,23 @@ last-updated: 2026-09-03
 
 # Recursion v3 construction runbook
 
+## Current handoff after foundation research — 2026-09-05
+
+M1A/M1B/M1C are merged pure/inert contract slices, verified at baseline
+`a7cd9458d37f3090079930bf8d79ffd77c4f73e4`. Earlier first-milestone procedure in this file is
+historical construction guidance; it is not a request to rerun completed construction.
+
+Before separately authorized E-FHAR2-101 work, close the six integration obligations in
+`analysis.foundation.model` of [evidence.json](foundation-research/evidence.json). Compile the
+selected model adapter boundary into its GoalSpec, retain guard-removal mutants and explicit
+fairness cases, and leave immutable M1 schemas/receipts unchanged. Continue formal model →
+language-neutral vectors/CPython-Rust-Go comparison → JSONL/CAS versus SQLite-WAL/CAS.
+A mapping conflict needs a separate repair proposal; OR-015 remains blocked. FND-001–FND-003.
+
+Use [GRILLME](foundation-research/grillme.md) to record pending Owner decisions before compiling
+the next accepted GoalSpec/DAG. This research supplies designs and local docs validation only;
+it does not authorize model construction, provider trials, deployment or publication.
+
 This is temporary construction procedure, separate from the product specification. It does not
 authorize implementation, provider changes, deployment or control-plane amendments.
 

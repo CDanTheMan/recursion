@@ -6,6 +6,29 @@ last-updated: 2026-09-03
 
 # Recursion v3 execution fabric hypothesis
 
+## Native and delegated engine accommodation — proposed
+
+A provider adapter maps inference requests and billing fields; an engine adapter maps another
+harness's lifecycle/tools/session; a Recursion plugin contributes optional admitted behavior.
+Keep these identities separate. The common command bus owns canonical admission; engine events
+are evidence inputs. Optional controls require explicit versioned capability negotiation.
+The [foundation matrix](foundation-research/compatibility.json) distinguishes queued input,
+active steering, question/approval exchanges, cancellation, native resume and recovery. FND-004.
+
+Before any governed dispatch, bind packet/goal/plan/policy/grant/route and relevant lease/fence
+identities. An upstream shell approval does not identify every descendant effect. Restrict or
+refuse a route when a task-required fence cannot reach the protected resource. Process termination
+remains `not-evaluated` for external effects; unknown outcomes stay ambiguous until reconciled.
+M1A metered-spend/publication prohibitions cannot be widened by M1B route vocabulary or M1C
+eligibility records. FND-002/FND-003/FND-005.
+
+For future nodes, distinguish client host, authority coordinator, execution host, engine, inference
+provider and account pool. Enrollment/revocation, locality and manifest-first transfer are adapter
+concerns; one writer per aggregate and reconnect revalidation remain integrity obligations.
+Disconnected nodes spool evidence and finish only previously permitted local work; no publication
+or authority expansion. Single-user multi-node operation does not imply multi-tenant isolation.
+`decision.foundation.remote-scope` and `experiment.foundation.remote` remain pending. FND-013.
+
 ## Separation of concerns
 
 V3 resolves an execution route from independent declarations:

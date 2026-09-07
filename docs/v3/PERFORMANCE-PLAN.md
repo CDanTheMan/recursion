@@ -1,22 +1,47 @@
 ---
 title: Recursion v3 performance and resource hypothesis plan
 status: experiment-plan
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 performance and resource hypothesis plan
+
+## Foundation follow-up designs — 2026-09-05
+
+The [eight foundation designs](foundation-research/experiments.json) add explicit comparisons for
+compaction, total cache economics, fleet allocation, resource/UI cost, native/upstream adapter
+control, remote faults, setup and upgrade certification. All are preregistered exploratory
+proposals, not executed trials. Preserve the earlier formal-model → language → storage priorities.
+
+Match total budgets, count failures/retries/compaction and human review, and keep attempts nested
+within independent tasks. Freeze route/OS/build/model/evaluator and workloads before execution;
+run blinded power simulation before a powered claim. Stronger models or larger fleets are not
+verification by voting. Historic benchmark rankings and developer/agent studies motivate controls
+but do not establish current Recursion quality, performance or market effects. FND-015/FND-018.
+
+The Owner's desktop-lag report motivates component attribution, including UI, engine subprocess,
+language server, indexer, watchers, tools and inference. No headless speedup, GPU dependency or
+cache-heartbeat savings is presumed. FND-011/FND-012.
 
 No v3 performance improvement was measured in this campaign. This document defines workloads,
 metrics and decision rules so later implementation cannot convert expectations into facts.
 
 ## Canonical optimization decision rule
 
-OR-017 requires every architecture and optimization comparison to preserve the full vector
-below. Authority, safety, privacy, effect correctness and declared quality floors are hard
-constraints. Among conforming candidates, no dimension receives a hidden priority or scalar
-weight: report the vector, prefer Pareto dominance, and escalate a material non-dominated choice
-to Lucas. A recommended default needs at least one measured improvement, no hard-floor failure,
-and an explicit disposition for every regression or unavailable denominator.
+OR-024 refines OR-017: the Owner's default ranking is responsiveness, subscription efficiency,
+then task completion, subject to correctness, authorization, resource limits and recoverability.
+Preserve the full vector below and the existing safety/privacy/effect/quality floors. Report
+Pareto comparisons and explicit tradeoffs; no hidden scalar weights or invented thresholds.
+A recommended default needs measured evidence and a disposition for every regression or
+unavailable denominator. Material tradeoffs remain visible for Owner decision.
+
+Compare each supported upstream engine directly with the same engine orchestrated by Recursion.
+Include planning, failed attempts, verification, compaction, coordination and recovery. Keep
+money, subscription allowance, machine resources and human review capacity distinct. Measure
+session reuse, context/evidence reuse, delegation, placement/transfer, scheduling/reservations,
+verification throughput, idle CPU/RSS, storage growth and disk writes, including interactions.
+The [platform trials](foundation-research/platform-round/trials.json) define four scenarios,
+including upstream-only role closure. These remain preregistered designs, not results.
 
 | Dimension | Required observation |
 |---|---|

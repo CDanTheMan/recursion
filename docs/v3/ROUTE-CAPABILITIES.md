@@ -1,10 +1,24 @@
 ---
 title: Recursion v3 provider-route capability matrix
 status: reconstructed-current-observation
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 provider-route capability matrix
+
+## Platform integration evidence — 2026-09-06
+
+The [platform route records](foundation-research/platform-round/integration.json) refresh
+selected mechanisms and explicitly track the broader frontier set: Codex, Claude Code/SDK,
+Cursor, OpenCode, Gemini, Hermes Agent, DeepSeek Harness, Grok Build/xAI and Muse Code.
+T3 Code is inspected as an integration/composition precedent. These product candidates
+are distinct from the research-worker routes recorded below.
+
+Provider, engine, integration interface, authentication, billing and host are separate fields.
+Technical documentation, observed behavior and intended usage/distribution eligibility have
+separate status. Supported extension mechanisms are investigated before declaring a wrapper
+limitation final. Every reasoning role requires a route; native and upstream eligibility are
+evaluated independently. No live engine or account eligibility is certified by this source pass.
 
 This matrix records campaign observations, not entitlement, price, privacy, cache, subscription
 debit or future availability. Model, provider, engine, account, capacity pool, credential
@@ -73,3 +87,37 @@ SDK/CLI, account/policy or contradictory-observation change.
 A model listing supplies name/capability documentation only. A successful dispatch supplies one
 behavior observation only. Neither supplies billing, privacy, entitlement, stable capacity or
 cache-portability authority.
+
+## Foundation native and upstream interface inventory — 2026-09-05
+
+The [foundation compatibility record](foundation-research/compatibility.json) adds 14 distinct
+route profiles and 17 capability dimensions per route. It records exact source/build identities
+where available and explicitly marks unknown builds. Local Codex CLI 0.149.0 and Cursor Agent
+2026.08.25-3e8eec8 were observed through version/help only; no runtime capability was probed.
+Current Codex documentation describes newer builds and includes experimental surfaces.
+Do not project those capabilities onto the installed binary. FND-007.
+
+Core ownership is common across native and delegated execution. Sampling, native tools, session
+state and compaction ownership differ; server/SDK, structured CLI and terminal interfaces offer
+different controls. The Recursion command bridge must map namespaces, schemas, turn targeting,
+grants and unsupported features explicitly. Native APIs require more loop construction; upstream
+engines may retain useful optimizations and subscription routes without proving performance.
+FND-004/FND-005.
+
+Keep Claude SDK/API separate from unmodified user-authenticated Claude Code; preserve provider
+login and distribution boundaries. Codex ChatGPT authentication, API usage and external-token
+modes are distinct. Missing subscription debit, cache minimums or recovery observations remain
+unavailable, never zero. `decision.foundation.authentication` stays pending. FND-006/FND-010.
+
+Direct Claude Code CLI sources are SRC-V3-139 through SRC-V3-143, with retrieved-content digests
+in evidence.json. The binary route no longer borrows SDK callback evidence. Startup profile,
+credential eligibility, command availability and outer campaign budgets must be certified
+together; documented per-turn limits are not a campaign limit. See
+`analysis.foundation.claude-bridge`. No Claude binary interaction was probed here.
+
+Source refresh: OpenCode 1.18.29, DeepSeek Harness 0.1.3-alpha.1, T3 current source with release
+v0.0.38, Hermes v2026.8.31, Gemini nightly source/package pair and official Grok Build source are
+recorded with immutable pins and limitations. The Owner has resolved Meta's intended referent
+to Muse Code; its external integration protocol and route-specific eligibility remain unverified.
+No source inventory grants runtime eligibility. Upgrades require staged semantic replay and
+explicit route-epoch promotion under a still-proposed support window. FND-007/FND-016.

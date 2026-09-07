@@ -1,10 +1,66 @@
 ---
 title: Recursion v3 CLI direction
 status: accepted-surface-with-open-command-research
-last-updated: 2026-09-03
+last-updated: 2026-09-06
 ---
 
 # Recursion v3 CLI hypothesis
+
+## First-release capability coverage — accepted 2026-09-06
+
+OR-023 requires streaming output, questions, approvals, queued messages, active steering,
+interruption, resume, forks, compaction controls and custom commands/plugins. See their
+[observable behavior and ownership](foundation-research/platform-round/interaction-contract.md).
+Probe the shared runtime, adapter, supported upstream extension, native loop and combinations
+before treating a simple wrapper's missing feature as a platform limit. Preserve engine-specific
+features through explicit versioned extensions; unsupported route combinations remain visible.
+
+Configuration must cover engines, tools, context, memory, routing, delegation, verification,
+scheduling, placement and resources. Account, project, profile, workflow and task composition
+needs explicit precedence/merge rules and ceilings, effective-value provenance and lifecycle.
+The hierarchy below is the existing starting contract; profile/workflow/account relationships
+are proposed additions to validate before schema freeze. Setup/import/preview/guided repair
+share one change transaction; first-auth and offline recovery stay model-free.
+
+## One CLI over native and upstream loops — proposed accommodation
+
+Recursion commands address canonical goals, plans, permissions, evidence and status in both modes.
+A direct-API native loop would give Recursion control of sampling and tool orchestration.
+A delegated route retains the upstream inner loop and uses only its supported interface.
+Neither mode is assumed faster. See [compatibility.json](foundation-research/compatibility.json)
+for layer ownership and explicit capability gaps. FND-004/FND-005.
+
+Proposed command bridge:
+- Reserve canonical commands. Import native commands under an engine namespace; aliases bind
+  exact versions and argument schemas. Reject collisions and expose translation losses.
+- Register Recursion custom tools with a supported MCP/dynamic-tool surface only after grant
+  mapping. An upstream plugin or command origin confers no authority.
+- Distinguish “queue next input,” “steer active turn,” and “interrupt.” Bind target turn and route
+  epoch. If the engine lacks a control, show unavailable or offer an explicitly scoped native
+  session; do not emulate successful control through blind keystrokes or model-generated prose.
+- Render correlated question/approval events without polling a model. Local status/help and
+  deterministic commands need no inference request. Use bounded incremental event rendering;
+  measure bridge overhead separately from engine/provider time.
+- Report native session outcomes separately from canonical acceptance. Native compact/resume/fork
+  cannot silently overwrite the Recursion capsule, permissions or filesystem recovery state.
+
+For Claude, keep SDK/API integration distinct from an unmodified Claude Code binary conducting
+its user's own native sign-in. Current terms and exact interface coverage control eligibility;
+Recursion must not collect upstream session tokens. Codex technical ChatGPT login support is not
+a universal OAuth entitlement. `decision.foundation.authentication` remains pending. FND-006.
+
+The binary route now has direct CLI sources, separate from SDK evidence: SRC-V3-139 through
+SRC-V3-143. Certify binary, mode and configuration together. In particular, `--bare` excludes
+subscription sign-in; `--safe-mode` retains normal authentication but suppresses custom MCP/hooks.
+Neither is a ready-made governed profile. Native command availability varies with mode/version;
+profile optimization must preserve the required interaction controls. See
+`analysis.foundation.claude-bridge` and `experiment.foundation.adapter`.
+
+Deterministic zero-model setup remains the bootstrap. Optional agent-assisted `/setup` may explain
+presets and propose a scoped diff after first-auth; credentials stay in protected provider/OS flows.
+Validation, explicit apply, rollback and offline recovery must still work without the assistant.
+This is a product proposal, never authorization for an agent to modify its own configuration.
+`decision.foundation.setup` and `experiment.foundation.setup` remain pending. FND-012.
 
 ## Product requirement
 
