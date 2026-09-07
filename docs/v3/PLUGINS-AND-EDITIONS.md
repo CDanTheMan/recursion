@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 plugins and editions hypothesis
 
+## Mark 2 Owner direction — 2026-09-06
+
+OR-029 requires browser/MCP workflows, adaptation of other harness plugins and a local execution path even when the chosen upstream route is incompatible. Preserve the inspectable incompatibility marker and four configurable responses: state incompatibility, recommend combinations, no action, notify and recommend. Local execution does not establish offline operation, universal conversion or automatic fallback. Support both configuration-propagation choices; OR-033 adds six update modes and compatible recovery preserving newest work. Exact mechanics and presets remain in the [Mark 2 research mandate](foundation-research/mark2/handoff.md).
+
 ## Platform plugin requirement — accepted 2026-09-06
 
 OR-023 makes configurable extension behavior foundational. Investigate one user-facing schema

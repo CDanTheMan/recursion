@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 performance and resource hypothesis plan
 
+## Mark 2 Owner direction — 2026-09-06
+
+Mark 2 adds persistent-assistant consultation/lifecycle and inactive-population comparisons, plugin/research-workflow quality, handoff cost through completion, and update/recovery overhead. OR-032 defines a configurable additional recovery cap relative to pre-shutdown task consumption in tokens, subscription quota or API spending; 10% is an example, not a default. OR-034 protects landed-change quality against superficial token savings and counts downstream correction cost. OR-035 assigns representative resources and numeric presets to research. Extend the [Mark 2 comparison plan](foundation-research/mark2/handoff.md) without inventing a personal inventory, unlimited run budget or measured result.
+
 ## Foundation follow-up designs — 2026-09-05
 
 The [eight foundation designs](foundation-research/experiments.json) add explicit comparisons for

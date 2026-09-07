@@ -7,6 +7,10 @@ authority: non-normative until ratified
 
 # Recursion v3 evidence-grounded design workspace
 
+## Mark 2 Owner direction — 2026-09-06
+
+The [Mark 2 fleet handoff](foundation-research/mark2/handoff.md) is the current starting point. All ten Owner questions are complete; OR-026 through OR-035 record the answers and explicit research dispositions. It extends the six-deliverable platform brief with seven launch-critical integration priorities, persistent assistants, configurable controls/plugins, recovery/update modes and quality-preserving resource research. The [typed answer capture](foundation-research/mark2/directions.json) separates accepted direction from unselected mechanisms. No new integration or performance result is claimed.
+
 ## Platform clarification and next research — 2026-09-06
 
 Start with the [platform research brief](foundation-research/platform-round/research-brief.md)

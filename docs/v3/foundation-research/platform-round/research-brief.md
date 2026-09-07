@@ -8,6 +8,14 @@ subscriptions, tools, workflows and machines. The target is the new architecture
 `docs/v3`. Earlier brainstorming references to "v2" mean this release. The terminal
 interface must expose its capabilities; a dedicated graphical application follows later.
 
+## Current Owner input
+
+The completed [Mark 2 handoff](../mark2/handoff.md) and [answer record](../mark2/directions.json)
+extend this brief. OR-026 through OR-035 settle seven critical compatibility names, installation
+direction, persistent assistants, controls/plugins, relative recovery budgets, six update modes
+and quality goals. Mechanisms and resource defaults explicitly assigned to research are not
+missing questionnaire answers. Preserve the six outputs and ordered comparisons below.
+
 ## Accepted requirements
 
 Native execution, upstream execution and combined workflows are first-release requirements.

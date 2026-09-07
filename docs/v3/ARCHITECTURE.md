@@ -7,6 +7,10 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 ratified architecture target
 
+## Mark 2 Owner direction — 2026-09-06
+
+Persistent assistants spanning sessions/goals and configurable inter-assistant decision rights require an explicit mapping to Head, ARM, profiles and current GoalSpec amendment ownership. Compare the proposed identities, consultation/lifecycle, coherent forks, configuration propagation, Stop scopes and update/recovery accounting before formal-model freeze. OR-018/019 and immutable M1 remain unchanged; see the [Mark 2 contract obligations](foundation-research/mark2/handoff.md). No new manager tier, live process migration or universal memory-sharing default is selected.
+
 ## Platform execution requirement — 2026-09-06
 
 OR-021/OR-022 require independently useful native and upstream execution in the first usable

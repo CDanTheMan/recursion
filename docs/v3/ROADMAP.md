@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## Mark 2 Owner direction — 2026-09-06
+
+OR-026 through OR-035 add current product requirements and delegate mechanisms/defaults to research. Seven critical compatibility names are now selected; exact routes/builds and support windows remain unproved. The [Mark 2 fleet packets](foundation-research/mark2/handoff.md) keep probes before formal-model freeze, then language and storage comparisons, with current M1 and OR-015 boundaries intact. Persistent assistant, plugin, update/recovery and quality/resource work informs those contracts. All ten questionnaire answers are complete; a personal inventory is not a missing Owner answer.
+
 ## First usable platform milestone — 2026-09-06
 
 OR-021–OR-025 require the new standalone architecture, a small native loop, independently
