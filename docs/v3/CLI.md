@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 CLI hypothesis
 
+## Mark 2 Owner direction — 2026-09-06
+
+OR-028 requires separately configurable Steer/Queue, Aggressive/Full/Lazy Stop and source-aware forks preserving two versions with before-work notice or after-work disclosure/review. OR-029 requires outstanding-session or new-session-only configuration propagation. OR-033 preserves six distinct update modes and requested repair. Exact bindings, operation boundaries, inheritance and Stop/PAUSE relationships remain research outputs in the [Mark 2 handoff](foundation-research/mark2/handoff.md); neither dirty-source refusal nor automatic hot reload is a universal default.
+
 ## First-release capability coverage — accepted 2026-09-06
 
 OR-023 requires streaming output, questions, approvals, queued messages, active steering,

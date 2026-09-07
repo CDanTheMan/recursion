@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 executive model
 
+## Mark 2 Owner direction — 2026-09-06
+
+OR-027 requires persistent named assistants, project/session views, attributable consultation, configurable decision rights and measured active/idle behavior. A profile selector or one goal-scoped ArmRun alone does not define this experience; the mapping to current Head/GoalSpec ownership needs an explicit proposal. OR-031 requires lean configurable reporting of tests, supported fix confidence, regression evidence and benefit. The [Mark 2 handoff](foundation-research/mark2/handoff.md) preserves upstream-only role accounting and truthful verification classes.
+
 ## Upstream-only reasoning closure — accepted 2026-09-06
 
 OR-022 requires an explicit eligible route and accounting path for planning, implementation,

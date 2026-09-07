@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 acceptance hypothesis
 
+## Mark 2 Owner direction — 2026-09-06
+
+The next acceptance proposal must cover all seven critical integration names, persistent-assistant/session continuity, three Stop modes, preserved forks, browser/MCP/local plugin adaptation, four incompatibility responses, two configuration-propagation choices, six update modes and relative recovery accounting. Keep evidence for working software, readable history, newest-work preservation and resumable tasks separate. OR-031/034 require truthful lean verification and quality through downstream correction. The [Mark 2 handoff](foundation-research/mark2/handoff.md) identifies unproved guarantees and research dispositions; these additions do not certify a runtime or replace immutable M1 receipts.
+
 ## First usable platform release — accepted 2026-09-06
 
 OR-021–OR-025 require native-only, upstream-only and combined workflows. Test every required

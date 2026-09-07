@@ -7,6 +7,28 @@ source: archive/session-transcript-2026-09-02.md plus owner direction 2026-09-03
 
 # Recursion v3 session decision register
 
+## Mark 2 answer capture — 2026-09-06
+
+The Owner supplied the completed Mark 2 questionnaire for the next research fleet.
+[Provenance and typed dispositions](foundation-research/mark2/directions.json) preserve its
+source digest and distinguish accepted behavior, accepted starting recommendations and
+unselected mechanisms. All ten questions are complete, including research dispositions.
+[The fleet handoff](foundation-research/mark2/handoff.md) maps these to the existing six outputs.
+These are future product rulings; current authority, M1 and runtime behavior are unchanged.
+
+| ID | Accepted Owner direction | Supersession and remaining work |
+|---|---|---|
+| OR-026 | Research all named integrations; Grok, Cursor, Gemini, Claude, Hermes, OpenCode and ChatGPT are launch-critical compatibility priorities. Detect compatible existing installations first, offer managed installation, pinning, agent assistance, self-update/other-CLI update access and warning plus requested repair. | Q1 resolves critical names, adds Antigravity and both Cursor paths. Exact products, versions, connection/streaming behavior and eligibility remain unproved; popularity is Owner rationale. |
+| OR-027 | Persistent assistants and project/session views, cross-assistant consultation, configurable bot decision rights and active/idle performance are required. | Q2 assigns identity, memory, lifecycle and defaults to research. Advisory-only cannot be the sole future configuration; mapping delegated decisions to current GoalSpec ownership needs an explicit proposal. No new authority tier is selected. |
+| OR-028 | Distinct configurable Steer/Queue; Aggressive, Full and Lazy Stop; source preflight and two preserved fork versions with configured before-work notice or after-work disclosure/review. | Q3 supersedes queue-only and universal dirty-source hold interpretations. Bindings, delivery/Stop boundaries, scope and snapshot/inheritance remain research work. No merge, truncation or cleanup is implied. |
+| OR-029 | Browser/MCP, plugin adaptation and local execution; inspectable route incompatibility with four response modes; configuration changes may target outstanding sessions or only new agent/isolated sessions. | Q4 selects the behavior, not a universal default, hot reload, offline/local-model operation, automatic fallback or proven arbitrary plugin conversion. Quiet-mode invocation and precise extension identities need research. |
+| OR-030 | Research handoff contents and continuity across quota consumption, quality, tokens, performance and system resources through completion. | Q5 supplies a complete research disposition, not a payload or general reduced-route default. OR-024 ranking remains; recommendations do not authorize route changes. |
+| OR-031 | Report tests run, supported fix confidence, regression evidence and benefit; verification/reporting follows operator configuration and stays lean. Pi Agent is a research reference. | Q6 leaves per-scenario presets and evidence presentation to research. Preserve truthful omitted checks and independence; no confidence percentage or mandatory extra reviewer is selected. OR-006 conflicts require proposals. |
+| OR-032 | Configure recovery destinations/automation and maximum additional recovery consumption as a fraction of pre-shutdown task use, in tokens, subscription quota or API spending. | Q7 resolves the percentage: 10% of prior 10% quota use permits one additional percentage point of the same allowance. It is not a retained-work percentage or universal default and does not widen other caps. Repeated failures, telemetry and guarantees remain research. |
+| OR-033 | Six configurable update modes; accepted recovery starting recommendation is a verified compatible rollback preserving newest work/history, verified resume/hold, and configured repair-forward/separate-instance alternatives with bounded optional agent assistance. | Q8 resolves self promoted as self-updated. Preserve all six modes, including distinct modes 2 and 6. No universal update preset, storage/migration mechanism or complete restoration guarantee is selected; test the recommendation and propose revisions from evidence. |
+| OR-034 | Reduce repeated instructions, correction work, compaction loss and cache inefficiency; protect landed-change quality from superficial token/quota savings and keep quality/effort configurable. | Q9 resolves the tradeoff while retaining OR-024 and existing limits. Count initial and downstream work; more initial spend or review is not automatically efficient. Numeric thresholds and presets need evidence. |
+| OR-035 | Research representative resource requirements and operator-configurable limits without defining the platform around the Owner's current setup. | Q10 is complete; do not re-ask a personal inventory. No actual accounts/machines, numeric experiment budget or new execution authority was supplied. Run-specific bounds remain necessary for resource-dependent trials. |
+
 ## Owner platform clarification — 2026-09-06
 
 Provenance: the Owner's explicit platform-clarification message in this private research task,

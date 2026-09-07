@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 product hypothesis
 
+## Mark 2 Owner direction — 2026-09-06
+
+OR-026 through OR-035 extend the release direction: seven launch-critical compatibility names (Grok, Cursor, Gemini, Claude, Hermes, OpenCode, ChatGPT), persistent assistants across sessions and goals, local plugin execution, configurable update/recovery behavior and quality-preserving efficiency. Missing critical compatibility requires an Owner release decision. Exact routes and guarantees remain research work. Use the [Mark 2 handoff](foundation-research/mark2/handoff.md); product requirements must not be narrowed to one operator's current hardware or accounts.
+
 ## Accepted first usable platform release — 2026-09-06
 
 OR-021–OR-025 clarify the release under `docs/v3`; earlier brainstorming "v2" means this

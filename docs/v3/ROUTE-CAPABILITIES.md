@@ -6,6 +6,10 @@ last-updated: 2026-09-06
 
 # Recursion v3 provider-route capability matrix
 
+## Mark 2 Owner direction — 2026-09-06
+
+OR-026 makes Grok, Cursor, Gemini, Claude, Hermes, OpenCode and ChatGPT launch-critical compatibility priorities. Research all named paths, including Antigravity, both Cursor paths, BYOK, Muse Code, DeepSeek Harness and Codex. ChatGPT authentication, Codex execution, Grok Build and Grok Bot remain separate identities; resolve exact interfaces/plans before eligibility claims. OR-029 adds local plugin availability separate from per-route compatibility. The [Mark 2 handoff](foundation-research/mark2/handoff.md) extends research scope; the existing matrix retains its original unobserved status.
+
 ## Platform integration evidence — 2026-09-06
 
 The [platform route records](foundation-research/platform-round/integration.json) refresh
