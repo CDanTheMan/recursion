@@ -35,7 +35,17 @@
       ],
       "next_test": "experiment.mark2.simulation",
       "owner_answer": null,
-      "status": "pending"
+      "status": "pending",
+      "classification": "proposed-owner-decision",
+      "affected_contracts": [
+        "docs/v3/ARCHITECTURE.md",
+        "docs/v3/EXECUTION-FABRIC.md",
+        "docs/v3/ACCEPTANCE.md",
+        "docs/v3/ROADMAP.md"
+      ],
+      "fixture_implications": "Bounded traces must cover process ownership, consultation, queue saturation, reset/replay, relaunch and configuration/update/Stop ordering while retaining the six M1 obligations.",
+      "dependency": "Small source-informed interface probes and explicit mapping of the six immutable M1 obligations.",
+      "falsifier": "A necessary broker obligation cannot be expressed or independently checked as a refinement, or an interleaving violates the aggregate obligations; move that state into the first model."
     },
     {
       "id": "decision.mark2.delegated-amendments",
@@ -66,7 +76,17 @@
       ],
       "next_test": "experiment.mark2.assistants",
       "owner_answer": null,
-      "status": "pending"
+      "status": "pending",
+      "classification": "proposed-owner-decision",
+      "affected_contracts": [
+        "docs/v3/EXECUTIVES.md",
+        "docs/v3/EXECUTION-FABRIC.md",
+        "docs/v3/PLANNING.md",
+        "docs/v3/DECISION-REGISTER.md"
+      ],
+      "fixture_implications": "An attempted consultant or expired lease amendment must stay rejected under current contracts; any accepted whitelist needs separate red/green authority and revocation fixtures.",
+      "dependency": "Current Owner-only GoalSpec amendment rule; granting routine decision rights does not grant amendment rights.",
+      "falsifier": "A representative authorized routine workflow requires an amendment and cannot complete through ordinary delegated decisions without repeated Owner intervention; then test an explicit bounded whitelist proposal."
     }
   ],
   "not_owner_questions": [

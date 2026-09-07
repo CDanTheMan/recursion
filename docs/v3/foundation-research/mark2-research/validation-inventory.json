@@ -313,11 +313,11 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/campaign.md",
-      "git_blob_sha256": "2c4b13f4bdafa3bb441e6eb71ed61708553f9a13a6627faa87d4d7f32c28b4ec"
+      "git_blob_sha256": "22a71efe21defa53bd0e9cf3ab0b75d1dfbc501dac99feba6d72455c5c7c255e"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/check.py",
-      "git_blob_sha256": "899838c82433244ab9622a773c08bf8c09c89a79755182c419bdc897b2d69184"
+      "git_blob_sha256": "7f4c8499112d7691a3145e7479d62afbcd353fc82ba5ac7d4d008b6a69c773d7"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/compatibility.json",
@@ -325,11 +325,11 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/decisions.json",
-      "git_blob_sha256": "7a14f5cf819c403b18da9a01a04642e98c9fef32b1380d4f5e6ad4d6ae318e59"
+      "git_blob_sha256": "e7afe5d9cb264cc3153c72324f6b2fa328189eb46029f9eac976fbc9058d35bc"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/evidence.json",
-      "git_blob_sha256": "fedec371222de2d3ab2090168a77fa6c52ffd98df54a4a3e62702b27e4a0f5f9"
+      "git_blob_sha256": "e478f3be437c05c80540cbc16e937a32be31e27e4244fd710bfe787fdf950efd"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/experiments.json",
@@ -337,7 +337,7 @@
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/grillme.md",
-      "git_blob_sha256": "7c965913df060c0c6a49c30a7536746bbe508844d24c52168350b4db10d7bf01"
+      "git_blob_sha256": "eb9e4e1188b336fe58a6f4f1cf65d0b928c576c7737364cfa4ff0070da56e5ad"
     },
     {
       "path": "docs/v3/foundation-research/mark2-research/manifest.json",
@@ -507,6 +507,35 @@
   "limitations": [
     "The artifact inventory excludes itself to avoid a self-referential digest; the exact candidate hash binds it.",
     "Recovery fixtures validate proposed arithmetic only. They do not exercise provider counters, a runtime ledger, process containment or update recovery.",
-    "All 25 historical regression commands and their entrypoint blobs remain unchanged. Final receipts and independent reviews are external to the candidate."
-  ]
+    "All 25 historical regression commands and their entrypoint blobs remain unchanged. Final receipts and independent reviews are external to the candidate.",
+    "Privacy scanning covers all changed artifacts and decoded JSON; it rejects known credentials, private paths/networks/hosts and tagged private provenance. Arbitrary private prose and novel identifiers can evade patterns, so lead and exact-candidate reviewers inspect the publication set. No private prompt corpus is copied into the gate.",
+    "Primary URLs are limited to declared public publisher hosts and cannot contain credentials or query payloads; this does not prove every remote page is accurate, current or permissible for every account."
+  ],
+  "publication_policy": {
+    "scope": "every changed artifact; raw UTF-8 and recursively decoded JSON strings and keys",
+    "permitted_forms": [
+      "Public primary HTTPS sources on the declared publisher host list, without credentials, URL query or fragment.",
+      "Public source repository pins and campaign Git hashes; repository-relative links and generic commands.",
+      "Publication-safe requirement summaries, null resource bindings and synthetic examples without credential-shaped values or private locations."
+    ],
+    "rejected_forms": [
+      "private_key",
+      "aws",
+      "github",
+      "slack",
+      "api_token",
+      "bearer",
+      "credential_assignment",
+      "credential_url",
+      "windows_user_path",
+      "unix_user_path",
+      "private_canary",
+      "private_network",
+      "private_field",
+      "private_host",
+      "unc_path"
+    ],
+    "human_review_required": true,
+    "guarantee": "known-pattern rejection only; no universal privacy certification"
+  }
 }

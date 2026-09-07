@@ -86,7 +86,7 @@ If interrupted before completion, inspect this plan, manifest, Git log, evidence
 review channel; continue the earliest incomplete phase. Unrun probes and unavailable counters
 remain explicit. No completed campaign, integration or product milestone is inferred from time spent.
 
-## PlanRevision 2 — current
+## PlanRevision 2 — historical, superseded by revision 3
 
 All six discovery packets and focused primary-source reconciliation are complete. Astra integrated
 80 primary-source records, 24 registered conclusions, 13 requested entries/23 paths/130 control
@@ -132,3 +132,33 @@ receipts and artifact hashes under the Git common directory at
 receipt belong there too. Read that location via `git rev-parse --git-common-dir`.
 If it is absent in another clone, revalidate the candidate rather than inferring a pass.
 The candidate's content cannot attest to reviews that occur after its commit.
+
+## PlanRevision 3 — current; validation and evidence audit repair
+
+Candidate `be038ee0f806a32939557c957f92dedb2453ce47` passed one full 25-command gate.
+Its independent evidence review passed; its contract review requested stronger publication
+privacy coverage and negative fixtures. The review's initial claim that scanning was absent
+was too broad: the candidate called the unchanged historical publication scanner. The useful
+gap was explicit coverage, encoded JSON, tagged private provenance and adversarial validation.
+The original review and exact-candidate receipts are retained externally, not erased.
+
+Astra's original-method audit also found missing explicit confidence, source revalidation,
+search provenance and complete thought-disposition metadata. This repair adds 76 linked thought
+records (all 66 historical ideas plus every sub-item of the ten completed answers), source-level
+contradiction/freshness/revalidation, qualitative claim confidence, repository anchors, six
+honestly reconstructed packet search summaries and three exact generic audit queries. Earlier
+unretained query strings are not invented. Moving HTML digests are retrieval receipts, with
+the reviewer-observed byte drift in one Claude policy page explicitly disclosed.
+
+The strengthened gate scans every changed artifact and recursively decoded JSON, checks known
+credential/private-location patterns and forbidden provenance fields, constrains source URLs,
+and tests raw and escaped synthetic privacy mutants. Pattern rejection cannot certify absence
+of arbitrary private prose; lead and independent review of the complete publication set remain
+required. The unchanged historical scan and all 25 original regressions remain in the gate.
+There is no new product code or operational change.
+
+Discovery and six-deliverable synthesis remain complete. Gate/review is the only phase in
+progress. The repaired candidate must pass the full gate twice and both reviewers must review
+its exact full hash anew before publication. Earlier passes cannot substitute. Publication is
+pending those external attestations; read the actual branch and attestation directory when
+resuming. The original six-hour deadline and zero-new-spend bounds are unchanged.
