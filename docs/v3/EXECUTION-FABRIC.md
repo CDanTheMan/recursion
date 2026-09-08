@@ -6,6 +6,26 @@ last-updated: 2026-09-07
 
 # Recursion v3 execution fabric hypothesis
 
+## Observed accounting boundaries — 2026-09-07
+
+IPR-003: the installed Codex fixture emitted cumulative totals of 15, 30, 45, 60 and 75,
+then a fork inherited 30 and the restarted original session replayed 75 without another
+provider POST. These values were scripted. Their lineage and replay behavior demonstrates why
+summing notifications or parent-plus-fork totals would duplicate usage. Bind each observation
+to the canonical parent, upstream request, session lineage, meter segment and reset boundary.
+
+IPR-006: the Hermes real-agent fixture made two scripted chat POST attempts, while its
+post-interrupt view reported only one completed usage call and the first response's 18 tokens.
+The second stream supplied no final usage. Retain an attempted-request record and an unknown
+remainder; interruption cannot release the corresponding allowance by interpreting missing
+counters as zero. These observations establish protocol behavior, not real subscription debit.
+See [hash-bound receipts and applicability](construction/interface-probes-20260907/evidence.json).
+
+Kernel admission, broker ownership and recipient settlement remain separate. A successful
+harness interrupt, zero local owned processes or a restored transcript supplies one observation,
+not an external-effect settlement receipt. Recovery allowance remains cumulative across all
+of these boundaries, including failed attempts, helpers and verification.
+
 ## Mark 3 comparison: dispatch and ownership receipts - 2026-09-07
 
 Each proposed dispatch envelope binds canonical operation/attempt, GoalSpec and packet digests,

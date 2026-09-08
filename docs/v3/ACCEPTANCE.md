@@ -6,6 +6,27 @@ last-updated: 2026-09-07
 
 # Recursion v3 acceptance hypothesis
 
+## Interface campaign acceptance boundary — 2026-09-07
+
+Foundation readiness has advanced to observed installed-harness/OS mechanisms and finite
+contract falsifiers. Full contract readiness remains conditional: the complete ten-control,
+three-Stop, all-role, plugin/configuration, remote-recovery and live upstream-only workflows
+have not passed an end-to-end gate. No model quality, subscription efficiency or production
+acceptance follows from scripted providers.
+
+The [construction gate](../../experiments/v3/interface-probes/check.py) binds the new frozen
+start and exact candidate, private raw receipts to allowlisted public evidence, executed tooling,
+source/claim identities, historical preservation and positive/adversarial observers. It runs
+the unchanged 25 regression commands on the current candidate. Historical campaign validators
+run unchanged against their explicitly identified frozen worktree; current canonical bindings
+are checked separately. These are distinct validation scopes.
+
+Two full gate passes and two independent reviews must identify the same clean candidate before
+publication. A changed candidate restarts final validation/review. The external receipts under
+`research-attestations/interface-probes/<candidate>/` establish completion; a preflight or working
+pass does not. Failed earlier admissions stay failed, and absent private evidence requires
+revalidation. No new consequential Owner decision has been established by these probes.
+
 ## Mark 3 comparison readiness gate - 2026-09-07
 
 CMP-018: the foundation is ready for bounded admission/probe construction and deeper formal

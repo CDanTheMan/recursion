@@ -6,6 +6,24 @@ last-updated: 2026-09-07
 
 # Recursion v3 interactive terminal and persistent session runtime
 
+## Observed Windows launch gap — 2026-09-07
+
+IPR-001: the bounded Windows probe reproduced the create-suspended-before-association gap.
+The observed live child was outside the operation Job and survived broker death. The
+`PROC_THREAD_ATTRIBUTE_JOB_LIST` treatment placed the child in that Job at creation; observed
+children terminated when broker death closed its last handle. Later association and ordinary
+descendant checkpoints also terminated their observed children. An independent outer safety
+Job contained every experiment and was empty after cleanup.
+
+Disposition: use supported creation-time containment as the Windows launch candidate, with
+membership verification before resume and explicit refusal on association failure. This result
+does not cover a crash inside the OS call, alternate launchers, hostile escape, Job breakaway,
+registration/reconciliation, remote effects or Full Stop. The at-birth created/associated
+checkpoints repeat the same membership boundary; they are not two independent mechanisms.
+Linux cgroup launch and remote recovery remain separate admissions. The test's Windows Job
+around a WSL client alone does not prove Linux cleanup; successful Hermes runs additionally
+observed the owned Linux namespace's exit.
+
 ## Mark 3 comparison: birth containment and control progress - 2026-09-07
 
 PTYs carry terminal data; they do not define canonical ownership or Full Stop. Compare Windows
