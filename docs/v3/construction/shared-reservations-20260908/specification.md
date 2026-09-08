@@ -126,3 +126,14 @@ framework selection, installations, providers, spend/reset credits, operational
 configuration changes, deployment or merge.
 
 Prospective revision2 after run-01: add free-reservation-core with14 unordered one-shot actions spanning admission, intent, send, acceptance, loss, restart, quota, snapshot and transfer. Run-01 remains retained preliminary evidence; this additional profile is declared before its run. Only actual guards restrict its interleavings. It does not import the original complete core/cross product.
+
+Prospective revision3 after read-only challenge and retained run-02: durable
+reservation bindings now store the actual fixed seven-field tuple and compare
+incoming owner, payload, goal, attempt and amount. Add successful/refused terminal
+request duplicates, explicit restart after reservation/intent/send and an ordered
+transfer install -> restart without ACK -> duplicate install profile. Replay now
+has a separately represented replay cursor; it observes the current intact durable
+envelope revision, while installation records a different presentation cursor.
+This is a bounded envelope replay relation, not a JSONL event-log implementation.
+A replay-reservation mutation must fail. All prior runs remain superseded. The
+free core remains unchanged; new profiles are declared before their admitted run.

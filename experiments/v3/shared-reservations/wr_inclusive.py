@@ -1,6 +1,6 @@
 """Inclusive concrete reducer. Audit and split reducer are not imported."""
 from dataclasses import replace
-from wr_domain import available, finish
+from wr_domain import available, finish, request_input, REQUESTS
 
 def put(t,i,v): return t[:i]+(v,)+t[i+1:]
 
@@ -8,20 +8,22 @@ def step(s,a,p,design,mutant=None):
     d={}; outcome='ok'; i=int(a[-1]) if a[-1].isdigit() else 0; bit=1<<i
     holder=i if design=='rights' else 0
     if a.startswith('read') and a[-1].isdigit(): d['reads']=put(s.reads,i,s.free[holder])
-    elif a.startswith(('reserve','duplicate')):
-        if s.issued & bit: outcome='duplicate'
+    elif a.startswith(('reserve','duplicate','wrong_owner','changed_payload','wrong_goal','changed_amount','changed_attempt')):
+        request=request_input(a)
+        expected=s.bindings[i] if s.issued&bit else REQUESTS[i]
+        if request[5]!=expected[5] and mutant!='owner-binding':outcome='owner-refused'
+        elif request[4]!=expected[4] and mutant!='payload-binding':outcome='payload-conflict'
+        elif any(request[k]!=expected[k] for k in (0,1,2,3,6)) and mutant!='identity-binding':outcome='identity-conflict'
+        elif s.issued & bit: outcome='duplicate'
         else:
             balance=s.reads[i] if mutant=='serialization' and s.reads[i]>=0 else s.free[holder]
             if balance<6:outcome='denied'
             else:
-                d.update(free=put(s.free,holder,s.free[holder]-6),reserved=put(s.reserved,i,6),issued=s.issued|bit,revision=s.revision+1);outcome='admitted'
-    elif a.startswith('wrong_owner'):
-        outcome='owner-refused' if mutant!='owner-binding' else 'duplicate'
-    elif a.startswith('changed_payload'):
-        outcome='payload-conflict' if mutant!='payload-binding' else 'duplicate'
+                d.update(free=put(s.free,holder,s.free[holder]-6),reserved=put(s.reserved,i,6),issued=s.issued|bit,bindings=put(s.bindings,i,request),revision=s.revision+1);outcome='admitted'
     elif a.startswith('foreign_release'):
-        outcome='owner-refused'
-        if mutant=='foreign-release': d.update(reserved=put(s.reserved,i,0),free=put(s.free,holder,s.free[holder]+s.reserved[i]))
+        request=request_input(a)
+        if request[5]!=s.bindings[i][5] and mutant!='foreign-release':outcome='owner-refused'
+        else:d.update(reserved=put(s.reserved,i,0),free=put(s.free,holder,s.free[holder]+s.reserved[i]));outcome='released'
     elif a.startswith('intent'):
         if s.reserved[i]==6 and not s.intent&bit:d.update(intent=s.intent|bit,revision=s.revision+1)
         else: outcome='denied'
@@ -73,8 +75,11 @@ def step(s,a,p,design,mutant=None):
         if design=='rights' and s.transfer==2:d['ack']=True
         else:outcome='unavailable'
     elif a=='restart':
-        d.update(boot=1,ack=False)
+        d.update(boot=1,ack=False,replay_cursor=0)
         if mutant=='restart-release':d.update(free=(10,0) if design=='central' else (5,5),reserved=(0,0))
+    elif a=='replay':
+        d['replay_cursor']=s.revision
+        if mutant=='replay-reservation':d.update(free=(10,0) if design=='central' else (5,5),reserved=(0,0))
     elif a=='quota_reset':
         d.update(quota_epoch=1,quota_used=0)
         if mutant=='quota-reservation':d.update(reserved=(0,0),free=(10,0) if design=='central' else (5,5))
@@ -101,7 +106,7 @@ def step(s,a,p,design,mutant=None):
         else:outcome='unavailable'
     elif a=='install':
         if s.copied:
-            d['installed']=s.snapshot
+            d.update(installed=s.snapshot,installed_cursor=s.snapshot[0])
             if mutant=='snapshot-reservation':d.update(reserved=s.snapshot[2],free=s.snapshot[1])
         else:outcome='unavailable'
     elif a=='restore_old':

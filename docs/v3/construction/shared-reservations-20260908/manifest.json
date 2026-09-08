@@ -47,6 +47,10 @@
       "git_blob_sha256": "50f546774fc805a242110d8a8a193d72f3aa50843cc091ec3d92e19b65d4b2b2"
     },
     {
+      "path": "docs/v3/M1C-INTEGRITY-CONTRACTS.md",
+      "git_blob_sha256": "f72aeeb05c6090651c97dda59bf5f77f5680abe1bfd5faaad60df153c3f0d5ee"
+    },
+    {
       "path": "docs/v3/ROADMAP.md",
       "git_blob_sha256": "95bd828c5e2acfe4d79bdc70850cb4e7229d30884160fbccdd5d4140ad9bd90c"
     },

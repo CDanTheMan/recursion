@@ -1,6 +1,6 @@
 """Concrete authority envelope plus broker state; independently coded commands."""
 from dataclasses import dataclass
-from wr_domain import State, NAMES, BROKER, available
+from wr_domain import State, NAMES, BROKER, available, request_input, REQUESTS
 
 AUTH = tuple(n for n in NAMES if n not in BROKER)
 LOCAL = tuple(n for n in NAMES if n in BROKER)
@@ -25,14 +25,19 @@ def edges(s,p,design):
         def tick():v['revision']+=1
         if action in ('read0','read1'):
             set_at('reads',goal,v['free'][owner])
-        elif action in ('reserve0','reserve1','duplicate0','duplicate1'):
-            if v['issued']&flag:answer='duplicate'
+        elif action.startswith(('reserve','duplicate','wrong_owner','changed_payload','wrong_goal','changed_amount','changed_attempt')):
+            incoming=request_input(action);saved=v['bindings'][goal] if v['issued']&flag else REQUESTS[goal]
+            if incoming[5]!=saved[5]:answer='owner-refused'
+            elif incoming[4]!=saved[4]:answer='payload-conflict'
+            elif incoming!=saved:answer='identity-conflict'
+            elif v['issued']&flag:answer='duplicate'
             elif v['free'][owner]>=6:
                 set_at('free',owner,v['free'][owner]-6);set_at('reserved',goal,6)
-                v['issued']|=flag;tick();answer='admitted'
+                set_at('bindings',goal,incoming);v['issued']|=flag;tick();answer='admitted'
             else:answer='denied'
-        elif action.startswith('wrong_owner') or action.startswith('foreign_release'):answer='owner-refused'
-        elif action.startswith('changed_payload'):answer='payload-conflict'
+        elif action.startswith('foreign_release'):
+            if request_input(action)[5]!=v['bindings'][goal][5]:answer='owner-refused'
+            else:set_at('free',owner,v['free'][owner]+v['reserved'][goal]);set_at('reserved',goal,0);answer='released'
         elif action.startswith('intent'):
             if v['reserved'][goal]!=6 or v['intent']&flag:answer='denied'
             else:v['intent']|=flag;tick()
@@ -79,7 +84,8 @@ def edges(s,p,design):
         elif action=='transfer_ack':
             if design=='rights' and v['transfer']==2:v['ack']=True
             else:answer='unavailable'
-        elif action=='restart':v['boot']=1;v['ack']=False
+        elif action=='restart':v['boot']=1;v['ack']=False;v['replay_cursor']=0
+        elif action=='replay':v['replay_cursor']=v['revision']
         elif action=='quota_reset':v['quota_epoch']=1;v['quota_used']=0
         elif action=='exit':v['worker']=1
         elif action=='wait':
@@ -102,7 +108,7 @@ def edges(s,p,design):
             if v['copied']:v['reader_pin']=False
             else:answer='unavailable'
         elif action=='install':
-            if v['copied']:v['installed']=v['snapshot']
+            if v['copied']:v['installed']=v['snapshot'];v['installed_cursor']=v['snapshot'][0]
             else:answer='unavailable'
         elif action=='restore_old':answer='stale-rejected' if v['snapshot'] and v['snapshot'][0]!=v['revision'] else 'no-change'
         else:raise ValueError(action)

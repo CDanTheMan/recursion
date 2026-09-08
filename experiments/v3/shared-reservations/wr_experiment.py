@@ -7,6 +7,7 @@ MUTANTS={
  'serialization':('stale-read-race','central'),
  'ambiguity':('lost-receipt-restart','central'),
  'restart-release':('lost-receipt-restart','central'),
+ 'replay-reservation':('lost-receipt-restart','central'),
  'exit-reservation':('local-lifetime','central'),
  'quota-reservation':('local-lifetime','central'),
  'quota-lifetime':('local-lifetime','central'),
@@ -15,6 +16,7 @@ MUTANTS={
  'foreign-release':('owner-and-identity','central'),
  'owner-binding':('owner-and-identity','central'),
  'payload-binding':('owner-and-identity','central'),
+ 'identity-binding':('owner-and-identity','central'),
  'classification-release':('success-consumption','central'),
  'conflict-hold':('classification-hold','central'),
  'settlement-idempotence':('lost-receipt-refusal','central'),
@@ -36,19 +38,29 @@ def witness_check(name,design,w):
     if name in ('free-admission','stale-read-race'):
         if design=='central':audit.require(s['reserved']==(6,0) and events['reserve1']['label']=='reserve1=denied','original central6+6 schedule')
         else:audit.require(s['reserved']==(0,0),'initial5/5 rights cannot serve six')
-    elif name in ('free-reservation-core','lost-receipt-restart','owner-and-identity','snapshot-uncertainty','local-lifetime','pin-and-reservation'):
+    elif name in ('free-reservation-core','lost-receipt-restart','owner-and-identity','snapshot-uncertainty','local-lifetime','pin-and-reservation','restart-after-reserve','restart-after-intent','restart-after-send'):
         audit.require(s['reserved']==(6,0) and s['sent']==(1,0) and s['receipt']==(0,0) and s['classification']==(0,0),'same unknown operation reservation survives')
         if 'resend0' in events:audit.require(events['resend0']['label']=='resend0=blocked','no blind resend')
         if name=='snapshot-uncertainty':audit.require(s['installed'][2]==(0,0) and s['reserved']==(6,0),'old snapshot distinct from current reservation')
         if name=='local-lifetime':audit.require(s['lifetime']==(1,1) and s['quota_epoch']==1 and s['boot']==1,'independent lifetime/reset/restart')
         if name=='pin-and-reservation':audit.require(s['generation']==2 and not s['reader_pin'] and s['reserved']==(6,0),'pin release is not reservation release')
-    elif name=='success-consumption':audit.require(s['consumed']==(6,0) and s['reserved']==(0,0) and sum(s['free'])==4,'success consumes budget once')
+        if 'replay' in events:audit.require(events['replay']['after']['replay_cursor']==events['replay']['before']['revision'] and events['replay']['after']['reserved']==(6,0),'replay observes durable reservation')
+        if name.startswith('restart-after-'):
+            cut=name.removeprefix('restart-after-');before=events['restart']['before']
+            audit.require(before['reserved']==(6,0) and before['remote']==(0,0),'restart before environmental outcome')
+            audit.require(before['intent']==(0 if cut=='reserve' else 1) and before['sent']==((1,0) if cut=='send' else (0,0)),'exact reservation crash cut')
+    elif name=='success-consumption':
+        audit.require(s['consumed']==(6,0) and s['reserved']==(0,0) and sum(s['free'])==4,'success consumes budget once')
+        audit.require(events['duplicate0']['label']=='duplicate0=duplicate','duplicate after consumed disposition')
     elif name=='lost-receipt-refusal':
         audit.require(s['consumed']==(0,0) and s['reserved'][0]==0 and s['issued']&1,'terminal nonexecution releases with tombstone')
         audit.require(events['settle_again0']['label']=='settle_again0=duplicate','settlement idempotent')
+        audit.require(events['duplicate0']['label']=='duplicate0=duplicate','duplicate after released disposition')
     elif name=='classification-hold':audit.require(s['reserved']==(6,0) and s['classification']==(1,0) and s['conflict']==1,'classification success and conflict hold differ')
     elif name.startswith('transfer'):
         if design=='rights':audit.require(s['transfer']==2 and sum(s['reserved'])==6,'durable transfer enables six exactly once')
+        if name=='transfer-lost-ack' and design=='rights':
+            audit.require(events['restart']['before']['transfer']==2 and not events['restart']['before']['ack'] and events['transfer_duplicate']['label']=='transfer_duplicate=duplicate','installation survives lost ACK and restart')
     elif name=='receipt-and-local-interleavings':audit.require(s['consumed']==(6,0),'receipt settlement despite local restart')
     else:raise ValueError('uncovered witness '+name)
 

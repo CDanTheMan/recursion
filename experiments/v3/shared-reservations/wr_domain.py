@@ -7,6 +7,7 @@ class State:
     reserved: tuple = (0, 0)
     consumed: tuple = (0, 0)
     issued: int = 0
+    bindings: tuple = ((), ())
     intent: int = 0
     sent: tuple = (0, 0)
     remote: tuple = (0, 0)  # 1 success; 2 terminal nonexecution
@@ -29,10 +30,25 @@ class State:
     snapshot: tuple = ()
     copied: bool = False
     installed: tuple = ()
+    installed_cursor: int = 0
+    replay_cursor: int = 0
     done: int = 0
 
 NAMES = tuple(f.name for f in fields(State))
-BROKER = frozenset(('reads','worker','incarnation','quota_used','reader_pin','snapshot','copied','installed','done'))
+BROKER = frozenset(('reads','worker','incarnation','quota_used','reader_pin','snapshot','copied','installed','installed_cursor','replay_cursor','done'))
+
+# pool, goal, logical operation/request ID, attempt, payload, authorized owner, amount
+REQUESTS = (('pool10','goalA','opA','attemptA','payloadA','ownerA',6),
+            ('pool10','goalB','opB','attemptB','payloadB','ownerB',6))
+
+def request_input(action):
+    i=int(action[-1]);values=list(REQUESTS[i])
+    if action.startswith(('wrong_owner','foreign_release')):values[5]=REQUESTS[1-i][5]
+    elif action.startswith('changed_payload'):values[4]='changed-payload'
+    elif action.startswith('wrong_goal'):values[1]=REQUESTS[1-i][1]
+    elif action.startswith('changed_amount'):values[6]=5
+    elif action.startswith('changed_attempt'):values[3]='attempt-other'
+    return tuple(values)
 
 def initial(design):
     return State(free=(10,0) if design == 'central' else (5,5))
@@ -50,11 +66,11 @@ PROFILES = {
  'free-reservation-core': profile(('transfer_debit','transfer_install','reserve0','reserve1','intent0','send0','accept0','lose0','restart','quota_reset','capture','copy','install','resend0')),
  'free-admission': profile(('read0','read1','reserve0','reserve1','duplicate0','duplicate1','restart','quota_reset')),
  'stale-read-race': sequence('read0','read1','reserve0','reserve1'),
- 'lost-receipt-restart': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','restart','duplicate0','resend0','reserve1'),
- 'lost-receipt-refusal': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','refuse0','lose0','restart','query0','classify0','reconcile0','settle_again0','reserve1'),
- 'success-consumption': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','receive0','classify0','reconcile0','settle_again0','reserve1'),
+ 'lost-receipt-restart': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','restart','replay','duplicate0','resend0','reserve1'),
+ 'lost-receipt-refusal': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','refuse0','lose0','restart','query0','classify0','reconcile0','settle_again0','duplicate0','reserve1'),
+ 'success-consumption': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','receive0','classify0','reconcile0','settle_again0','duplicate0','reserve1'),
  'classification-hold': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','receive0','classify0','conflict0','reconcile0','reserve1'),
- 'owner-and-identity': sequence('transfer_debit','transfer_install','reserve0','wrong_owner0','changed_payload0','intent0','send0','accept0','lose0','foreign_release0','duplicate0'),
+ 'owner-and-identity': sequence('transfer_debit','transfer_install','reserve0','wrong_owner0','changed_payload0','wrong_goal0','changed_amount0','changed_attempt0','intent0','send0','accept0','lose0','foreign_release0','duplicate0'),
  'snapshot-uncertainty': profile(('capture','copy','reader_wait','transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','install','restore_old','reserve1'),
     (('capture','copy','reader_wait','install'),('capture','transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','install','restore_old','reserve1'))),
  'local-lifetime': profile(('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','exit','wait','quota_reset','restart','new_worker','compute','resend0','reserve1'),
@@ -64,6 +80,10 @@ PROFILES = {
  'transfer-free': profile(('transfer_debit','transfer_install','transfer_duplicate','transfer_timeout','transfer_ack','restart','reserve0','reserve1'),
      (('transfer_debit','transfer_install','transfer_duplicate'),('transfer_install','transfer_ack'),('transfer_debit','transfer_timeout'))),
  'transfer-mirror': sequence('transfer_debit','restart','transfer_install','transfer_duplicate','transfer_timeout','reserve1','reserve0',source=0),
+ 'transfer-lost-ack': sequence('transfer_debit','transfer_install','restart','transfer_duplicate','transfer_timeout','reserve0','reserve1'),
+ 'restart-after-reserve': sequence('transfer_debit','transfer_install','reserve0','restart','replay','duplicate0','intent0','send0','accept0','lose0','reserve1'),
+ 'restart-after-intent': sequence('transfer_debit','transfer_install','reserve0','intent0','restart','replay','duplicate0','send0','accept0','lose0','reserve1'),
+ 'restart-after-send': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','restart','replay','duplicate0','resend0','accept0','lose0','reserve1'),
  'receipt-and-local-interleavings': profile(('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','query0','classify0','reconcile0','exit','wait','restart','quota_reset'),
      (('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','query0','classify0','reconcile0'),('send0','exit','wait'),('lose0','restart'))),
 }

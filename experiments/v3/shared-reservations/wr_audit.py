@@ -7,9 +7,9 @@ def require(condition,message):
 def invariant(s,design):
     for name in ('free','reserved','consumed','sent','remote','receipt','classification','reads','lifetime'):
         t=getattr(s,name);require(type(t) is tuple and len(t)==2 and all(type(x) is int for x in t),'typed '+name)
-    require(all(0<=x<=10 for x in s.free),'nonnegative owned allowance')
     require(all(x in (0,6) for x in s.reserved+s.consumed),'six-unit original demand')
     require(sum(s.reserved)+sum(s.consumed)<=10,'aggregate admitted capacity <= ten')
+    require(all(0<=x<=10 for x in s.free),'nonnegative owned allowance')
     inflight=int(design=='rights' and s.transfer==1)
     require(sum(s.free)+inflight+sum(s.reserved)+sum(s.consumed)==10,'durable conservation')
     require(s.transfer in (0,1,2) and (design=='rights' or s.transfer==0),'transfer domain')
@@ -18,6 +18,8 @@ def invariant(s,design):
     require(s.worker in (0,1,2) and s.generation in (1,2) and s.boot in (0,1),'lifecycle domains')
     for i in range(2):
         bit=1<<i
+        suffix='AB'[i];binding=('pool10','goal'+suffix,'op'+suffix,'attempt'+suffix,'payload'+suffix,'owner'+suffix,6)
+        require(s.bindings[i]==(binding if s.issued&bit else ()),'immutable reservation identity/owner')
         require(s.sent[i] in (0,1),'no blind ambiguous redispatch')
         require(s.remote[i] in (0,1,2) and s.receipt[i] in (0,1,2) and s.classification[i] in (0,1,2),'evidence domains')
         require(not s.receipt[i] or s.receipt[i]==s.remote[i],'exact-operation retained receipt')
@@ -29,10 +31,11 @@ def invariant(s,design):
         if s.issued&bit and s.reserved[i]==0 and s.consumed[i]==0:
             require(s.classification[i]==2 and not s.conflict&bit,'only proven nonexecution frees budget')
     require(not s.installed or s.copied,'installation needs independent copied snapshot')
+    require(s.installed_cursor==(s.installed[0] if s.installed else 0) and 0<=s.replay_cursor<=s.revision,'separate installed/replayed cursors')
 
 def initial(s,design):
     expected={n:0 for n in NAMES}
-    expected.update(free=(10,0) if design=='central' else (5,5),reserved=(0,0),consumed=(0,0),sent=(0,0),remote=(0,0),receipt=(0,0),classification=(0,0),reads=(-1,-1),ack=False,lifetime=(1,0),quota_used=1,generation=1,reader_pin=False,snapshot=(),copied=False,installed=())
+    expected.update(free=(10,0) if design=='central' else (5,5),reserved=(0,0),consumed=(0,0),bindings=((),()),sent=(0,0),remote=(0,0),receipt=(0,0),classification=(0,0),reads=(-1,-1),ack=False,lifetime=(1,0),quota_used=1,generation=1,reader_pin=False,snapshot=(),copied=False,installed=())
     require(all(getattr(s,n)==v for n,v in expected.items()),'independent initial relation');invariant(s,design)
 
 def enabled(s,p,labels):
@@ -54,9 +57,12 @@ def edge(s,label,t,p,design):
     elif a in ('read0','read1'):at('reads',i,s.free[h])
     elif a in ('reserve0','reserve1','duplicate0','duplicate1'):
         expected='duplicate' if s.issued&b else ('admitted' if s.free[h]>=6 else 'denied')
-        if expected=='admitted':at('free',h,s.free[h]-6);at('reserved',i,6);changes.update(issued=s.issued|b,revision=s.revision+1)
+        if expected=='admitted':
+            suffix='AB'[i];at('bindings',i,('pool10','goal'+suffix,'op'+suffix,'attempt'+suffix,'payload'+suffix,'owner'+suffix,6))
+            at('free',h,s.free[h]-6);at('reserved',i,6);changes.update(issued=s.issued|b,revision=s.revision+1)
     elif a.startswith(('wrong_owner','foreign_release')):expected='owner-refused'
     elif a.startswith('changed_payload'):expected='payload-conflict'
+    elif a.startswith(('wrong_goal','changed_amount','changed_attempt')):expected='identity-conflict'
     elif a.startswith('intent'):
         expected='ok' if s.reserved[i]==6 and not s.intent&b else 'denied'
         if expected=='ok':changes.update(intent=s.intent|b,revision=s.revision+1)
@@ -94,7 +100,8 @@ def edge(s,label,t,p,design):
     elif a=='transfer_ack':
         expected='ok' if design=='rights' and s.transfer==2 else 'unavailable'
         if expected=='ok':changes['ack']=True
-    elif a=='restart':changes.update(boot=1,ack=False)
+    elif a=='restart':changes.update(boot=1,ack=False,replay_cursor=0)
+    elif a=='replay':changes['replay_cursor']=s.revision
     elif a=='quota_reset':changes.update(quota_epoch=1,quota_used=0)
     elif a=='exit':changes['worker']=1
     elif a=='wait':
@@ -116,7 +123,7 @@ def edge(s,label,t,p,design):
         if expected=='ok':changes['reader_pin']=False
     elif a=='install':
         expected='ok' if s.copied else 'unavailable'
-        if expected=='ok':changes['installed']=s.snapshot
+        if expected=='ok':changes.update(installed=s.snapshot,installed_cursor=s.snapshot[0])
     elif a=='restore_old':expected='stale-rejected' if s.snapshot and s.snapshot[0]!=s.revision else 'no-change'
     else:raise ValueError('unknown independent action '+a)
     if a!='status':changes['done']=s.done|(1<<p['actions'].index(a))
