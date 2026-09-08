@@ -330,3 +330,8 @@ For SC-WIRE-02, verify the external completion and receipt hashes, then remote P
 
 For SC-EPOCH-03 verify external completion/receipt hashes and current PR state before choosing another baseline. Preserve earlier passing-but-superseded common-mode attempts. Commit sources before admitted execution, retain independent exact reviews and run the full gate twice on one clean commit. Do not alter M1, historical gates, operational flags or protected paths. Owner merges; a new coupled campaign needs fresh bounded admission.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
+
+## SC-COUPLED-01 — 2026-09-08
+
+For SC-COUPLED-01 verify external completion and all receipt/source/log hashes, plus actual PR/default state. Preserve passing-but-superseded runs and preflight failures. Sources precede admission, final gates run twice on an identical clean commit, and two independent exact reviews are required. All13 frozen gates and25 unchanged regressions remain; Owner merges.
+[Evidence and limits](construction/coupled-construction-20260908/handoff.md).

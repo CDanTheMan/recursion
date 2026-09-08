@@ -175,6 +175,12 @@
       "start": 1,
       "end": 3,
       "reserved": []
+    },
+    {
+      "prefix": "CPL",
+      "start": 1,
+      "end": 3,
+      "reserved": []
     }
   ],
   "foreignRegistries": [

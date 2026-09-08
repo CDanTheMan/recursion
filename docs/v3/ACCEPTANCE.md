@@ -501,3 +501,8 @@ SC-WIRE-02 requires two full exact-candidate gates, two independent exact review
 
 SC-EPOCH-03 requires two clean exact-candidate full gates, two independent exact reviews, unchanged25 regressions and12 frozen predecessors including SC-WIRE-02. Require full declared finite closure, original06/23/24 ordered witnesses, typed and stale-wake counterexamples, explicit retired aliases and independent initialization/step obligations. External completion receipts determine scoped readiness; no isolated pass promotes aggregate or production completion.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
+
+## SC-COUPLED-01 — 2026-09-08
+
+SC-COUPLED-01 requires two exact clean full gates,13 frozen predecessors, unchanged25 regressions and two independent exact-candidate reviews. One hundred finite environments and58 cases across29 guard removals add scoped support to four obligations; all6 obligations/27 traces and prior integration requirements remain. No formal freeze, runtime integration or migration promotion follows.
+[Evidence and limits](construction/coupled-construction-20260908/handoff.md).

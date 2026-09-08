@@ -477,3 +477,8 @@ SC-WIRE-02 constructs the bounded literal correspondence packet. SC-EPOCH-03 is 
 
 SC-EPOCH-03 is the second Owner-authorized successor campaign. The next bounded request is the coupled shared-reservation/wire/typed-consultation construction, preserving original6+6-from10 and full flow/byte/framing obligations. Keep all6 obligations,27 traces, eight experiment families, six cross-area cases and native/upstream-only/combined routes. Full formal comparison precedes language then storage comparison.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
+
+## SC-COUPLED-01 — 2026-09-08
+
+SC-COUPLED-01 adds scoped central reservation/wire/consultation composition. Next propose coupled effect-evidence-cut and PAUSE admission for original10/13/14/15 crossings, preserving current bounds. General rights, full core/cross comparison, authenticated physical persistence and common-writer migration remain residuals; product language/store/framework selection remains deferred.
+[Evidence and limits](construction/coupled-construction-20260908/handoff.md).
