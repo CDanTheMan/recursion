@@ -79,7 +79,7 @@ def join(bundle,keys,mutant=None):
     header=cut['trace_header'];require(set(header)=={'type','intent','admission','dependency_states','current_admission_epoch','current_fence_epoch','effect_count','external_call_count'},'header-shape')
     dispatch=verify(bundle['dispatch'],'dispatcher',keys,mutant)
     require(set(dispatch)=={'cut_id','intent','admission','starts'},'dispatch-shape')
-    require(dispatch['cut_id']==cut['cut_id'] and dispatch['intent']==header['intent'] and dispatch['admission']==header['admission'],'original-dispatch-binding')
+    require(dispatch['cut_id']==cut['cut_id'] and canonical(dispatch['intent'])==canonical(header['intent']) and canonical(dispatch['admission'])==canonical(header['admission']),'original-dispatch-binding')
     records=[]
     for index,envelope in enumerate(bundle['evidence']):
         # Expected signer is derived from the signed record type, then checked.
@@ -88,7 +88,7 @@ def join(bundle,keys,mutant=None):
         require(set(body)=={'cut_id','ordinal','record'} and body['cut_id']==cut['cut_id'] and type(body['ordinal'])is int and body['ordinal']==index,'ordered-envelope')
         records.append(body['record'])
     starts=[{'ordinal':i,'record':r} for i,r in enumerate(records) if r['type']=='AttemptStarted@1']
-    require(dispatch['starts']==starts,'original-starts')
+    require(canonical(dispatch['starts'])==canonical(starts),'original-starts')
     if mutant!='inventory':require(cut['ordered_inventory']==[dh(r) for r in records],'complete-ordered-cut')
     n=cut['prefix_length'];require(type(n)is int and 0<=n<=len(records),'historical-prefix')
     c=cut['context'];check_context(c,header['intent'],mutant)

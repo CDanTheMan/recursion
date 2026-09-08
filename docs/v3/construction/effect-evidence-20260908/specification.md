@@ -107,3 +107,8 @@ M1C-WIRE-PROFILE.md (effects), planning validation/canonical.py and contracts.py
 planning replay/kernel.py, integrity schema.test.py and reference_oracle.py,
 F-M1A-014/F-M1A-016 and F-M1C-007. Both independent method challenges confirmed
 the missing-evidence, prefix, PAUSE and quarantine limits before construction.
+
+Exact-candidate review refinement before run04: separately signed original intent,
+admission and starts require canonical-byte equality. Python structural equality
+accepts bool/int aliases. Three new targeted negative controls retain valid MACs
+and collector records while changing only one signed dispatch scalar.

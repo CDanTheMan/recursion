@@ -133,6 +133,13 @@ def run(keys,directory,limits):
         if name=='bool-ordinal':
             body=bundle['evidence'][0]['body'];body['ordinal']=False;bundle['evidence'][0]=sign(body,'dispatcher',keys)
         rejection(name,bundle,'join')
+    for name in ('dispatch-intent-bool','dispatch-admission-bool','dispatch-start-bool'):
+        bundle=package(base,keys);body=bundle['dispatch']['body']
+        if name=='dispatch-intent-bool':body['intent']['admission_epoch']=True
+        elif name=='dispatch-admission-bool':body['admission']['admission_epoch']=True
+        else:body['starts'][0]['record']['attempt_number']=True
+        bundle['dispatch']=sign(body,'dispatcher',keys)
+        rejection(name,bundle,'join','original-starts' if name=='dispatch-start-bool' else 'original-dispatch-binding')
     # Guard mutants each accept a counterexample rejected by the baseline.
     wrong=package(base,keys);wrong['dispatch']=sign(wrong['dispatch']['body'],'observer',keys)
     role=join(wrong,keys,'role');mutants.append({'guard':'role','counterexample':'wrong-role','accepted_status':role['current']['status']})
