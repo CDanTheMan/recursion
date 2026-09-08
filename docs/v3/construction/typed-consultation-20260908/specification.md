@@ -82,3 +82,9 @@ even when the serial is already2. Add explicit alias-active state, retire it on
 expiry/Stop, reactivate only on the single admitted request, and independently forbid
 new evidence through inactive aliases. Add expiry-request-stop as the16th profile.
 Two generations remain sufficient; there is no wrap or post-Stop readmission.
+
+Prospective revision3: add wake-only lease-guard removal after historically valid
+adoption, plus alias-retirement guard removal on expiry-request-stop. An independent
+continuation admission property requires current authority and free executor on any
+wake-count increase. Changed payload coverage concerns request duplicates; conflicting
+reply payloads are not offered in this campaign. Run02 remains superseded before run03.

@@ -93,5 +93,6 @@ def initialization(s):
  d.require(s==expected,'complete independent initialization');invariant(s)
 
 def check(s,a,n,name):
+ if n['wake_count']>s['wake_count']:d.require(eligible(s,s['adopted']) and s['executor']=='free','fresh current authority at continuation admission')
  if a in ('ingest','duplicate-reply') and not s['alias_active']:d.require(n['evidence']==s['evidence'],'retired alias cannot create evidence')
  d.require(a in enabled(s,name),'enabled action');d.require(n==expected(s,a),'complete independent postcondition '+a);invariant(n)

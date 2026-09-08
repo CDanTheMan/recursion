@@ -62,7 +62,7 @@ def step(s,a,mutant=None):
   elif not current(s,s['evidence'],mutant):deny('stale-or-missing-authority')
   else:n['adopted']=s['evidence'];n['adoption_count']=1
  elif a in ('wake','wake-again','relaunch'):
-  if not current(s,s['adopted'],mutant):deny('stale-or-missing-authority')
+  if not current(s,s['adopted'],'omit-lease' if mutant=='wake-lease' else mutant):deny('stale-or-missing-authority')
   elif s['wake_count']:
    deny('duplicate')
    if mutant=='duplicate-wake':n['wake_count']+=1
@@ -77,7 +77,7 @@ def step(s,a,mutant=None):
   t['delivery']=d.token('delivery',2);n['alias_active']=False
   if mutant=='erase-evidence':n['evidence']=None
  elif a=='stop':
-  n['stopped']=True;n['alias_active']=False
+  n['stopped']=True;n['alias_active']=(mutant=='alias-retirement')
   if mutant!='stop-generation':t['delivery']=d.token('delivery',2)
   if mutant=='cancel-all':n['unrelated']='stopped'
   if mutant=='release-reservation':n['reserved']=0;n['free']=10

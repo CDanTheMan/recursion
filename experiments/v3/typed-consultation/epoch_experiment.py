@@ -2,7 +2,7 @@
 import argparse,collections,copy,ctypes,datetime,hashlib,json,pathlib,runpy,time
 import epoch_domain as d,epoch_inclusive as inc,epoch_split as sp,epoch_audit as audit
 ROOT=pathlib.Path(__file__).resolve().parents[3]
-MUTANTS={'omit-lease':'stale-lease','omit-goal':'stale-goal','omit-issuer':'stale-issuer','omit-incarnation':'stale-incarnation','serial-only':'wrong-domain','omit-delivery':'alias-before-receipt','erase-evidence':'alias-after-receipt','duplicate-adopt':'duplicates','duplicate-wake':'duplicates','payload-conflict':'duplicates','invisible-wait':'resource-wait','hold-executor':'resource-wait','cancel-all':'stop-borrowed','stop-generation':'stop-borrowed','false-settlement':'stop-borrowed','release-reservation':'stop-borrowed','advice-amend':'owner-only','restore-incarnation':'stale-incarnation'}
+MUTANTS={'wake-lease':'historical-adoption','alias-retirement':'expiry-request-stop','omit-lease':'stale-lease','omit-goal':'stale-goal','omit-issuer':'stale-issuer','omit-incarnation':'stale-incarnation','serial-only':'wrong-domain','omit-delivery':'alias-before-receipt','erase-evidence':'alias-after-receipt','duplicate-adopt':'duplicates','duplicate-wake':'duplicates','payload-conflict':'duplicates','invisible-wait':'resource-wait','hold-executor':'resource-wait','cancel-all':'stop-borrowed','stop-generation':'stop-borrowed','false-settlement':'stop-borrowed','release-reservation':'stop-borrowed','advice-amend':'owner-only','restore-incarnation':'stale-incarnation'}
 def write(p,x):p.write_text(json.dumps(x,indent=2)+'\n',encoding='utf-8')
 def peak_bytes():
     class Counters(ctypes.Structure):
