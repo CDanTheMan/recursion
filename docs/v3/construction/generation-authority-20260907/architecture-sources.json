@@ -207,6 +207,276 @@
       "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/668016926adfd1b8a79dbce894f1e203d8892599/LICENSE",
       "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
       "retained_at": "2026-09-08T05:55:23.221846+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "OpenHands-software-agent-sdk-openhands-tools-openhands-tools-delegate-impl.py",
+      "repository": "OpenHands/software-agent-sdk",
+      "commit": "3896f186936342b99c7c5d3f89cdae888f458e7f",
+      "path": "openhands-tools/openhands/tools/delegate/impl.py",
+      "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/3896f186936342b99c7c5d3f89cdae888f458e7f/openhands-tools/openhands/tools/delegate/impl.py",
+      "sha256": "0b4bab177bb2a7a82f3bfc5f8ab828f939ab9ea4d4b2613aa8c37d777d394abb",
+      "retained_at": "2026-09-08T05:57:12.765060+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "OpenHands-software-agent-sdk-openhands-sdk-openhands-sdk-conversation-impl-local_conversation.py",
+      "repository": "OpenHands/software-agent-sdk",
+      "commit": "3896f186936342b99c7c5d3f89cdae888f458e7f",
+      "path": "openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py",
+      "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/3896f186936342b99c7c5d3f89cdae888f458e7f/openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py",
+      "sha256": "60370c843f51476ff76b2fbbd3c2511b461930a08539d82c21b5b868a25909b0",
+      "retained_at": "2026-09-08T05:57:12.806079+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "OpenHands-software-agent-sdk-openhands-sdk-pyproject.toml",
+      "repository": "OpenHands/software-agent-sdk",
+      "commit": "3896f186936342b99c7c5d3f89cdae888f458e7f",
+      "path": "openhands-sdk/pyproject.toml",
+      "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/3896f186936342b99c7c5d3f89cdae888f458e7f/openhands-sdk/pyproject.toml",
+      "sha256": "5e083d18f2d2a2db675a414b1cbba161617ff228cb834a7e1f99f43a7ade4a58",
+      "retained_at": "2026-09-08T05:57:12.829084+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "OpenHands-software-agent-sdk-LICENSE",
+      "repository": "OpenHands/software-agent-sdk",
+      "commit": "3896f186936342b99c7c5d3f89cdae888f458e7f",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/3896f186936342b99c7c5d3f89cdae888f458e7f/LICENSE",
+      "sha256": "14a9b631c658eee682c6c2973525fbdf808c3457176bc47513052c559cc5ce86",
+      "retained_at": "2026-09-08T05:57:12.874104+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "google-adk-python-src-google-adk-agents-parallel_agent.py",
+      "repository": "google/adk-python",
+      "commit": "b0180620f4c2f4f4467a89c37a30f75bf849700b",
+      "path": "src/google/adk/agents/parallel_agent.py",
+      "url": "https://raw.githubusercontent.com/google/adk-python/b0180620f4c2f4f4467a89c37a30f75bf849700b/src/google/adk/agents/parallel_agent.py",
+      "sha256": "760ce9887bb2552b617cc38939f4e6fe8df2fabb0042dc7951994100af0be93f",
+      "retained_at": "2026-09-08T05:57:12.984647+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "google-adk-python-pyproject.toml",
+      "repository": "google/adk-python",
+      "commit": "b0180620f4c2f4f4467a89c37a30f75bf849700b",
+      "path": "pyproject.toml",
+      "url": "https://raw.githubusercontent.com/google/adk-python/b0180620f4c2f4f4467a89c37a30f75bf849700b/pyproject.toml",
+      "sha256": "9f6102beddeb2266ff49f7dbad782ec89fde20b11d45c1fcf14f3d8b9ba71d1b",
+      "retained_at": "2026-09-08T05:57:13.034116+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "google-adk-python-LICENSE",
+      "repository": "google/adk-python",
+      "commit": "b0180620f4c2f4f4467a89c37a30f75bf849700b",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/google/adk-python/b0180620f4c2f4f4467a89c37a30f75bf849700b/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "retained_at": "2026-09-08T05:57:13.055628+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "google-adk-docs-docs-agents-workflow-agents-parallel-agents.md",
+      "repository": "google/adk-docs",
+      "commit": "4983b6974ae6b5414e82db9e9aa934064a3d5cdc",
+      "path": "docs/agents/workflow-agents/parallel-agents.md",
+      "url": "https://raw.githubusercontent.com/google/adk-docs/4983b6974ae6b5414e82db9e9aa934064a3d5cdc/docs/agents/workflow-agents/parallel-agents.md",
+      "sha256": "adbc75b0f9f2094de82201f324b6d95d42d3541b69d0d3835d4a31b460c33ec9",
+      "retained_at": "2026-09-08T05:57:13.094134+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "anthropics-claude-agent-sdk-python-src-claude_agent_sdk-types.py",
+      "repository": "anthropics/claude-agent-sdk-python",
+      "commit": "efd4d865ef1795daffee3cd24cce45307aed8a51",
+      "path": "src/claude_agent_sdk/types.py",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-agent-sdk-python/efd4d865ef1795daffee3cd24cce45307aed8a51/src/claude_agent_sdk/types.py",
+      "sha256": "49e6a4ca6155ad9b245133d138516d9269bbb3aad2eb21311d02d77d75bca86a",
+      "retained_at": "2026-09-08T05:57:13.156660+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "anthropics-claude-agent-sdk-python-src-claude_agent_sdk-_internal-transport-subprocess_cli.py",
+      "repository": "anthropics/claude-agent-sdk-python",
+      "commit": "efd4d865ef1795daffee3cd24cce45307aed8a51",
+      "path": "src/claude_agent_sdk/_internal/transport/subprocess_cli.py",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-agent-sdk-python/efd4d865ef1795daffee3cd24cce45307aed8a51/src/claude_agent_sdk/_internal/transport/subprocess_cli.py",
+      "sha256": "748227e42cb9802d7316fabc836428d69bd219b63ef1b2f9f8f7a86a72a03e45",
+      "retained_at": "2026-09-08T05:57:13.185171+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "anthropics-claude-agent-sdk-python-pyproject.toml",
+      "repository": "anthropics/claude-agent-sdk-python",
+      "commit": "efd4d865ef1795daffee3cd24cce45307aed8a51",
+      "path": "pyproject.toml",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-agent-sdk-python/efd4d865ef1795daffee3cd24cce45307aed8a51/pyproject.toml",
+      "sha256": "00bcff397a21f835b90a8ca9c1765250b47b46e85346ebcecdbd344e3bb4693a",
+      "retained_at": "2026-09-08T05:57:13.220681+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "anthropics-claude-agent-sdk-python-LICENSE",
+      "repository": "anthropics/claude-agent-sdk-python",
+      "commit": "efd4d865ef1795daffee3cd24cce45307aed8a51",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-agent-sdk-python/efd4d865ef1795daffee3cd24cce45307aed8a51/LICENSE",
+      "sha256": "cebdde8a8fb9ee59e5eaaed19578bf8085aa7047562259c31f38f225c26f6812",
+      "retained_at": "2026-09-08T05:57:13.244187+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "TimelyDataflow-differential-dataflow-differential-dataflow-src-trace-mod.rs",
+      "repository": "TimelyDataflow/differential-dataflow",
+      "commit": "aa8745f93ea8abe131104fc7885ba4fd47e63902",
+      "path": "differential-dataflow/src/trace/mod.rs",
+      "url": "https://raw.githubusercontent.com/TimelyDataflow/differential-dataflow/aa8745f93ea8abe131104fc7885ba4fd47e63902/differential-dataflow/src/trace/mod.rs",
+      "sha256": "e8075801ab2d2c6b073b99a760d1b6337b45b1b760436392853c07c037357f1d",
+      "retained_at": "2026-09-08T05:57:13.270698+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "TimelyDataflow-differential-dataflow-differential-dataflow-src-operators-arrange-agent.rs",
+      "repository": "TimelyDataflow/differential-dataflow",
+      "commit": "aa8745f93ea8abe131104fc7885ba4fd47e63902",
+      "path": "differential-dataflow/src/operators/arrange/agent.rs",
+      "url": "https://raw.githubusercontent.com/TimelyDataflow/differential-dataflow/aa8745f93ea8abe131104fc7885ba4fd47e63902/differential-dataflow/src/operators/arrange/agent.rs",
+      "sha256": "ed89ebb566d70176fc47f7a9e50c5a1b4dc55498bd138d5c1e763479cb62425b",
+      "retained_at": "2026-09-08T05:57:13.295712+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "TimelyDataflow-differential-dataflow-Cargo.toml",
+      "repository": "TimelyDataflow/differential-dataflow",
+      "commit": "aa8745f93ea8abe131104fc7885ba4fd47e63902",
+      "path": "Cargo.toml",
+      "url": "https://raw.githubusercontent.com/TimelyDataflow/differential-dataflow/aa8745f93ea8abe131104fc7885ba4fd47e63902/Cargo.toml",
+      "sha256": "32dffcc15b1e011e34e49341d511e34dc4fed001ada441f1a0342b3d0b600115",
+      "retained_at": "2026-09-08T05:57:13.319717+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "TimelyDataflow-differential-dataflow-LICENSE",
+      "repository": "TimelyDataflow/differential-dataflow",
+      "commit": "aa8745f93ea8abe131104fc7885ba4fd47e63902",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/TimelyDataflow/differential-dataflow/aa8745f93ea8abe131104fc7885ba4fd47e63902/LICENSE",
+      "sha256": "a6c1841776769c3bfea412e2c7b5d0b7f05ae2ebd600e07c1b6f64c3283f05c2",
+      "retained_at": "2026-09-08T05:57:13.341731+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "automerge-automerge-rust-automerge-src-automerge.rs",
+      "repository": "automerge/automerge",
+      "commit": "1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1",
+      "path": "rust/automerge/src/automerge.rs",
+      "url": "https://raw.githubusercontent.com/automerge/automerge/1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1/rust/automerge/src/automerge.rs",
+      "sha256": "44c9534bc733ae156d982f1b83316a0b4aa3534fb282dad9f2033fcc240c9190",
+      "retained_at": "2026-09-08T05:57:13.373736+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "automerge-automerge-rust-automerge-src-read.rs",
+      "repository": "automerge/automerge",
+      "commit": "1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1",
+      "path": "rust/automerge/src/read.rs",
+      "url": "https://raw.githubusercontent.com/automerge/automerge/1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1/rust/automerge/src/read.rs",
+      "sha256": "8892bc6399a8a4843971dfb04f0903943acb4db01ad1e1c10b9a0d707a92f103",
+      "retained_at": "2026-09-08T05:57:13.397243+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "automerge-automerge-rust-automerge-Cargo.toml",
+      "repository": "automerge/automerge",
+      "commit": "1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1",
+      "path": "rust/automerge/Cargo.toml",
+      "url": "https://raw.githubusercontent.com/automerge/automerge/1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1/rust/automerge/Cargo.toml",
+      "sha256": "33b1f11d5025a39369cc30a8db1034afa7b52a2b25437c946bdf1f99239303b1",
+      "retained_at": "2026-09-08T05:57:13.419753+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "automerge-automerge-LICENSE",
+      "repository": "automerge/automerge",
+      "commit": "1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/automerge/automerge/1618c976ca23fca8282c4a69ebbb0bb0c3f27ab1/LICENSE",
+      "sha256": "7a06f577e39ec132eb8657abc3471f81f668ff3810a160db79b9b18a9568242b",
+      "retained_at": "2026-09-08T05:57:13.453766+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "vllm-project-vllm-vllm-v1-core-kv_cache_utils.py",
+      "repository": "vllm-project/vllm",
+      "commit": "782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed",
+      "path": "vllm/v1/core/kv_cache_utils.py",
+      "url": "https://raw.githubusercontent.com/vllm-project/vllm/782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed/vllm/v1/core/kv_cache_utils.py",
+      "sha256": "7d299419aece21423962748d14101f60441a0f1c844c1bb37d53f6541d50da3a",
+      "retained_at": "2026-09-08T05:57:13.486779+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "vllm-project-vllm-vllm-plugins-__init__.py",
+      "repository": "vllm-project/vllm",
+      "commit": "782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed",
+      "path": "vllm/plugins/__init__.py",
+      "url": "https://raw.githubusercontent.com/vllm-project/vllm/782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed/vllm/plugins/__init__.py",
+      "sha256": "fb6e6ee432c5a4ae207aaffe4b546aca9381f56ee8498b0a3e0d9af2d289d023",
+      "retained_at": "2026-09-08T05:57:13.530290+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "vllm-project-vllm-docs-design-prefix_caching.md",
+      "repository": "vllm-project/vllm",
+      "commit": "782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed",
+      "path": "docs/design/prefix_caching.md",
+      "url": "https://raw.githubusercontent.com/vllm-project/vllm/782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed/docs/design/prefix_caching.md",
+      "sha256": "67ee4e2b7bc23d40e9b366e4a9053ae4ecd0925ddef51f412ac5c16b9dc83a61",
+      "retained_at": "2026-09-08T05:57:13.553306+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "vllm-project-vllm-docs-usage-security.md",
+      "repository": "vllm-project/vllm",
+      "commit": "782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed",
+      "path": "docs/usage/security.md",
+      "url": "https://raw.githubusercontent.com/vllm-project/vllm/782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed/docs/usage/security.md",
+      "sha256": "c606d0998cdc70b87795311017855a67ebd86e55fb2426ff9bc0d8ae6beb1552",
+      "retained_at": "2026-09-08T05:57:13.581818+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "vllm-project-vllm-pyproject.toml",
+      "repository": "vllm-project/vllm",
+      "commit": "782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed",
+      "path": "pyproject.toml",
+      "url": "https://raw.githubusercontent.com/vllm-project/vllm/782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed/pyproject.toml",
+      "sha256": "d45403b9cf0657df2ee5e659723fc386c31f6a688cca5d886db514881d53ee4b",
+      "retained_at": "2026-09-08T05:57:13.624330+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "vllm-project-vllm-docs-getting_started-installation-gpu.md",
+      "repository": "vllm-project/vllm",
+      "commit": "782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed",
+      "path": "docs/getting_started/installation/gpu.md",
+      "url": "https://raw.githubusercontent.com/vllm-project/vllm/782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed/docs/getting_started/installation/gpu.md",
+      "sha256": "1bcf504d2c28d4f147ee80f34d90ed5f243912d7de690aa07b91944d7d596726",
+      "retained_at": "2026-09-08T05:57:13.644837+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "vllm-project-vllm-LICENSE",
+      "repository": "vllm-project/vllm",
+      "commit": "782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/vllm-project/vllm/782f36cd0c7951cc1fa3c4fb3eeb916cc31780ed/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "retained_at": "2026-09-08T05:57:13.668348+00:00"
     }
   ],
   "documentation_references": [

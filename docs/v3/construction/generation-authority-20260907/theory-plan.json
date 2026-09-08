@@ -1,0 +1,46 @@
+{
+  "status": "preregistered-before-root-execution",
+  "recorded_at": "2026-09-08T05:59:40.075191+00:00",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "input_commit": "4603187",
+  "kind": "Finite abstract counterexample comparison; not upstream runtime or full formal comparison",
+  "families": [
+    "activation-closure",
+    "revision-bound-decision",
+    "detached-settlement",
+    "stale-transport-ack",
+    "incarnation-accounting",
+    "branch-adoption",
+    "memory-freshness",
+    "rejected-command-provenance"
+  ],
+  "domain": {
+    "config_revisions": 2,
+    "actors_or_forks": 2,
+    "authority_epochs": 2,
+    "meter_values": [
+      1,
+      2
+    ],
+    "maximum_named_actions": 4,
+    "event_order": "All permutations satisfying declared family partial orders; meter and memory use closed Cartesian fixture domains"
+  },
+  "candidates": [
+    "shortcut comparator",
+    "explicit identity and authority guard"
+  ],
+  "acceptance": "Each family must have at least one independently stated obligation violation in the shortcut, zero in the guarded candidate and at least one positive authorized outcome; retain all fixture/trace results and a concrete counterexample. A guard that merely denies everything fails.",
+  "limits": {
+    "seconds": 30,
+    "fixtures": 256,
+    "network": false,
+    "third_party_imports": false,
+    "subprocesses": false
+  },
+  "non_claims": [
+    "No production integration or measured performance",
+    "No exhaustive exploration outside the declared finite fixtures",
+    "No completion of the parent formal coverage ledger",
+    "No framework, language or store selection"
+  ]
+}
