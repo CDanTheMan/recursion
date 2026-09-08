@@ -49,3 +49,10 @@ Keep6 original obligations and27 trace rows with partial flow/replay and uncerta
 support only. SC-EPOCH-03 follows as its own campaign. A coupled reservation/wire
 product remains required before aggregate promotion, followed by remaining original
 coverage; no language/store/framework selection or operational change.
+
+Prospective revision2: retain the actual immutable (cursor,zero-reservations) snapshot
+record and separate installed snapshot cursor, including byte-unit cursor2. This
+cursor records snapshot installation, not subsequent incremental renderer progress.
+Run01 failed while recording a guard-removal enabledness witness; no semantic pass
+was admitted. Run02 passed the earlier equivalent fixed snapshot boundary and is
+superseded by this explicit cursor representation before final evidence.

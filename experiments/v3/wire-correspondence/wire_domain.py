@@ -21,10 +21,10 @@ def encode(action,s,c):
  return None
 def initial(c):
  h=copy.deepcopy(FIXTURE['messages'][0]);h['cursor_unit']=c[0]
- return dict(phase=0,source=(2,3),pending=(),byte_credit=c[1],event_credit=1,grants=0,sent=0,acknowledged=0,installed=0,view_reserved=0,reserved=6,free=4,owner=('pool-a','goal-a','operation-a','owner-a',6),restart=0,lost_ack=0,control=0,quota=0,wire=(canonical(h),canonical(encode('credit',{},c))))
+ return dict(phase=0,source=(2,3),pending=(),byte_credit=c[1],event_credit=1,grants=0,sent=0,acknowledged=0,installed=0,installed_cursor=0,snapshot=(cursor(1,c),0),view_reserved=0,reserved=6,free=4,owner=('pool-a','goal-a','operation-a','owner-a',6),restart=0,lost_ack=0,control=0,quota=0,wire=(canonical(h),canonical(encode('credit',{},c))))
 PRODUCER=('source',)
 RECEIVER=('phase','pending','byte_credit','event_credit','grants','sent','acknowledged','wire')
-APP=('installed','view_reserved','reserved','free','owner','restart','lost_ack','control','quota')
+APP=('installed','installed_cursor','snapshot','view_reserved','reserved','free','owner','restart','lost_ack','control','quota')
 class Split(NamedTuple):
  producer:dict
  receiver:dict

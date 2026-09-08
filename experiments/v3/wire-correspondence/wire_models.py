@@ -10,7 +10,7 @@ def inclusive(s,c,mutant=None):
  if s['phase']==0:add('gap',phase=1,sent=1,acknowledged=0)
  if s['phase']==1:add('reset',phase=2,pending=(),byte_credit=0,event_credit=0,acknowledged=1)
  if s['phase']==2:
-  if not s['installed']:add('install',installed=1,view_reserved=0,**({'reserved':0,'free':10} if mutant=='install-reservation' else {}))
+  if not s['installed']:add('install',installed=1,installed_cursor=s['snapshot'][0],view_reserved=s['snapshot'][1],**({'reserved':0,'free':10} if mutant=='install-reservation' else {}))
   if s['grants']<2:add('credit',grants=s['grants']+1,byte_credit=s['byte_credit']+z,event_credit=s['event_credit']+1)
   if (s['installed'] or mutant=='install-guard') and s['source'] and s['byte_credit']>=z and s['event_credit']>=1 and len(s['pending'])<qe and (len(s['pending'])+1)*z<=qb*z:
    add('emit',source=s['source'][1:],pending=s['pending']+(s['source'][0],),byte_credit=s['byte_credit']-z,event_credit=s['event_credit']-1,sent=s['source'][0])
@@ -34,7 +34,7 @@ def separated(state,c):
  if f['phase']<1:append('gap',ff={'phase':1,'sent':1,'acknowledged':0})
  elif f['phase']==1:append('reset',ff={'phase':2,'pending':(),'byte_credit':0,'event_credit':0,'acknowledged':1})
  else:
-  if a['installed']==0:append('install',aa={'installed':1,'view_reserved':0})
+  if a['installed']==0:append('install',aa={'installed':1,'installed_cursor':a['snapshot'][0],'view_reserved':a['snapshot'][1]})
   if 2-f['grants']>0:append('credit',ff={'grants':f['grants']+1,'byte_credit':z+f['byte_credit'],'event_credit':1+f['event_credit']})
   room=c[2]>len(f['pending']) and c[3]*z-sum(z for _ in f['pending'])>=z
   funded=f['event_credit']>0 and f['byte_credit']-z>=0

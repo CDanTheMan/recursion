@@ -22,7 +22,7 @@ def check(s,a,n,c):
  expected=dict(s);changes={
  'gap':dict(phase=1,sent=1,acknowledged=0),
  'reset':dict(phase=2,pending=(),byte_credit=0,event_credit=0,acknowledged=1),
- 'install':dict(installed=1,view_reserved=0),
+ 'install':dict(installed=1,installed_cursor=d.cursor(1,c),view_reserved=0),
  'credit':dict(grants=s['grants']+1,byte_credit=s['byte_credit']+c[1],event_credit=s['event_credit']+1),
  'ack':dict(pending=(),acknowledged=s['sent']),
  'lose-ack':dict(lost_ack=1),'restart':dict(restart=1),'control':dict(control=1),'quota':dict(quota=1)}
@@ -36,6 +36,8 @@ def invariant(s,c):
  d.require(s['reserved']==6 and s['free']==4 and s['owner']==('pool-a','goal-a','operation-a','owner-a',6),'reservation ownership')
  d.require(0<=s['byte_credit'] and 0<=s['event_credit'] and len(s['pending'])<=c[2] and len(s['pending'])*c[1]<=c[3]*c[1],'flow bounds')
  d.require(s['source']==tuple(n for n in (2,3) if n>s['sent']),'source future preservation')
+ d.require(s['snapshot']==(d.cursor(1,c),0),'immutable snapshot')
+ d.require(s['installed_cursor']==(d.cursor(1,c) if s['installed'] else 0),'installation cursor')
  d.require(not s['installed'] or s['phase']==2,'installation precondition')
  d.require(s['sent']<=1 or s['installed']==1,'application before delivery')
 
