@@ -596,3 +596,8 @@ rights as optional under explicit persistent-memory/serialized-holder premises.
 
 No product store/language/framework, physical durability, arbitrary transfer, full
 formal freeze or common-writer migration is established. [Evidence and limits](construction/shared-reservations-20260908/findings.md).
+
+## SC-WIRE-02 — 2026-09-08
+
+WIR-003 adds scoped literal recovery correspondence with independent split/inclusive reducers, a complete separate relation and all distinct wire histories in16 finite configurations. Preserve synthetic versus observed support. Full shared-reservation/wire composition, original core/cross comparison, authenticated snapshots and runtime integration remain unproved.
+[Evidence and limits](construction/wire-correspondence-20260908/evidence.json).

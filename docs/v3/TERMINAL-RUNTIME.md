@@ -489,3 +489,8 @@ preserve uncertain external effects. This does not implement the full M1B wire,
 queue/credit, framing or ACK correspondence. SC-WIRE-02 remains next, followed by
 a coupled model before aggregate promotion. All ten controls, three Stop modes,
 forks and persistent assistants remain required. [Evidence](construction/shared-reservations-20260908/findings.md).
+
+## SC-WIRE-02 — 2026-09-08
+
+WIR-001 distinguishes source future entries, receiver pending entries, immutable snapshot content and installed snapshot cursor. In16 finite configurations, GAP via WELCOME requires RESET, fresh CREDIT and independent application installation before EVENT. Failed ACK holds pending; successful ACK creates no credit. Fixed-epoch receiver restart preserves ownership. Literal M1B cannot prove application installation. Full prior flow/ingress bounds remain separately checked, not imported into this narrow product.
+[Evidence and limits](construction/wire-correspondence-20260908/evidence.json).

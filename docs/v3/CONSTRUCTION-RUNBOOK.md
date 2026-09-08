@@ -320,3 +320,8 @@ source/host/capacity/time admission. Two full exact-candidate passes and indepen
 reviews precede Owner-authorized normal review publication. No settings, PAUSE,
 auth, deployment or merge changes are included. SC-WIRE-02 and SC-EPOCH-03 remain
 the bounded successors; Astra remains the sole integrator/writer.
+
+## SC-WIRE-02 — 2026-09-08
+
+For SC-WIRE-02, verify the external completion and receipt hashes, then remote PR state before choosing the successor baseline. Sources precede admitted runs; failed/superseded attempts remain external. Preserve historical validators and gates. New campaigns require fresh scope/resource/time admission, isolated worktree, slice commits and exact final review/publication; Owner handles merges.
+[Evidence and limits](construction/wire-correspondence-20260908/evidence.json).

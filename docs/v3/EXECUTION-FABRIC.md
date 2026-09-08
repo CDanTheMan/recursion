@@ -439,3 +439,8 @@ reservation. This is the fixed-identity finite relation, not a literal M1C runti
 bridge or proof of provider authentication. Existing dispatch envelopes, integration
 roles/routes, eight experiment families and full workflow requirements remain.
 [Scoped sources and results](construction/shared-reservations-20260908/evidence.json).
+
+## SC-WIRE-02 — 2026-09-08
+
+WIR-002 checks that an old zero-reservation presentation snapshot cannot release a current six-unit uncertain reservation. Install, receiver restart, quota and control preserve its fixed owner binding. The literal wire oracle cannot inspect this authority; independent local guards reject corruption. This is a held-reservation boundary, while original6+6-from10 admission remains in SC-WR-01. The full coupled product and common-writer migration remain unresolved.
+[Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
