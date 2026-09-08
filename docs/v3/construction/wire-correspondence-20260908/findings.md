@@ -41,3 +41,7 @@ independent exact reviews, outside this candidate. Original6 obligations,27 rows
 eight experiment families, six cross-area cases and all integration routes remain.
 No full formal freeze, authenticated snapshot, physical durability, production
 integration, common-writer migration or liveness claim. No new Owner decision.
+
+Two synthesis working checks were retained as failed: broken relative source link,
+then tuple/list JSON normalization in control comparison. Repairs change documentation
+and gate serialization comparison; admitted model semantics remain run05.

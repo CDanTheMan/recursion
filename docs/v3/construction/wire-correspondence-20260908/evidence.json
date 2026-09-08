@@ -149,6 +149,13 @@
       "files": {
         "working-attempt.json": "2ea4b13badf7ffd451bb387dd8ec1ecc757b31cc3b9e6d9b0fb0bb32d4ce76ab"
       }
+    },
+    {
+      "candidate": "9216d2de8ff48e727f901e721292c57e3c537778",
+      "disposition": "superseded-not-a-pass",
+      "files": {
+        "working-attempt.json": "cb89f0ca698f19c8a4ff7740a0d358da45f9edbc16faaee4151debfccb4d780a"
+      }
     }
   ]
 }

@@ -94,7 +94,7 @@ def result_check(r,expected):
     for i,c in enumerate(domain.CONFIGS):require(canonical(r['profiles'][str(i)])==canonical(experiment.explore(c)),'independent complete graph/witness reproduction')
     require(r['states_per_boundary']==sum(p['states'] for p in r['profiles'].values())<=LIMITS['states_per_boundary'],'admitted complete totals')
     require(canonical(r['mutants'])==canonical([experiment.explore(domain.CONFIGS[0],mutant=m) for m in experiment.MUTANTS]),'independent counterexamples')
-    require(r['calibrations']==experiment.calibrate() and r['controls']==experiment.controls(),'literal and checker controls')
+    require(r['calibrations']==experiment.calibrate() and canonical(r['controls'])==canonical(experiment.controls()),'literal and checker controls')
 
 
 def admission(a,x,directory,accepted):
