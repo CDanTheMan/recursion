@@ -40,13 +40,13 @@ def successors(s,policy,mutant=None):
     if s.admission!=2:put('stop',admission=2)
     elif s.installed!=2:put('install_fence',installed=2)
     if s.permit==0:
-        if s.installed==2 and mutant!='recipient_fence':put('stale_permit_refused',permit=2)
+        if s.installed==2 and mutant!='recipient_fence':put('stale_permit_refused',permit=2,reserved=False)
         else:put('execute' if s.admission==1 else 'execute_exposed',permit=1,effect=1,executions=s.executions+1)
     if s.effect==1:put('remote_complete',effect=2)
     if not s.receipt and s.effect==2:
         name='current_receipt' if s.incarnation==1 and s.admission==1 else 'late_receipt'
-        if mutant=='receipt_attempt' and s.incarnation==2:put(name,receipt=True,closed=s.closed|2)
-        else:put(name,receipt=True)
+        if mutant=='receipt_attempt' and s.incarnation==2:put(name,receipt=True,reserved=False,closed=s.closed|2)
+        else:put(name,receipt=True,reserved=False)
     for bad_input in ('wrong_operation','wrong_payload','unauthenticated'):
         if mutant==bad_input and s.effect==2 and not s.receipt:put(bad_input+'_refused',receipt=True)
         else:put(bad_input+'_refused')

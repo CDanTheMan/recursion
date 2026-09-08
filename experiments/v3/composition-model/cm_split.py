@@ -37,9 +37,9 @@ def successors(s,policy,mutant=None):
     if a.admission==2 and b.installed==1:yield edge('install_fence',ba={'installed':2})
     if b.permit==0:
         if b.installed==1 or mutant=='recipient_fence':yield edge('execute_exposed' if a.admission==2 else 'execute',ba={'permit':1,'effect':1,'executions':b.executions+1})
-        else:yield edge('stale_permit_refused',ba={'permit':2})
+        else:yield edge('stale_permit_refused',{'reserved':False},ba={'permit':2})
     if b.effect==1:yield edge('remote_complete',ba={'effect':2})
-    if b.effect==2 and not b.receipt:yield edge('late_receipt' if a.incarnation==2 or a.admission==2 else 'current_receipt',{'closed':a.closed|2} if mutant=='receipt_attempt' and a.incarnation==2 else {},{'receipt':True})
+    if b.effect==2 and not b.receipt:yield edge('late_receipt' if a.incarnation==2 or a.admission==2 else 'current_receipt',{'reserved':False,**({'closed':a.closed|2} if mutant=='receipt_attempt' and a.incarnation==2 else {})},{'receipt':True})
     for invalid in ('wrong_operation','wrong_payload','unauthenticated'):
         yield edge(invalid+'_refused',ba={'receipt':True} if mutant==invalid and b.effect==2 and not b.receipt else {})
     yield edge('invalid_receipt_refused',ba={'receipt':True} if mutant=='receipt_identity' and b.effect!=2 else {})

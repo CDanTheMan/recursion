@@ -34,6 +34,7 @@ def invariant(s):
     if s.admission not in (1,2) or s.installed not in (1,2) or s.installed>s.admission:return 'recipient namespace'
     if s.actor not in range(4) or s.permit not in range(3) or s.effect not in range(3):return 'environment type'
     if s.receipt and s.effect!=2:return 'effect evidence identity'
+    if s.reserved!=(s.permit!=2 and not s.receipt):return 'unresolved effect reservation'
     if s.executions not in (0,1) or (s.permit==1)!=(s.executions==1) or bool(s.effect)!=(s.executions==1):return 'no blind duplicate effect'
     if s.incarnation not in (1,2) or s.spent!=s.incarnation:return 'lifetime accounting'
     if s.closed not in range(4) or (s.closed&2 and s.incarnation!=2) or (s.closed&1 and s.actor not in (1,3)):return 'attempt accounting'
@@ -71,7 +72,7 @@ def witnesses(s,label,t,policy):
     if t.selected==2 and t.pin:out.append('g2_with_live_g1')
     if label=='status_hold' and s.pin:out.append('g3_hold_live_pin')
     if label=='commit_capsule' and t.pin:out.append('capsule_keeps_invocation_pin')
-    if label=='wait_local' and t.effect==1 and not t.receipt:out.append('local_death_keeps_effect_unknown')
+    if label=='wait_local' and t.effect==1 and not t.receipt and t.reserved:out.append('local_death_keeps_effect_unknown')
     if t.selected==3 and t.capsule and t.fork and not t.resident&1:out.append('g3_after_safe_reclaim')
     if label=='status_hold' and not s.pin and policy=='resident':out.append('resident_fork_holds_g3')
     if label=='restart_authority' and s.reply and s.selected>=2 and t.selected==s.selected and t.pin==s.pin:out.append('commit_survives_restart')
@@ -81,12 +82,12 @@ def witnesses(s,label,t,policy):
     if label=='stale_permit_refused':out.append('postinstallation_refusal')
     if label=='current_receipt':out.append('valid_current_receipt')
     if label=='late_receipt' and s.incarnation==2 and not t.closed&2:out.append('late_receipt_preserves_attempt2')
-    if label=='old_transport_ack' and s.effect==1 and not t.closed&2 and not t.receipt:out.append('old_ack_preserves_unknown_attempt')
+    if label=='old_transport_ack' and s.effect==1 and not t.closed&2 and not t.receipt and t.reserved:out.append('old_ack_preserves_unknown_attempt')
     if label=='close_attempt2' and s.receipt:out.append('own_attempt2_completion')
     if label=='pool_reset' and s.incarnation==2 and t.spent==2:out.append('reset_conserves_two_segments')
     if label=='inspect_fork' and s.admission==2 and s.capsule and not s.resident&1 and t.admission==2:out.append('fork_inspection_no_authority_restore')
     if label=='query_same_operation' and s.receipt and t.executions==1:out.append('settled_query_no_reexecution')
-    if t.selected==3 and t.effect==1 and not t.receipt and t.capsule and t.fork and not t.resident&1 and t.spent==2:out.append('g3_with_unknown_effect')
+    if t.selected==3 and t.effect==1 and not t.receipt and t.capsule and t.fork and not t.resident&1 and t.spent==2 and t.reserved:out.append('g3_with_unknown_effect')
     if label=='late_receipt' and s.selected==3 and not s.resident&1 and s.incarnation==2 and not t.closed&2:out.append('late_receipt_after_reclaim')
     return out
 

@@ -27,6 +27,7 @@ class State(NamedTuple):
     executions:int=0
     spent:int=1  # lifetime admitted compute units, independent of pool reset
     fork:bool=True
+    reserved:bool=True
 
 class Authority(NamedTuple):
     selected:int=1
@@ -44,6 +45,7 @@ class Authority(NamedTuple):
     closed:int=0
     spent:int=1
     fork:bool=True
+    reserved:bool=True
 
 class Broker(NamedTuple):
     half:int=0
@@ -63,7 +65,7 @@ class Split(NamedTuple):
 
 POLICIES=('capsule','resident')
 MUTANTS=('capacity','live_pin','fork_loss','writer_fence','early_selection','recipient_fence','receipt_identity','old_ack','receipt_attempt','reset_budget','death_settlement','blind_retry','fork_authority','publish_unstaged','skip_first_delete','wrong_operation','wrong_payload','unauthenticated','hidden_hold')
-BOOLS={'staged','reply','requested','pin','capsule','receipt','ack','reset','fork'}
+BOOLS={'staged','reply','requested','pin','capsule','receipt','ack','reset','fork','reserved'}
 def bit(g):return 1<<(g-1)
 def normalize(s):
     if isinstance(s,State):return s

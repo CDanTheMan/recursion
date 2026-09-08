@@ -31,10 +31,10 @@ def step(v,event,policy):
     elif event=='install_fence' and v.admission==2 and v.installed==1:changes={'installed':2}
     elif event in ('execute','execute_exposed') and v.permit==0 and v.installed==1:
         if (event=='execute')==(v.admission==1):changes={'permit':1,'effect':1,'executions':v.executions+1}
-    elif event=='stale_permit_refused' and v.permit==0 and v.installed==2:changes={'permit':2}
+    elif event=='stale_permit_refused' and v.permit==0 and v.installed==2:changes={'permit':2,'reserved':False}
     elif event=='remote_complete' and v.effect==1:changes={'effect':2}
     elif event in ('current_receipt','late_receipt') and v.effect==2 and not v.receipt:
-        if (event=='current_receipt')==(v.incarnation==1 and v.admission==1):changes={'receipt':True}
+        if (event=='current_receipt')==(v.incarnation==1 and v.admission==1):changes={'receipt':True,'reserved':False}
     elif event=='kill_local' and v.actor==0:changes={'actor':2}
     elif event=='return_local' and v.actor==0 and (v.effect==2 or v.permit==2):changes={'actor':1}
     elif event=='wait_local' and v.actor==2:changes={'actor':3}
