@@ -34,6 +34,7 @@ class Campaign:
         thread=threading.Thread(target=drain,daemon=True);thread.start();deadline=time.monotonic()+LIMITS['child_seconds'];error=None
         try:
             while True:
+                require(time.monotonic()<deadline,'child-deadline')
                 line=q.get(timeout=max(.001,deadline-time.monotonic()))
                 if line is None:break
                 obj=json.loads(line);records.append(obj)
@@ -49,14 +50,18 @@ class Campaign:
             p.stdin.close();p.stdout.close()
             receipt={'command':command,'started_at':started,'finished_at':now(),'pid':p.pid,'exit_code':p.returncode,'requested_cut':cut,'cut_observed':phase_seen,'terminated_by_controller':killed,'wait_completed':True,'error':error,'records':records}
             save(root/(tag+'.json'),receipt)
-        require(error is None,'child-error '+str(error));require(cut is None or phase_seen,'named-cut-not-reached');return receipt
+        require(error is None,'child-error '+str(error));require(cut is None or (phase_seen and p.returncode!=0),'named-cut-not-reached');receipt['_file']=tag+'.json';return receipt
     def init(self,root,layout,unit):
         r=self.child(root,'init',layout=layout,unit=unit);require(r['exit_code']==0,'init-refused');save(root/'application.json',F.initial_app())
     def read(self,root,layout,unit,g,*,files=None,request=1,mutate=None):
         trust=F.trust(layout,g,unit,root.name,uuid.uuid4().hex,files=files,request_event=request)
         if mutate:mutate(trust)
         t=root/f'trust-{self.children}.json';save(t,trust);r=self.child(root,'read',trust=t);require(r['exit_code']==0 and len(r['records'])==1,'reader-process-failed');proof=r['records'][0]
-        require(proof['attempt']==trust['attempt'] and proof['nonce']==trust['nonce'] and proof['reader_pid']==r['pid'],'reader-provenance');p=root/f'proof-{self.children}.json';save(p,proof);return t,p,proof
+        require(proof['attempt']==trust['attempt'] and proof['nonce']==trust['nonce'] and proof['reader_pid']==r['pid'],'reader-provenance')
+        snapshot=root/f'read-snapshot-{self.children}';snapshot.mkdir()
+        for path in (root/'store').rglob('*'):
+            if path.is_file():dest=snapshot/path.relative_to(root/'store');dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(path.read_bytes())
+        proof['_reader_receipt']=r['_file'];proof['_read_snapshot']=snapshot.name;p=root/f'proof-{self.children}.json';save(p,proof);return t,p,proof
     def receive(self,root,t,p,cut=None,refused=False):
         r=self.child(root,'receive',trust=t,proof=p,app=root/'application.json',cut=cut)
         wire=[v['wire'] for v in r['records'] if 'wire' in v];decision=None
@@ -65,7 +70,8 @@ class Campaign:
             require(decision['status'] in ('accepted','accepted-reset'),'wire-refused '+str(decision))
         if refused:require(r['exit_code']==2 and not wire,'unsafe-receiver-emission')
         elif cut is None:require(r['exit_code']==0,'receiver-failed')
-        return {'wire':wire,'decision':decision,'application':load(root/'application.json'),'refused':refused}
+        app=load(root/'application.json');appfile=f'application-observation-{self.children}.json';save(root/appfile,app)
+        return {'wire':wire,'decision':decision,'application':app,'refused':refused,'receipt':r['_file'],'application_file':appfile}
     def finish_row(self,root,row):
         row['case']=root.name;self.rows.append(row);save(root/'observation.json',row);save(root/'inventory.json',inventory(root))
     def ordinary(self,rep,layout,unit,mode):
@@ -110,7 +116,8 @@ class Campaign:
             old=F.artifacts(1,unit);d=root/'store/g1';d.mkdir()
             for n,raw in old.items():F.flush_write(d/n,raw)
             F.flush_write(root/'store/CURRENT.json',F.encode(F.current(layout,1,old)))
-        elif name=='duplicate-json':F.flush_write(root/'store/CURRENT.json',b'{"version":1,"version":1}')
+        elif name=='duplicate-json':
+            raw=F.encode(F.current(layout,g,files)).replace(b'"version":1',b'"version":1,"version":1');F.flush_write(root/'store/CURRENT.json',raw);mutate=lambda t:t.update(current_sha256=F.digest(raw))
         t,p,proof=self.read(root,layout,unit,g,files=files,request=request,mutate=mutate)
         if name in ('transplanted-proof','stale-proof'):
             require(proof['status']=='gap','negative-baseline')
@@ -118,7 +125,10 @@ class Campaign:
             else:F.flush_write(directory/'snapshot.json',b'{}')
             received=self.receive(root,t,p,refused=True);row={'kind':'receiver-negative','control':name,'store':semantic_report(proof),'receiver':received}
         else:
-            require(proof['status']==expected,'control '+name+str(proof));row={'kind':'namespace-control','control':name,'store':semantic_report(proof),'expected':expected}
+            require(proof['status']==expected,'control '+name+str(proof))
+            reasons={'trailing-hole':'snapshot-below-replay-floor','false-floor':'declared-floor-not-observed-suffix','snapshot-stream':'snapshot-identity','snapshot-generation':'snapshot-identity','snapshot-unit':'snapshot-identity','snapshot-cursor':'snapshot-content-or-cursor','snapshot-content':'snapshot-content-or-cursor','missing-snapshot':'namespace-membership-mismatch','tampered-snapshot':'member-digest-mismatch','unknown-member':'unexpected-namespace-member','missing-event':'namespace-membership-mismatch','rollback':'current-pin-mismatch','duplicate-json':'duplicate-json-key','inside-byte':'cursor-inside-payload-or-outside-catalog'}
+            if expected=='blocked':require(proof['reason']==reasons[name],'wrong-negative-reason '+name+str(proof))
+            row={'kind':'namespace-control','control':name,'store':semantic_report(proof),'expected':expected}
             if expected!='blocked':row['receiver']=self.receive(root,t,p)
         self.finish_row(root,row)
     def run(self):
