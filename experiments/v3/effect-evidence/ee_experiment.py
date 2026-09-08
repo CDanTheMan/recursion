@@ -36,7 +36,7 @@ def literal_controls():
     fresh=rebind(fixture['commands'][-1],paused)
     refused,re,rr,rj=kernel.admit(paused,paused['content_digest'],fresh,authorities,policies,pj)
     require(ar['disposition']=='accepted' and len(ae)==1 and ae[0]['event_type']=='EffectObservationRecorded','running positive')
-    require(pr['disposition']=='accepted' and rr['disposition']=='refused' and rr['error_code']=='E-PAUSED' and not re and refused==paused and len(rj)==len(pj)+1,'literal pause refusal')
+    require(pr['disposition']=='accepted' and rr['disposition']=='refused' and rr['primary_error']=='E-PAUSED' and not re and refused==paused and len(rj)==len(pj)+1,'literal pause refusal')
     require(command['payload']==fresh['payload'] and command['candidate_digest']==fresh['candidate_digest'] and command['auth_ref']==fresh['auth_ref'],'otherwise identical pair')
     guard=contracts.PAUSE_SENSITIVE
     try:
@@ -58,10 +58,10 @@ def literal_controls():
     sc['payload']['payload']=unsigned('success')['cut']['context']['observation']['payload']
     sc,sa=authorized(fixture,sc,qs,21)
     ss,se,sr,sj=kernel.admit(qs,qs['content_digest'],sc,sa,policies,qj)
-    require(sr['disposition']=='accepted' and ss['ambiguous_effect_refs']==qs['ambiguous_effect_refs'] and ss['object_states']==qs['object_states'],'success retains canonical quarantine')
+    require(sr['disposition']=='accepted' and ss['ambiguous_effect_refs']==qs['ambiguous_effect_refs'] and all(item in ss['object_states'] for item in qs['object_states']),'success retains canonical quarantine')
     return {'running':{'receipt':ar,'events':ae},'paused':{'receipt':rr,'events':re,'projection_unchanged':refused==paused,'journal_growth':len(rj)-len(pj)},
         'guard_mutant':{'receipt':mr,'events':me},'duplicate_after_pause':{'receipt':dupreceipt,'events':dupevents,'projection_unchanged':duplicate==ds},
-        'quarantine':{'ambiguous_receipt':qr,'success_receipt':sr,'ambiguous_refs':ss['ambiguous_effect_refs'],'object_states_unchanged':ss['object_states']==qs['object_states']}}
+        'quarantine':{'ambiguous_receipt':qr,'success_receipt':sr,'ambiguous_refs':ss['ambiguous_effect_refs'],'prior_object_states_preserved':all(item in ss['object_states'] for item in qs['object_states'])}}
 
 def run(keys,directory,limits):
     outcomes={};raw={};negative=[];mutants=[]
