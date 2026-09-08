@@ -43,4 +43,6 @@ def invariant(s,c):
 
 def initialization(s,c):
  invariant(s,c)
- d.require(s['phase']==0 and s['sent']==0 and s['source']==(2,3) and not s['pending'] and s['grants']==0 and s['installed']==0 and s['byte_credit']==c[1] and s['event_credit']==1,'initial conditions')
+ expected={'phase':0,'source':(2,3),'pending':(),'byte_credit':c[1],'event_credit':1,'grants':0,'sent':0,'acknowledged':0,'installed':0,'installed_cursor':0,'snapshot':(d.cursor(1,c),0),'view_reserved':0,'reserved':6,'free':4,'owner':('pool-a','goal-a','operation-a','owner-a',6),'restart':0,'lost_ack':0,'control':0,'quota':0}
+ expected['wire']=(d.canonical({'type':'HELLO','protocol_version':'m1b-broker/1','client_id':'client-a','stream_id':'stream-a','daemon_epoch':2,'last_cursor':0,'cursor_unit':c[0],'columns':80,'rows':24,'capabilities':['attach']}),d.canonical({'type':'CREDIT','protocol_version':'m1b-broker/1','client_id':'client-a','stream_id':'stream-a','daemon_epoch':2,'bytes':c[1],'events':1}))
+ d.require(s==expected,'complete independent initial conditions')

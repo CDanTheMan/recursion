@@ -15,6 +15,7 @@ def peak_bytes():
 def explore(c,limit=500000,seconds=600,mutant=None,calibration=None):
  start=time.monotonic();s=d.initial(c)
  if calibration=='initial':s['reserved']=0
+ if calibration=='initial-view':s['view_reserved']=99
  audit.initialization(s,c)
  todo=collections.deque([(s,[])]);seen={d.canonical(s)};edges=set();wire_cache={};witnesses={};terminal=0
  while todo:
@@ -52,7 +53,7 @@ def explore(c,limit=500000,seconds=600,mutant=None,calibration=None):
 
 def calibrate():
  labels=[]
- for k in ('initial','missing-edge','no-op','truncated'):
+ for k in ('initial','initial-view','missing-edge','no-op','truncated'):
   try:explore(d.CONFIGS[0],calibration=k)
   except ValueError as e:labels.append({'calibration':k,'failure':str(e)})
   else:raise ValueError('checker missed '+k)

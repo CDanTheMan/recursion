@@ -61,3 +61,8 @@ Prospective revision3 after independent challenge: add correctly typed UTF-8 byt
 cursor with wrong advancement and a syntactically valid oversized JSON object.
 Require the exact byte-ceiling error so malformed syntax cannot make that negative
 control pass vacuously. Earlier run03 remains superseded before admitted rerun.
+
+Prospective revision4: independent review found initial flags/view/ACK/wire fields
+underconstrained. The independent audit now requires every initial field and exact
+initial HELLO/CREDIT bytes; add wrong-initial-view calibration. Run04 is retained
+superseded. This strengthens the independent obligation without reducing the model.
