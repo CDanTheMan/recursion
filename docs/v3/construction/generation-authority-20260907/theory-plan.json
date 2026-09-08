@@ -1,5 +1,5 @@
 {
-  "status": "preregistered-before-root-execution",
+  "status": "revised-preregistration-before-corrected-root-execution",
   "recorded_at": "2026-09-08T05:59:40.075191+00:00",
   "parent_goal": "goal-recursion-v2-execution-fabric",
   "input_commit": "4603187",
@@ -12,7 +12,8 @@
     "incarnation-accounting",
     "branch-adoption",
     "memory-freshness",
-    "rejected-command-provenance"
+    "rejected-command-provenance",
+    "recipient-fence-installation"
   ],
   "domain": {
     "config_revisions": 2,
@@ -29,7 +30,7 @@
     "shortcut comparator",
     "explicit identity and authority guard"
   ],
-  "acceptance": "Each family must have at least one independently stated obligation violation in the shortcut, zero in the guarded candidate and at least one positive authorized outcome; retain all fixture/trace results and a concrete counterexample. A guard that merely denies everything fails.",
+  "acceptance": "Each family has a shortcut counterexample, no guarded violation and a positive authorized outcome in the declared finite abstraction. These are executable requirement examples and bounded shortcut counterexamples, not independent implementation proofs or runtime rankings.",
   "limits": {
     "seconds": 30,
     "fixtures": 256,
@@ -42,5 +43,11 @@
     "No exhaustive exploration outside the declared finite fixtures",
     "No completion of the parent formal coverage ledger",
     "No framework, language or store selection"
+  ],
+  "revised_at": "2026-09-08T06:07:46.297200+00:00",
+  "corrections": [
+    "Prior source f6b85af retained as superseded: late ACK after already-settled current attempt overcounted a violation; rejection query checked receipt existence without full identity.",
+    "Applied dependency counts are not Timely/Differential progress-frontier semantics.",
+    "New delayed dispatch trace separates canonical revoke, recipient installation and launch; admitted in-flight exposure before installation remains visible."
   ]
 }

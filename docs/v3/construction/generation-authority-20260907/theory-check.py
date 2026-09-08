@@ -1,5 +1,5 @@
 """Closed abstract traces challenge shortcuts; no upstream runtime implementation."""
-import hashlib,itertools,json,time
+import copy,itertools,json,time
 
 def require(ok,why):
     if not ok:raise ValueError(why)
@@ -36,8 +36,8 @@ def simulate(family,guard,trace,params):
         elif family=='stale-transport-ack':
             if event=='redeliver':s['current_attempt']=2
             elif event=='ack_old':
-                accepted=not guard;observation['transport_ack_accepted']=True;observation['current_attempt_settlement_from_old_ack']=accepted
-                if accepted:bad.append('old attempt ACK used as current attempt settlement');s['settled']=True
+                ack_attempt=1;accepted=not guard or (ack_attempt==s['current_attempt'] and params.get('authenticated_effect_receipt',False));changed=accepted and not s['settled'];observation.update(ack_attempt=ack_attempt,current_attempt=s['current_attempt'],transport_ack_accepted=True,current_attempt_settlement_from_old_ack=changed)
+                if changed:bad.append('old attempt ACK used as current attempt settlement');s['settled']=True
             else:s['settled']=True;positive+=1
         elif family=='incarnation-accounting':
             incarnation,value=event.split(':');value=int(value);s['segments'][incarnation]=value
@@ -54,8 +54,8 @@ def simulate(family,guard,trace,params):
                 if admit:s.update(accepted=actor,adoption_revision=s['adoption_revision']+1);positive+=1
             observation['preserved_proposals']=sorted(s['proposals'])
         elif family=='memory-freshness':
-            # Two-dimensional frontier: one coordinate cannot certify the other.
-            current=params['auth_epoch']==2;complete=all(a>=b for a,b in zip(params['frontier'],params['required_cut']));historical=params['result_revision']==params['branch_revision'];allowed=current and complete and historical and params['evidence_allowed']
+            # Applied-event-count vector, NOT a mapping of Timely progress frontiers.
+            current=params['auth_epoch']==2;complete=all(a>=b for a,b in zip(params['applied_dependency_vector'],params['required_cut']));historical=params['result_revision']==params['branch_revision'];allowed=current and complete and historical and params['evidence_allowed']
             admit=allowed if guard else True;observation=dict(admitted=admit,content_hash_equal=True,required_cut=params['required_cut'])
             if admit:
                 if not allowed:bad.append('hash hit substituted for branch completeness or current authority')
@@ -68,10 +68,18 @@ def simulate(family,guard,trace,params):
                 # A validator rejection creates no accepted workflow history entry.
             else:
                 visible=s['receipt'] if guard else next(iter(s['history']),None);observation['query_result']=visible
-                if visible is None:bad.append('lost rejection reply has no queryable attributable receipt')
+                if visible!=dict(command='c1',principal='owner',expected_revision=0,status='rejected-stale-revision'):bad.append('lost rejection reply lacks exact attributable terminal receipt')
                 else:positive+=1
+        elif family=='recipient-fence-installation':
+            if event=='admit':s.update(permit_epoch=1,local_epoch=1,recipient_epoch=1)
+            elif event=='revoke':s['local_epoch']=2
+            elif event=='install':s['recipient_epoch']=2
+            else:
+                launched=not guard or s['permit_epoch']>=s['recipient_epoch'];exposed=launched and s['permit_epoch']<s['local_epoch'];observation.update(launched=launched,local_epoch=s['local_epoch'],recipient_epoch=s['recipient_epoch'],exposed_before_install=exposed)
+                if launched and s['permit_epoch']<s['recipient_epoch']:bad.append('delayed permit launched after recipient fence installation')
+                elif launched:positive+=1
         else:raise ValueError('unknown family')
-        log.append(dict(event=event,observation=observation))
+        log.append(dict(event=event,observation=copy.deepcopy(observation)))
     return dict(violations=bad,positive_outcomes=positive,observations=log)
 
 def fixtures():
@@ -87,9 +95,10 @@ def fixtures():
     add('branch-adoption',schedules(['propose:A','propose:B','adopt:A','adopt:B'],[('propose:A','adopt:A'),('propose:B','adopt:B')]),[{}])
     # Branch A needs both updates; preserved B needs only the first. E0 may be
     # retained historically while being forbidden for present disclosure.
-    for branch,epoch,frontier,result,allowed in itertools.product((0,1),(1,2),[(1,0),(0,1),(1,1)],(0,1),(False,True)):
-        add('memory-freshness',[['hydrate']],[dict(branch_revision=branch,required_cut=[1,branch],auth_epoch=epoch,frontier=list(frontier),result_revision=result,evidence_allowed=allowed)])
+    for branch,epoch,applied,result,allowed in itertools.product((0,1),(1,2),[(1,0),(0,1),(1,1)],(0,1),(False,True)):
+        add('memory-freshness',[['hydrate']],[dict(branch_revision=branch,required_cut=[1,branch],auth_epoch=epoch,applied_dependency_vector=list(applied),result_revision=result,evidence_allowed=allowed)])
     add('rejected-command-provenance',[['receive','reject','query_after_lost_reply']],[{}])
+    add('recipient-fence-installation',schedules(['admit','revoke','install','deliver'],[('admit','revoke'),('revoke','install'),('admit','deliver')]),[{}])
     return out
 
 def run():

@@ -1,0 +1,13 @@
+{
+  "source_commit": "f6b85af1ca4a10945dc2f8f007c51cbb29733552",
+  "classification": "modeled",
+  "directory": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion\\.git\\research-attestations\\generation-authority\\theory\\f6b85af1ca4a10945dc2f8f007c51cbb29733552",
+  "files": {
+    "admission.json": "3898d63717dc61c27de9f7e2e0bce1ba1eaf77e9ee8913361e8b2b0b46296ff8",
+    "execution.json": "181930cc5f341fadaa30c8150e22bdd4a1abafaa14a4b33c0eb52e609d33d5bb",
+    "stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.json": "aff96f9bfec53fad0c8f84aa1e2ed2029cb3efa62e8a4f87a8a8ad5e2dc5cac4"
+  },
+  "semantic_sha256": "a1b332922e91014452b227c9f915739a93d439a729f73c2404f3e23be35968ea",
+  "status": "superseded-pending-corrected-execution"
+}

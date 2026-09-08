@@ -494,6 +494,26 @@
       "url": "https://docs.restate.dev/foundations/services",
       "status": "web-tool-inspected; no local raw snapshot",
       "limit": "Direct urllib external-events fetch returned403; documentation version compatibility remains unverified."
+    },
+    {
+      "url": "https://docs.osgi.org/specification/osgi.core/8.0.0/framework.service.html",
+      "status": "web-tool-inspected; no local raw snapshot",
+      "limit": "Versioned Core8 specification; direct local fetch returned403."
+    },
+    {
+      "url": "https://docs.osgi.org/specification/osgi.cmpn/8.0.0/service.component.html",
+      "status": "web-tool-inspected; no local raw snapshot",
+      "limit": "Versioned DS1.5 specification; not a runtime certification."
+    },
+    {
+      "url": "https://code.claude.com/docs/en/agent-sdk/quickstart",
+      "status": "web-tool-inspected; no local raw snapshot",
+      "limit": "Mutable product/distribution documentation; exact route eligibility remains unestablished."
+    },
+    {
+      "url": "https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan",
+      "status": "web-tool-inspected; no local raw snapshot",
+      "limit": "Mutable subscription guidance; account/build eligibility is not inferred."
     }
   ]
 }
