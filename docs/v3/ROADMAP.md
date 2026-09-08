@@ -412,3 +412,9 @@ Formal model completion precedes language comparison, then storage comparison. A
 file-backed probe fixture chooses no product language/store. Whole-system performance and all
 eight experiment families continue alongside this dependency chain. No new Owner decision is
 needed to prepare these already authorized bounded requests.
+
+## After replay-store evidence, 2026-09-07
+
+The [local named-cut campaign](construction/replay-store-evidence-20260907/dossier.md) advances retention-floor and snapshot-byte assumptions into observed fixture evidence. Next, specify the authoritative generation-selection seam and bounded concurrent-reader/publication tests, then integrate that evidence relation into both complete formal-model boundaries. Preserve the sequence: small integration probes → formal model → language comparison → storage comparison. Do not treat this synthetic layout comparison as a product storage decision.
+
+A parallel configuration campaign can use the [pinned Owner-suggested management UI](construction/replay-store-evidence-20260907/source-findings.md) as inspiration for reviewed diffs, stale-response generation guards and explicit unknown quota states. Test expected-revision conflict rejection and separate accepted/applied configuration receipts before runtime propagation claims. All accepted integration routes and product interaction/delegation capabilities remain required.

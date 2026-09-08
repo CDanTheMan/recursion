@@ -434,3 +434,9 @@ but the two-event limit is not independently saturated with the current mixed co
 capacity2. Preserve the physical at-birth containment result as separate evidence, and retain
 all ten terminal controls, three Stop modes, forks, persistent assistants and remote recovery.
 See [scope and evidence](construction/flow-recovery-integration-20260907/evidence.json).
+
+## Receiver installation evidence, 2026-09-07
+
+RSE-003 separates wire audit recovery from committed application recovery. The local receiver stores content, stream/epoch, last installed snapshot generation and both cursors in one replacement envelope. Kills after RESET emission or staging leave application A/cursor1 despite accepted-reset in the unchanged wire oracle. A kill after envelope publication leaves Aé/cursor2. Fresh readers and receivers complete to AéB/cursor3; a repeated attachment appends nothing. Application generation means the last installed snapshot, so no-reset replay can consume a newer selected store generation without changing that field.
+
+These are named process-cut observations, not power-loss durability or exactly-once delivery for arbitrary external effects. The [probe dossier](construction/replay-store-evidence-20260907/dossier.md) retains all literal wire traces and application envelopes. Independent control lanes, all ten terminal controls, three Stop modes, forks, persistent assistants and remote recovery budgets remain required; helper termination here does not implement product Stop or node fencing.
