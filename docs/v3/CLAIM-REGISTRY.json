@@ -145,6 +145,12 @@
       "start": 1,
       "end": 3,
       "reserved": []
+    },
+    {
+      "prefix": "EEJ",
+      "start": 1,
+      "end": 3,
+      "reserved": []
     }
   ],
   "foreignRegistries": [

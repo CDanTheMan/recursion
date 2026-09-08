@@ -374,3 +374,11 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | GCM-001 | Independent split and inclusive finite generation/effect models close identical graphs for both declared retention policies and satisfy the checked aggregate and hidden-broker relations; full formal coverage remains incomplete. | modeled | [Finite composition evidence](construction/composition-model-20260908/evidence.json) |
 | GCM-002 | In the bounded composition, a preserved history capsule plus ended local invocation permits G3 activation under two resident slots while remote effect uncertainty remains; a resident-only fork instead holds G3. | modeled | [Finite composition evidence](construction/composition-model-20260908/evidence.json) |
 | GCM-003 | The finite recipient model preserves pre-installation exposure, rejects an old permit after installation and accepts valid late operation evidence without closing another attempt or restoring fork authority. | modeled | [Finite composition evidence](construction/composition-model-20260908/evidence.json) |
+
+## Literal effect evidence, 2026-09-08
+
+| Claim | Statement | State | Evidence |
+| --- | --- | --- | --- |
+| EEJ-001 | The restricted local adapter joins signed synthetic evidence cuts to literal M1C inputs and rejects the tested missing, contradictory, mistyped and unauthorized joins without manufacturing external evidence. | locally observed | [Bounded literal evidence](construction/effect-evidence-20260908/evidence.json) |
+| EEJ-002 | The literal M1A fixture accepts a fresh observation while running and refuses the same otherwise-valid payload under PAUSE; duplicates retain their original receipt and later success retains prior quarantine. | locally observed | [Bounded literal evidence](construction/effect-evidence-20260908/evidence.json) |
+| EEJ-003 | The frozen M1C oracle can report an earlier success with a later uncompleted start; the restricted adapter preserves that literal result and independently holds the unsettled attempt. | locally observed | [Bounded literal evidence](construction/effect-evidence-20260908/evidence.json) |
