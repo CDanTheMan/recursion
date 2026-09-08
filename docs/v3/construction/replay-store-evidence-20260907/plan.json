@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "construction-plan-not-observed",
+  "start_commit": "03fd11014a5be99006d637ad5eb692faa0557f8f",
+  "domain": {
+    "events": 3,
+    "payloads": [
+      "A",
+      "\u00e9",
+      "B"
+    ],
+    "cursor_profiles": [
+      "event",
+      "utf8-byte"
+    ],
+    "initial_client_event_cursor": 1,
+    "snapshot_target_event_cursor": 2,
+    "layouts": [
+      "in-place",
+      "staged-generation"
+    ],
+    "writer_cuts": [
+      "snapshot_partial",
+      "snapshot_ready",
+      "retention_changed",
+      "manifest_staged",
+      "commit_published"
+    ],
+    "receiver_cuts": [
+      "RESET_emitted",
+      "snapshot_staged",
+      "reset_committed"
+    ],
+    "single_writer": true,
+    "repetitions": 2
+  },
+  "trust_boundary": "Controller-pinned manifest digest is a fixture trust anchor held outside the mutable store. It binds one selected generation; reader derives missing required events and snapshot content from bytes. This is not a production authentication scheme or protection against a compromised controller.",
+  "namespace_boundary": "Only the selected committed generation is admitted for replay; old generation artifacts are retained as forensic evidence, not silently treated as replayable. Distinguish logical retirement from physical deletion. In-place removal exercises actual selected-namespace absence.",
+  "method": "Compare independent fresh-process reader observations after named writer termination cuts. All inputs are synthetic. Interrupted or mixed facts must block or leave the previous coherent generation readable. Verify M1B wire independently of application installation.",
+  "limits": "Finite named process-termination cuts on the admitted local filesystem; no power failure, arbitrary interleaving theorem, real provider or common-writer migration result.",
+  "next": "Complete source inspection and adversarial plan review, then freeze exact fixture cases/source before execution."
+}
