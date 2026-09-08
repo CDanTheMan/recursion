@@ -169,6 +169,12 @@
       "start": 1,
       "end": 3,
       "reserved": []
+    },
+    {
+      "prefix": "EPC",
+      "start": 1,
+      "end": 3,
+      "reserved": []
     }
   ],
   "foreignRegistries": [

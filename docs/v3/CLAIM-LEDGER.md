@@ -404,3 +404,9 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | WIR-001 | Sixteen finite recovery configurations preserve literal M1B ordering and separate source, pending and installed snapshot ownership. | modeled | [SC-WIRE-02](construction/wire-correspondence-20260908/evidence.json) |
 | WIR-002 | Literal wire acceptance cannot establish application installation or uncertain reservation ownership; independent local guards are required. | modeled | [SC-WIRE-02](construction/wire-correspondence-20260908/evidence.json) |
 | WIR-003 | SC-WIRE-02 supplies scoped modeled correspondence while the coupled reservation product and original full comparison remain incomplete. | modeled | [SC-WIRE-02](construction/wire-correspondence-20260908/evidence.json) |
+
+## Typed consultation — 2026-09-08
+
+| EPC-001 | Typed consultation bindings separate retained advice and historical adoption from current continuation authority. | modeled | [SC-EPOCH-03](construction/typed-consultation-20260908/evidence.json) |
+| EPC-002 | A visible executor wait cycle and explicit release coexist with operation-scoped Stop that preserves unrelated work and unknown effects. | modeled | [SC-EPOCH-03](construction/typed-consultation-20260908/evidence.json) |
+| EPC-003 | SC-EPOCH-03 supplies finite typed consultation comparison while coupled composition and full original formal comparison remain incomplete. | modeled | [SC-EPOCH-03](construction/typed-consultation-20260908/evidence.json) |

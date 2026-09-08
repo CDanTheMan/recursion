@@ -496,3 +496,8 @@ pass completes full formal comparison, runtime integration or common-writer migr
 
 SC-WIRE-02 requires two full exact-candidate gates, two independent exact reviews, unchanged25 regressions and eleven frozen predecessors including SC-WR-01. Require complete declared graph closure, literal schema/oracle controls and independent ownership/initialization counterexamples. External completion receipts establish readiness; no discovery pass or documentation promotes full comparison.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
+
+## SC-EPOCH-03 — 2026-09-08
+
+SC-EPOCH-03 requires two clean exact-candidate full gates, two independent exact reviews, unchanged25 regressions and12 frozen predecessors including SC-WIRE-02. Require full declared finite closure, original06/23/24 ordered witnesses, typed and stale-wake counterexamples, explicit retired aliases and independent initialization/step obligations. External completion receipts determine scoped readiness; no isolated pass promotes aggregate or production completion.
+[Evidence and residuals](construction/typed-consultation-20260908/evidence.json).

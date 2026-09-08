@@ -494,3 +494,8 @@ forks and persistent assistants remain required. [Evidence](construction/shared-
 
 WIR-001 distinguishes source future entries, receiver pending entries, immutable snapshot content and installed snapshot cursor. In16 finite configurations, GAP via WELCOME requires RESET, fresh CREDIT and independent application installation before EVENT. Failed ACK holds pending; successful ACK creates no credit. Fixed-epoch receiver restart preserves ownership. Literal M1B cannot prove application installation. Full prior flow/ingress bounds remain separately checked, not imported into this narrow product.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
+
+## SC-EPOCH-03 — 2026-09-08
+
+EPC-002 models the Head/consultation/executor wait cycle, exposes a dependency blocker and releases the sole eligible executor on suspension. Stop of borrowedA retires its alias and continuation while unrelatedB progresses on its separately admitted capacity. Alias retirement is independent of numeric generation: assigning an already-current serial cannot keep delivery live. Cancellation delivery leaves remote outcome unknown and the inherited six-unit reservation held.
+[Evidence and residuals](construction/typed-consultation-20260908/evidence.json).

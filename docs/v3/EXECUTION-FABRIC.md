@@ -444,3 +444,8 @@ roles/routes, eight experiment families and full workflow requirements remain.
 
 WIR-002 checks that an old zero-reservation presentation snapshot cannot release a current six-unit uncertain reservation. Install, receiver restart, quota and control preserve its fixed owner binding. The literal wire oracle cannot inspect this authority; independent local guards reject corruption. This is a held-reservation boundary, while original6+6-from10 admission remains in SC-WR-01. The full coupled product and common-writer migration remain unresolved.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
+
+## SC-EPOCH-03 — 2026-09-08
+
+EPC-001 binds consultation to typed goal, lease, issuer, requester incarnation, delivery generation, context/payload and existing operation grant. Received stale advice and valid historical adoption remain evidence; adoption and continuation each recheck current authority. Actual request payload conflicts remain distinct from matching duplicates. Owner-only GoalSpec amendment is unchanged; literal M1A stale-authority checks remain separate from this proposed application relation.
+[Evidence and residuals](construction/typed-consultation-20260908/evidence.json).

@@ -472,3 +472,8 @@ required. No new Owner direction or product framework selection follows.
 
 SC-WIRE-02 constructs the bounded literal correspondence packet. SC-EPOCH-03 is the next separately authorized typed consultation campaign. A coupled shared-reservation/wire/epoch construction must precede aggregate promotion; preserve the original six obligations,27 traces, eight experiment families, six cross-area cases and native/upstream-only/combined routes. Language and storage comparison remain after full formal comparison.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
+
+## SC-EPOCH-03 — 2026-09-08
+
+SC-EPOCH-03 is the second Owner-authorized successor campaign. The next bounded request is the coupled shared-reservation/wire/typed-consultation construction, preserving original6+6-from10 and full flow/byte/framing obligations. Keep all6 obligations,27 traces, eight experiment families, six cross-area cases and native/upstream-only/combined routes. Full formal comparison precedes language then storage comparison.
+[Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
