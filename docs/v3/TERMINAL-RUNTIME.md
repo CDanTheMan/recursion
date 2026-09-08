@@ -6,6 +6,20 @@ last-updated: 2026-09-07
 
 # Recursion v3 interactive terminal and persistent session runtime
 
+## Conditional replay-store mapping — 2026-09-07
+
+RSM-002: a genuine gap can use HELLO(requested cursor), WELCOME(retention floor, snapshot cursor),
+RESET(snapshot cursor), fresh CREDIT and the next EVENT. The narrow controls require requested
+cursor < retention floor <= snapshot cursor, recorded modeled retention loss and an available
+snapshot. After WELCOME detects the gap, any non-RESET continuation remains refused.
+
+M1B validates the wire relationships; it cannot authenticate a claimed replay floor or prove that
+a snapshot exists. The [mapping controls](construction/reset-mapping-20260907/results.json) retain
+a wire-only forged-fact control that passes the oracle while separate fact guards reject missing
+loss/snapshot inputs. Those guards operate on modeled inputs, not authenticated store evidence.
+No gap may be invented to recover an event that was merely deferred locally. Physical retention,
+snapshot integrity, SDK loss detection and reconnect provenance remain unimplemented.
+
 ## Replay and flow recovery distinction — 2026-09-07
 
 FMC-001: the immutable [M1B wire profile](M1B-WIRE-PROFILE.md) requires RESET before any further

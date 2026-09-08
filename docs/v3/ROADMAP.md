@@ -6,6 +6,18 @@ last-updated: 2026-09-07
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## RESET mapping continuation — 2026-09-07
+
+The [mapping packet](construction/reset-mapping-20260907/handoff.md) establishes a narrow
+deferred-delivery route and a conditional genuine-gap route. The next construction step is to
+integrate the deferred-candidate state and explicit current recovery state into both complete
+broker-boundary models, preserving the old counterexample and all six obligations/27 corpus rows.
+Prove the replay-store floor/snapshot provenance separately; the wire oracle cannot supply it.
+Then extend typed epochs, process birth, receiver records, shared writer/pool conservation,
+GoalSpec/consultation and M1A/M1C joins through the full preserved profiles. Physical control,
+loss/recovery, configuration/plugin and remote probes continue alongside that work.
+Formal freeze, language comparison and storage comparison remain gated as previously recorded.
+
 ## Formal construction continuation — 2026-09-07
 
 The [first formal packet](construction/formal-comparison-20260907/handoff.md) provides an exhaustive

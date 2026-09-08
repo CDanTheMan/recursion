@@ -6,6 +6,15 @@ last-updated: 2026-09-07
 
 # Recursion v3 construction runbook
 
+## RESET mapping handoff — 2026-09-07
+
+Continue from [the bounded mapping packet](construction/reset-mapping-20260907/handoff.md).
+Its branch is codex/v3-reset-mapping-20260907, based on exact c87f492 from PR95. Frozen predecessor
+worktrees and external raw evidence remain required by its gate. Locate actual final receipts
+under the Git common directory research-attestations/reset-mapping/<candidate>/; missing receipts
+require revalidation. Owner's short work cutoff is 2026-09-08T01:00:00Z, not reusable authorization
+for a later launch. A checkpoint without both gates/reviews must remain explicitly incomplete.
+
 ## First formal packet — 2026-09-07
 
 Continue from [the formal handoff](construction/formal-comparison-20260907/handoff.md) on its

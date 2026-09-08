@@ -1,0 +1,5194 @@
+{
+  "schema_version": 1,
+  "kind": "finite-admission-mapping-controls",
+  "status": "conditional-mapping-controls-pass",
+  "base": "c87f492780087772e3bcb06249ef14d89e812a25",
+  "profiles": [
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "event",
+        "queue_events": 1,
+        "queue_bytes": 1,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "8cf796c3d6f43dff4127b2274eff92e887dd9ef91aca6ea40e1527cd9eefd3f8",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "event",
+        "queue_events": 1,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "8cf796c3d6f43dff4127b2274eff92e887dd9ef91aca6ea40e1527cd9eefd3f8",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "event",
+        "queue_events": 2,
+        "queue_bytes": 1,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "8cf796c3d6f43dff4127b2274eff92e887dd9ef91aca6ea40e1527cd9eefd3f8",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "event",
+        "queue_events": 2,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 20,
+      "unique_transitions": 32,
+      "schedule_prefixes": 185,
+      "complete_schedules": 46,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "cbabfdf7807574d194d862585faf2e0980e4487a9948c2ad455148f91fcda97e",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 1,
+        "queue_bytes": 1,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "a30b961c3a280e449c91ff6a2ee385f23e59a972908a12d30c344994fada3ff8",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 1,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "a30b961c3a280e449c91ff6a2ee385f23e59a972908a12d30c344994fada3ff8",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 2,
+        "queue_bytes": 1,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "a30b961c3a280e449c91ff6a2ee385f23e59a972908a12d30c344994fada3ff8",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 1,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 2,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 20,
+      "unique_transitions": 32,
+      "schedule_prefixes": 185,
+      "complete_schedules": 46,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "dc3ca619faab93c4542c34db9d31a82132f1391e1cf07ee7b6a76f4d94657fc4",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "event",
+        "queue_events": 1,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "6000cf99e6c2ad0391ce07b8814d9e134e732e44f9a7f1597785c88397d430f5",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "event",
+        "queue_events": 1,
+        "queue_bytes": 4,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "6000cf99e6c2ad0391ce07b8814d9e134e732e44f9a7f1597785c88397d430f5",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "event",
+        "queue_events": 2,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "6000cf99e6c2ad0391ce07b8814d9e134e732e44f9a7f1597785c88397d430f5",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "event",
+        "queue_events": 2,
+        "queue_bytes": 4,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 20,
+      "unique_transitions": 32,
+      "schedule_prefixes": 185,
+      "complete_schedules": 46,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "6c8b741eae21f183188ef1522505db101e71c0099dac21e33ab5666707a981b9",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 1,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "598121c3c8869c2932a4d8bff21de3bc740b7891dae199070fd91b375a597b0e",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 4,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 4,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 4,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 1,
+        "queue_bytes": 4,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "598121c3c8869c2932a4d8bff21de3bc740b7891dae199070fd91b375a597b0e",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 4,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 4,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 4,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 2,
+        "queue_bytes": 2,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 19,
+      "unique_transitions": 30,
+      "schedule_prefixes": 153,
+      "complete_schedules": 30,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "598121c3c8869c2932a4d8bff21de3bc740b7891dae199070fd91b375a597b0e",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 4,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 4,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 4,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    },
+    {
+      "configuration": {
+        "payload_bytes": 2,
+        "cursor_unit": "utf8-byte",
+        "queue_events": 2,
+        "queue_bytes": 4,
+        "candidate_offers": 2,
+        "credit_offers": 2
+      },
+      "unique_states": 20,
+      "unique_transitions": 32,
+      "schedule_prefixes": 185,
+      "complete_schedules": 46,
+      "frontier": 0,
+      "max_actions": 8,
+      "graph_sha256": "f8fd6c8a81bcfc0e38f4b71e0bdc3fb1963cc0e61341d322efbc123d6a5c5304",
+      "witnesses": {
+        "complete": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ],
+            [
+              "emit",
+              2
+            ],
+            [
+              "ack",
+              2
+            ]
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 4,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 4,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 4,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "deferred": {
+          "schedule": [
+            [
+              "credit"
+            ],
+            [
+              "offer",
+              1
+            ],
+            [
+              "emit",
+              1
+            ],
+            [
+              "ack",
+              1
+            ],
+            [
+              "offer",
+              2
+            ]
+          ],
+          "retained_candidates": [
+            2
+          ],
+          "wire": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "utf8-byte",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 0,
+              "resize_lease": null,
+              "snapshot_cursor": 0,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 2,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "utf8-byte",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eHg=",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 2,
+              "cursor_unit": "utf8-byte"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 2,
+            "cursor_unit": "utf8-byte",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        }
+      }
+    }
+  ],
+  "controls": {
+    "literal_cases": {
+      "defer_ACK_CREDIT_resume": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "ACK",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "cursor": 1,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 2,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "accepted",
+          "reasons": [],
+          "final_cursor": 2,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": false
+        }
+      },
+      "defer_CREDIT_ACK_resume": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "ACK",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "cursor": 1,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 2,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "accepted",
+          "reasons": [],
+          "final_cursor": 2,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": false
+        }
+      },
+      "local_deferral_RESET": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "ACK",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "cursor": 1,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "RESET",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "reason": "gap",
+            "snapshot_cursor": 1,
+            "cursor_unit": "event"
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "unexpected-reset"
+          ],
+          "final_cursor": 1,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": false
+        }
+      },
+      "ACK_without_CREDIT": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "ACK",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "cursor": 1,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 2,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "credit-exhausted"
+          ],
+          "final_cursor": 2,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "CREDIT_without_ACK": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 2,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "credit-exhausted"
+          ],
+          "final_cursor": 2,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "actual_exhaustion_RESET": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 2,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "RESET",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "reason": "gap",
+            "snapshot_cursor": 2,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 3,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "accepted-reset",
+          "reasons": [
+            "credit-exhausted"
+          ],
+          "final_cursor": 3,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "actual_exhaustion_backward_RESET": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 2,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "RESET",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "reason": "gap",
+            "snapshot_cursor": 1,
+            "cursor_unit": "event"
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "credit-exhausted",
+            "cursor-nonmonotonic"
+          ],
+          "final_cursor": 2,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "actual_exhaustion_no_RESET": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 0,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 0,
+            "resize_lease": null,
+            "snapshot_cursor": 0,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 1,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 2,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          },
+          {
+            "type": "ACK",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "cursor": 2,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 3,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "credit-exhausted"
+          ],
+          "final_cursor": 3,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "recorded_gap_reset_resume": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 1,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 2,
+            "resize_lease": null,
+            "snapshot_cursor": 2,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "RESET",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "reason": "gap",
+            "snapshot_cursor": 2,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 3,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "accepted-reset",
+          "reasons": [
+            "replay-gap"
+          ],
+          "final_cursor": 3,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "gap_RESET_without_fresh_CREDIT": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 1,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 2,
+            "resize_lease": null,
+            "snapshot_cursor": 2,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "RESET",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "reason": "gap",
+            "snapshot_cursor": 2,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 3,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "credit-missing",
+            "replay-gap"
+          ],
+          "final_cursor": 3,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "gap_continuation_before_RESET": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 1,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 2,
+            "resize_lease": null,
+            "snapshot_cursor": 2,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "RESET",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "reason": "gap",
+            "snapshot_cursor": 2,
+            "cursor_unit": "event"
+          },
+          {
+            "type": "CREDIT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "bytes": 1,
+            "events": 1
+          },
+          {
+            "type": "EVENT",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "cursor": 3,
+            "cursor_unit": "event",
+            "event_class": "output",
+            "process_id": "process-a",
+            "payload_base64": "eA==",
+            "payload_untrusted": true
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "replay-gap",
+            "replay-gap-continuation"
+          ],
+          "final_cursor": 3,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      },
+      "gap_backward_RESET": {
+        "messages": [
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "columns": 80,
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "last_cursor": 1,
+            "protocol_version": "m1b-broker/1",
+            "rows": 24,
+            "stream_id": "stream-a",
+            "type": "HELLO"
+          },
+          {
+            "capabilities": [
+              "attach"
+            ],
+            "client_id": "client-a",
+            "cursor_unit": "event",
+            "daemon_epoch": 2,
+            "input_lease": null,
+            "protocol_version": "m1b-broker/1",
+            "replay_floor": 2,
+            "resize_lease": null,
+            "snapshot_cursor": 2,
+            "stream_id": "stream-a",
+            "type": "WELCOME"
+          },
+          {
+            "type": "RESET",
+            "protocol_version": "m1b-broker/1",
+            "stream_id": "stream-a",
+            "daemon_epoch": 2,
+            "client_id": "client-a",
+            "reason": "gap",
+            "snapshot_cursor": 1,
+            "cursor_unit": "event"
+          }
+        ],
+        "decision": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "cursor-nonmonotonic",
+            "replay-gap"
+          ],
+          "final_cursor": 2,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": true
+        }
+      }
+    },
+    "modeled_store_facts": {
+      "client_cursor": 1,
+      "retention_floor": 2,
+      "snapshot_cursor": 2,
+      "snapshot_available": true,
+      "retention_loss_recorded": true
+    },
+    "fact_guard_negatives": [
+      "retention_loss_recorded",
+      "snapshot_available",
+      "retention_floor",
+      "snapshot_cursor",
+      "client_cursor"
+    ],
+    "wire_only_forged_fact_control": {
+      "decision": {
+        "type": "BrokerTraceDecision@1",
+        "status": "accepted-reset",
+        "reasons": [
+          "replay-gap"
+        ],
+        "final_cursor": 3,
+        "cursor_unit": "event",
+        "launch_count": 0,
+        "model_turn_count": 0,
+        "actor_create_count": 0,
+        "effect_count": 0,
+        "requires_reset": true
+      },
+      "finding": "Wire oracle accepts the same bytes without inspecting store facts; store provenance is a separate unimplemented runtime obligation."
+    },
+    "requires_reset_semantics": "Historical recovery_needed_seen; accepted-reset can still have requires_reset=true. It is not a current-state RESET command."
+  },
+  "full_formal_comparison_complete": false,
+  "formal_freeze": false,
+  "live_provider_calls": 0,
+  "limitations": [
+    "Two candidate offers and two CREDIT offers; no cutoff theorem, fairness or full aggregate/broker refinement.",
+    "Independent split/inclusive mapper code shares message encoding and immutable oracle, authored by one integrator.",
+    "Retained candidate queue is bounded to two offers; upstream overflow/loss detection and durable store/transport implementation are absent.",
+    "Store facts are modeled inputs; provenance is not authenticated by M1B wire validation.",
+    "Prior c87 full models and their RESET seam counterexample remain unchanged historical evidence."
+  ]
+}

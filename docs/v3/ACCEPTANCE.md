@@ -6,6 +6,20 @@ last-updated: 2026-09-07
 
 # Recursion v3 acceptance hypothesis
 
+## RESET mapping packet acceptance — 2026-09-07
+
+The finite mapper checks 16 configurations spanning event/UTF-8-byte cursor units, one/two-byte
+payloads, one/two-event queue bounds and one/two-payload byte bounds. It checks all 2,576 reachable
+schedule prefixes and 544 complete schedules, with two candidate offers and two CREDIT offers.
+Separate split/inclusive transitions agree and every emitted prefix passes the unchanged M1B
+schema/oracle. Twelve literal controls plus five store-fact rejection cases preserve negative
+evidence. These finite environments are not a cutoff theorem or fairness proof.
+
+Full formal freeze remains false. The c87 full models are unchanged; the new mapper has no
+process/recipient/writer/pool/GoalSpec state and does not complete the prior partial corpus rows.
+Publication requires two [exact candidate gates](../../experiments/v3/reset-mapping/check.py),
+including unchanged25 regressions and frozen historical checks, plus two independent reviews.
+
 ## Formal packet acceptance is scoped — 2026-09-07
 
 The first [formal construction results](construction/formal-comparison-20260907/results.json)

@@ -6,6 +6,25 @@ last-updated: 2026-09-07
 
 # Recursion v3 execution fabric hypothesis
 
+## Deferred candidates and recovery commands — 2026-09-07
+
+RSM-001: the [RESET mapping packet](construction/reset-mapping-20260907/handoff.md) replaces
+forced recovery after a locally suppressed candidate with deferred admission in its new narrow
+model. Keep the candidate identity and payload until both cumulative credit and pending-queue
+capacity permit emission. ACK releases queue capacity; CREDIT replenishes the separate allowance.
+A candidate that never reached the wire does not itself create wire exhaustion or justify RESET.
+The immutable oracle accepts both ACK-then-CREDIT and CREDIT-then-ACK continuation in the controls.
+
+The prior c87 model and FMC-004 counterexample remain valid historical evidence of the rejected
+mapping. The new finite mapper does not retroactively repair those models or prove full transport
+refinement. Actual emitted exhaustion still requires RESET, and its rejected EVENT remains in
+audit evidence. Candidate, admission, emission and audit facts remain separate.
+
+RSM-003: unchanged M1B replay_broker returns requires_reset from historical recovery_needed_seen.
+Consequently accepted-reset may still carry requires_reset=true. Do not turn that flag alone into
+another RESET command: the recovered trace would refuse an unexpected RESET. A runtime adapter
+needs separately established current recovery state; changing M1B is outside this packet.
+
 ## Preventive admission versus retained wire evidence — 2026-09-07
 
 FMC-004: the [paired immutable-oracle controls](construction/formal-comparison-20260907/results.json)
