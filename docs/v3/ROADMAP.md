@@ -6,6 +6,22 @@ last-updated: 2026-09-07
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## Formal construction continuation — 2026-09-07
+
+The [first formal packet](construction/formal-comparison-20260907/handoff.md) provides an exhaustive
+small flow/control graph, refinement and fairness checks, and preserved full-profile domains.
+Its preventive/audit RESET counterexample defines the next bounded adapter request. Resolve that
+mapping before extending the slice into the immutable wire contract; retain the existing source
+and runtime observations as separately scoped evidence.
+
+Then add typed epoch/recipient fencing, process birth/registration, receiver-record uncertainty,
+writer/pool conservation, GoalSpec/consultation and literal M1A/M1C joins with all required corpus
+witnesses. Execute the full core and cross-area configurations, and revisit abstract state or
+proof technique when the coupling relation fails. An isomorphism failure alone does not establish
+a semantic boundary fault. Physical control reserves and actual loss detection need interface
+probes alongside this work. Language comparison and then complete storage comparison remain
+behind the full formal gate; all integration, configuration and whole-workflow requirements remain.
+
 ## Interface campaign progression — 2026-09-07
 
 The [bounded campaign](construction/interface-probes-20260907/campaign.md) has run installed

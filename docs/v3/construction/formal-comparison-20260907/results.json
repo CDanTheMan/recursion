@@ -1,0 +1,2842 @@
+{
+  "started_at": "2026-09-08T00:18:44.108006+00:00",
+  "kind": "finite-subsystem-model-experiment",
+  "live_provider_calls": 0,
+  "formal_freeze": false,
+  "calibrations": {
+    "hidden_choice": {
+      "status": "calibration-pass",
+      "naive_state_map": {
+        "a0": false,
+        "a1": false
+      },
+      "finite_prefix_inclusion": {
+        "included": true,
+        "pairs": 3,
+        "transitions": 4,
+        "frontier": 0
+      },
+      "reverse_inclusion": {
+        "included": true,
+        "pairs": 4,
+        "transitions": 4,
+        "frontier": 0
+      },
+      "visible_negative": {
+        "included": false,
+        "trace": [
+          "reveal2"
+        ],
+        "pairs": 1,
+        "transitions": 3
+      },
+      "auxiliary_hiding_forward": {
+        "included": true,
+        "pairs": 4,
+        "transitions": 4,
+        "frontier": 0
+      },
+      "auxiliary_hiding_reverse": {
+        "included": true,
+        "pairs": 3,
+        "transitions": 4,
+        "frontier": 0
+      },
+      "limit": "Finite labeled-prefix languages only; no unbounded liveness, general prophecy theorem or product proof."
+    },
+    "weak_fairness": {
+      "status": "calibration-pass",
+      "exit_only_Stop": {
+        "cyclic_components": 1,
+        "fair_bad_components": 0,
+        "excluded_by_named_weak_fairness": {
+          "stop_apply": 1
+        },
+        "witness_component": null
+      },
+      "without_fairness": {
+        "cyclic_components": 1,
+        "fair_bad_components": 1,
+        "excluded_by_named_weak_fairness": {},
+        "witness_component": [
+          0
+        ]
+      },
+      "coarse_broker_fairness": {
+        "cyclic_components": 1,
+        "fair_bad_components": 1,
+        "excluded_by_named_weak_fairness": {},
+        "witness_component": [
+          0
+        ]
+      },
+      "intermittent_Stop": {
+        "cyclic_components": 1,
+        "fair_bad_components": 1,
+        "excluded_by_named_weak_fairness": {},
+        "witness_component": [
+          0,
+          1
+        ]
+      },
+      "internal_action": {
+        "cyclic_components": 1,
+        "fair_bad_components": 1,
+        "excluded_by_named_weak_fairness": {},
+        "witness_component": [
+          0
+        ]
+      },
+      "acyclic": {
+        "cyclic_components": 0,
+        "fair_bad_components": 0,
+        "excluded_by_named_weak_fairness": {},
+        "witness_component": null
+      },
+      "explicit_cycles": {
+        "unfair_or_coarse": [
+          0,
+          0
+        ],
+        "intermittent": [
+          0,
+          1,
+          0
+        ],
+        "internal": [
+          0,
+          0
+        ]
+      },
+      "limit": "Weak fairness of named action classes on a finite graph; one monotone pending-Stop monitor, not arbitrary LTL or strong fairness."
+    },
+    "concrete_types": {
+      "status": "calibration-pass",
+      "invalid_flags_rejected": true,
+      "boolean_cursor_rejected_in_both_boundaries": true,
+      "raw_target_counterexample": {
+        "violation": "complete target TypeOK before relation mapping",
+        "trace": [
+          [
+            "stop_request"
+          ]
+        ],
+        "target": "Split(kernel=Kernel(waiting=True, fenced=True, effect_unknown=True), broker=Broker(sdk=(), pump=(), inbox=(), phase=0, cursor=0, credit=0, pending=(), partial=0, loss_used=False, ingress_unknown=False, credit_offers=0, acknowledged=0, credit_seen=False))"
+      }
+    },
+    "immutable_wire_controls": {
+      "status": "paired-guard-controls-pass-not-full-wire-refinement",
+      "literal_cases": {
+        "legitimate": {
+          "messages": [
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted",
+            "reasons": [],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "cursor_skip": {
+          "messages": [
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "cursor-nonmonotonic"
+            ],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "ack_rollback": {
+          "messages": [
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 0,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "cursor-nonmonotonic"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": false
+          }
+        },
+        "credit_missing_permanent": {
+          "messages": [
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "credit-missing"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "flow_exhaustion_credit_RESET": {
+          "messages": [
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 2,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted-reset",
+            "reasons": [
+              "credit-exhausted"
+            ],
+            "final_cursor": 2,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_CREDIT": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "CREDIT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "bytes": 1,
+              "events": 1
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_EVENT": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "EVENT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 2,
+              "cursor_unit": "event",
+              "event_class": "output",
+              "process_id": "process-a",
+              "payload_base64": "eA==",
+              "payload_untrusted": true
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_ACK": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "ACK",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "cursor": 1,
+              "cursor_unit": "event"
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_HELLO": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_WELCOME": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_SNAPSHOT": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "SNAPSHOT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "cursor": 1,
+              "cursor_unit": "event",
+              "snapshot_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_INPUT": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "INPUT",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "command_id": "command-a",
+              "process_epoch": 2,
+              "input_lease": "lease:input:2",
+              "bytes_base64": "eA=="
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_then_RESIZE": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "RESIZE",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "command_id": "command-b",
+              "process_epoch": 2,
+              "resize_lease": "lease:resize:2",
+              "columns": 80,
+              "rows": 24
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "refused",
+            "reasons": [
+              "replay-gap",
+              "replay-gap-continuation"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        },
+        "gap_RESET_positive": {
+          "messages": [
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "columns": 80,
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "last_cursor": 0,
+              "protocol_version": "m1b-broker/1",
+              "rows": 24,
+              "stream_id": "stream-a",
+              "type": "HELLO"
+            },
+            {
+              "capabilities": [
+                "attach"
+              ],
+              "client_id": "client-a",
+              "cursor_unit": "event",
+              "daemon_epoch": 2,
+              "input_lease": null,
+              "protocol_version": "m1b-broker/1",
+              "replay_floor": 1,
+              "resize_lease": null,
+              "snapshot_cursor": 1,
+              "stream_id": "stream-a",
+              "type": "WELCOME"
+            },
+            {
+              "type": "RESET",
+              "protocol_version": "m1b-broker/1",
+              "stream_id": "stream-a",
+              "daemon_epoch": 2,
+              "client_id": "client-a",
+              "reason": "gap",
+              "snapshot_cursor": 1,
+              "cursor_unit": "event"
+            }
+          ],
+          "decision": {
+            "type": "BrokerTraceDecision@1",
+            "status": "accepted-reset",
+            "reasons": [
+              "replay-gap"
+            ],
+            "final_cursor": 1,
+            "cursor_unit": "event",
+            "launch_count": 0,
+            "model_turn_count": 0,
+            "actor_create_count": 0,
+            "effect_count": 0,
+            "requires_reset": true
+          }
+        }
+      },
+      "unimplemented_RESET_mapping_counterexample": {
+        "model_candidate_trace": [
+          [
+            "message",
+            "CREDIT",
+            "credit"
+          ],
+          [
+            "message",
+            "E1",
+            "event"
+          ],
+          [
+            "message",
+            "E2",
+            "flow-exhausted"
+          ],
+          [
+            "message",
+            "CREDIT",
+            "credit"
+          ],
+          [
+            "message",
+            "RESET",
+            "reset"
+          ]
+        ],
+        "model_admitted_cursor": 1,
+        "wire_after_omitting_prevented_EVENT": {
+          "type": "BrokerTraceDecision@1",
+          "status": "refused",
+          "reasons": [
+            "unexpected-reset"
+          ],
+          "final_cursor": 1,
+          "cursor_unit": "event",
+          "launch_count": 0,
+          "model_turn_count": 0,
+          "actor_create_count": 0,
+          "effect_count": 0,
+          "requires_reset": false
+        }
+      },
+      "limit": "Literal oracle is unchanged; these finite guard/prefix controls do not map all preventive model traces to immutable M1B audit state."
+    }
+  },
+  "models": {
+    "status": "conditional-subsystem-pass",
+    "abstract_graph": {
+      "reachable_states": 339,
+      "transitions": 5281,
+      "frontier": 0
+    },
+    "split": {
+      "reachable_states": 444834,
+      "transitions": 2644215,
+      "maximum_discovered_depth": 35,
+      "frontier": 0,
+      "seconds": 25.155566,
+      "process_peak_working_set_bytes": 885882880,
+      "reductions": [],
+      "internal_transition_depth_cutoff": null
+    },
+    "inclusive": {
+      "reachable_states": 444834,
+      "transitions": 2644215,
+      "maximum_discovered_depth": 35,
+      "frontier": 0,
+      "seconds": 24.641302,
+      "process_peak_working_set_bytes": 1738080256,
+      "reductions": [],
+      "internal_transition_depth_cutoff": null
+    },
+    "graph_sha256": "a4c924f5952cc174aca3284f9d8f6b7ada5da911ec0fc0579e960e00fca08d0c",
+    "mapping_checks": {
+      "initialization": true,
+      "every_reachable_step_or_visible_stutter": true,
+      "concrete_and_abstract_invariants": true,
+      "split_composition": true,
+      "separate_inclusive_transition_relation_checked": true,
+      "named_weak_fairness_Stop_progress": true
+    },
+    "fairness": {
+      "split": {
+        "cyclic_components": 103263,
+        "fair_bad_components": 0,
+        "excluded_by_named_weak_fairness": {
+          "stop_apply": 103263,
+          "pump_sdk": 34292,
+          "pump_broker": 34292,
+          "consume": 64393
+        },
+        "witness_component": null
+      },
+      "inclusive": {
+        "cyclic_components": 103263,
+        "fair_bad_components": 0,
+        "excluded_by_named_weak_fairness": {
+          "stop_apply": 103263,
+          "pump_sdk": 34292,
+          "pump_broker": 34292,
+          "consume": 64393
+        },
+        "witness_component": null
+      }
+    },
+    "positive_witnesses": {
+      "local_Stop_preserves_external_unknown": [
+        [
+          "stop_request"
+        ],
+        [
+          "stop_apply"
+        ]
+      ],
+      "loss": [
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "loss"
+        ]
+      ],
+      "framing_unknown/eof": [
+        [
+          "fragment"
+        ],
+        [
+          "framing_unknown",
+          "eof"
+        ]
+      ],
+      "Stop_with_full_partial_frame": [
+        [
+          "fragment"
+        ],
+        [
+          "fragment"
+        ],
+        [
+          "stop_request"
+        ]
+      ],
+      "framing_unknown/oversize": [
+        [
+          "fragment"
+        ],
+        [
+          "fragment"
+        ],
+        [
+          "framing_unknown",
+          "oversize"
+        ]
+      ],
+      "Stop_with_full_inflight": [
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "stop_request"
+        ]
+      ],
+      "Stop_with_blocked_upstream_pump": [
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "stop_request"
+        ]
+      ],
+      "non_EVENT_gap_refusal": [
+        [
+          "offer",
+          "CREDIT"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "gap"
+        ],
+        [
+          "message",
+          "CREDIT",
+          "gap-continuation"
+        ]
+      ],
+      "legitimate_reset": [
+        [
+          "offer",
+          "RESET"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "gap"
+        ],
+        [
+          "message",
+          "RESET",
+          "reset"
+        ]
+      ],
+      "refusal_survives_RESET": [
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "offer",
+          "RESET"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "message",
+          "E1",
+          "credit-missing"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "message",
+          "RESET",
+          "refused"
+        ]
+      ],
+      "legitimate_event": [
+        [
+          "offer",
+          "CREDIT"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "message",
+          "CREDIT",
+          "credit"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "message",
+          "E1",
+          "event"
+        ]
+      ],
+      "loss_supersedes_flow_recovery": [
+        [
+          "offer",
+          "CREDIT"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "message",
+          "CREDIT",
+          "credit"
+        ],
+        [
+          "offer",
+          "E2"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "pump_sdk"
+        ],
+        [
+          "message",
+          "E1",
+          "event"
+        ],
+        [
+          "offer",
+          "E1"
+        ],
+        [
+          "pump_broker"
+        ],
+        [
+          "message",
+          "E2",
+          "flow-exhausted"
+        ],
+        [
+          "loss"
+        ]
+      ]
+    },
+    "mutant_counterexamples": [
+      {
+        "boundary": "split",
+        "mutant": "shared_control",
+        "counterexample": {
+          "violation": "independent Stop admission",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [
+                "E1"
+              ],
+              [
+                "E1"
+              ],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 127
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "gap_event_only",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "CREDIT"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "gap"
+            ],
+            [
+              "message",
+              "CREDIT",
+              "credit"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            1,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              [
+                "CREDIT"
+              ]
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            1,
+            0,
+            1,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            true
+          ],
+          "expected_abstract": null,
+          "expanded": 808
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "reset_credit",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "CREDIT"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "RESET"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "CREDIT",
+              "credit"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "gap"
+            ],
+            [
+              "message",
+              "RESET",
+              "reset"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            1,
+            0,
+            1,
+            [],
+            [
+              [],
+              [],
+              [
+                "RESET"
+              ]
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            true
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            1,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            false
+          ],
+          "expected_abstract": [
+            false,
+            false,
+            true,
+            0,
+            0,
+            0,
+            [],
+            false,
+            0,
+            false
+          ],
+          "expanded": 17391
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "refusal_reset",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "RESET"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "E1",
+              "credit-missing"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "message",
+              "RESET",
+              "reset"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            2,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              [
+                "RESET"
+              ]
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": null,
+          "expanded": 10292
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "hidden_loss",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "loss"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [
+                "E1"
+              ],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            true,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": [
+            false,
+            false,
+            true,
+            1,
+            0,
+            0,
+            [],
+            true,
+            0,
+            false
+          ],
+          "expanded": 2
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "loss_retains_flow",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "CREDIT"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "CREDIT",
+              "credit"
+            ],
+            [
+              "offer",
+              "E2"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "E1",
+              "event"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "message",
+              "E2",
+              "flow-exhausted"
+            ],
+            [
+              "loss"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            3,
+            1,
+            0,
+            [
+              1
+            ],
+            [
+              [
+                "E1"
+              ],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            true
+          ],
+          "after": [
+            0,
+            true,
+            3,
+            1,
+            0,
+            [
+              1
+            ],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            true,
+            true,
+            1,
+            0,
+            true
+          ],
+          "expected_abstract": [
+            false,
+            false,
+            true,
+            1,
+            1,
+            0,
+            [
+              1
+            ],
+            true,
+            0,
+            true
+          ],
+          "expanded": 57791
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "unbounded_frame",
+        "counterexample": {
+          "violation": "bounded partial frame",
+          "trace": [
+            [
+              "fragment"
+            ],
+            [
+              "fragment"
+            ],
+            [
+              "fragment"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            3,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 370
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "queue_overflow",
+        "counterexample": {
+          "violation": "bounded pipeline",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [
+                "E1"
+              ],
+              [
+                "E1"
+              ],
+              [
+                "E1"
+              ]
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 5253
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "stage_overflow",
+        "counterexample": {
+          "violation": "bounded pipeline",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [
+                "E1",
+                "E1"
+              ],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 656
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "false_settlement",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "stop_request"
+            ],
+            [
+              "stop_apply"
+            ]
+          ],
+          "before": [
+            1,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            2,
+            false,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": [
+            false,
+            true,
+            true,
+            0,
+            0,
+            0,
+            [],
+            false,
+            0,
+            false
+          ],
+          "expanded": 1
+        }
+      },
+      {
+        "boundary": "split",
+        "mutant": "deny_event",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "message",
+              "E1",
+              "denied-all-events"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              [
+                "E1"
+              ]
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": null,
+          "expanded": 139
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "shared_control",
+        "counterexample": {
+          "violation": "independent Stop admission",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [
+                "E1"
+              ],
+              [
+                "E1"
+              ],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 127
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "gap_event_only",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "CREDIT"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "gap"
+            ],
+            [
+              "message",
+              "CREDIT",
+              "credit"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            1,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              [
+                "CREDIT"
+              ]
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            1,
+            0,
+            1,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            true
+          ],
+          "expected_abstract": null,
+          "expanded": 808
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "reset_credit",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "CREDIT"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "RESET"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "CREDIT",
+              "credit"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "gap"
+            ],
+            [
+              "message",
+              "RESET",
+              "reset"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            1,
+            0,
+            1,
+            [],
+            [
+              [],
+              [],
+              [
+                "RESET"
+              ]
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            true
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            1,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            false
+          ],
+          "expected_abstract": [
+            false,
+            false,
+            true,
+            0,
+            0,
+            0,
+            [],
+            false,
+            0,
+            false
+          ],
+          "expanded": 17391
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "refusal_reset",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "RESET"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "E1",
+              "credit-missing"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "message",
+              "RESET",
+              "reset"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            2,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              [
+                "RESET"
+              ]
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": null,
+          "expanded": 10292
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "hidden_loss",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "loss"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [
+                "E1"
+              ],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            true,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": [
+            false,
+            false,
+            true,
+            1,
+            0,
+            0,
+            [],
+            true,
+            0,
+            false
+          ],
+          "expanded": 2
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "loss_retains_flow",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "CREDIT"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "CREDIT",
+              "credit"
+            ],
+            [
+              "offer",
+              "E2"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "message",
+              "E1",
+              "event"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "message",
+              "E2",
+              "flow-exhausted"
+            ],
+            [
+              "loss"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            3,
+            1,
+            0,
+            [
+              1
+            ],
+            [
+              [
+                "E1"
+              ],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            1,
+            0,
+            true
+          ],
+          "after": [
+            0,
+            true,
+            3,
+            1,
+            0,
+            [
+              1
+            ],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            true,
+            true,
+            1,
+            0,
+            true
+          ],
+          "expected_abstract": [
+            false,
+            false,
+            true,
+            1,
+            1,
+            0,
+            [
+              1
+            ],
+            true,
+            0,
+            true
+          ],
+          "expanded": 57791
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "unbounded_frame",
+        "counterexample": {
+          "violation": "bounded partial frame",
+          "trace": [
+            [
+              "fragment"
+            ],
+            [
+              "fragment"
+            ],
+            [
+              "fragment"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            3,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 370
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "queue_overflow",
+        "counterexample": {
+          "violation": "bounded pipeline",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [
+                "E1"
+              ],
+              [
+                "E1"
+              ],
+              [
+                "E1"
+              ]
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 5253
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "stage_overflow",
+        "counterexample": {
+          "violation": "bounded pipeline",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ]
+          ],
+          "state": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [
+                "E1",
+                "E1"
+              ],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expanded": 656
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "false_settlement",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "stop_request"
+            ],
+            [
+              "stop_apply"
+            ]
+          ],
+          "before": [
+            1,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            2,
+            false,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": [
+            false,
+            true,
+            true,
+            0,
+            0,
+            0,
+            [],
+            false,
+            0,
+            false
+          ],
+          "expanded": 1
+        }
+      },
+      {
+        "boundary": "inclusive",
+        "mutant": "deny_event",
+        "counterexample": {
+          "violation": "aggregate step/stutter refinement",
+          "trace": [
+            [
+              "offer",
+              "E1"
+            ],
+            [
+              "pump_sdk"
+            ],
+            [
+              "pump_broker"
+            ],
+            [
+              "message",
+              "E1",
+              "denied-all-events"
+            ]
+          ],
+          "before": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              [
+                "E1"
+              ]
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "after": [
+            0,
+            true,
+            0,
+            0,
+            0,
+            [],
+            [
+              [],
+              [],
+              []
+            ],
+            0,
+            false,
+            false,
+            0,
+            0,
+            false
+          ],
+          "expected_abstract": null,
+          "expanded": 139
+        }
+      }
+    ],
+    "full_comparison_complete": false,
+    "formal_freeze": false
+  },
+  "status": "conditional-subsystem-pass",
+  "ended_at": "2026-09-08T00:20:05.626679+00:00",
+  "elapsed_seconds": 81.517712
+}

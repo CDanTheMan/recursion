@@ -6,6 +6,22 @@ last-updated: 2026-09-07
 
 # Recursion v3 execution fabric hypothesis
 
+## Preventive admission versus retained wire evidence — 2026-09-07
+
+FMC-004: the [paired immutable-oracle controls](construction/formal-comparison-20260907/results.json)
+expose an unresolved adapter seam. A preventive model can withhold an exhausted second EVENT,
+retain admitted cursor 1, and request RESET. If the actual wire omits that EVENT, the M1B audit has
+no observed recovery cause and refuses RESET as unexpected. If the rejected EVENT is included,
+the audit cursor advances to 2. Deleting the candidate therefore does not establish a correct
+mapping between admitted state and retained wire evidence.
+
+Disposition: maintain distinct candidate/admission, emitted-message and audit facts. Before a
+runtime adapter is admitted, specify how its supported resynchronization sequence creates a
+valid recovery cause and snapshot cursor while preserving every rejected/unknown observation.
+Check that sequence against unchanged M1B rules and both models. Do not invent a wire field,
+forge a gap, erase a rejected event, or weaken the immutable validator. M1A/M1C joining, PAUSE
+classification and OR-015's common-writer migration remain separately unresolved.
+
 ## Observed accounting boundaries — 2026-09-07
 
 IPR-003: the installed Codex fixture emitted cumulative totals of 15, 30, 45, 60 and 75,

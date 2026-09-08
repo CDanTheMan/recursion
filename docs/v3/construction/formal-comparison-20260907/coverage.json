@@ -99,8 +99,12 @@
       "profile": "baseline",
       "paired_trace_ids": [],
       "mutant_requirement": "discriminating-guard-removal",
-      "construction_status": "planned-partial-slice",
-      "construction_result": null
+      "construction_status": "partial-preventive-slice-checked",
+      "construction_result": {
+        "run": "20260908T001843893920",
+        "status": "conditional-subsystem-pass",
+        "limit": "Partial preventative model only: direct logical Stop path, immediate loss signal, one-quantum frames/events. Full immutable-wire adapter and declared core/cross profiles remain unimplemented."
+      }
     },
     {
       "id": "comparison.trace.02",
@@ -112,8 +116,12 @@
       "profile": "baseline",
       "paired_trace_ids": [],
       "mutant_requirement": "discriminating-guard-removal",
-      "construction_status": "planned-partial-slice",
-      "construction_result": null
+      "construction_status": "partial-preventive-slice-checked",
+      "construction_result": {
+        "run": "20260908T001843893920",
+        "status": "conditional-subsystem-pass",
+        "limit": "Partial preventative model only: direct logical Stop path, immediate loss signal, one-quantum frames/events. Full immutable-wire adapter and declared core/cross profiles remain unimplemented."
+      }
     },
     {
       "id": "comparison.trace.03",
@@ -428,8 +436,12 @@
       "profile": "baseline",
       "paired_trace_ids": [],
       "mutant_requirement": "discriminating-guard-removal",
-      "construction_status": "planned-partial-slice",
-      "construction_result": null
+      "construction_status": "partial-preventive-slice-checked",
+      "construction_result": {
+        "run": "20260908T001843893920",
+        "status": "conditional-subsystem-pass",
+        "limit": "Partial preventative model only: direct logical Stop path, immediate loss signal, one-quantum frames/events. Full immutable-wire adapter and declared core/cross profiles remain unimplemented."
+      }
     },
     {
       "id": "comparison.trace.27",

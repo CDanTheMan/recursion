@@ -45,15 +45,15 @@
     },
     {
       "id": "exhaustive-and-adversarial-checks",
-      "status": "first_exhaustive_run_in_progress"
+      "status": "complete_named_slice_and_calibrations"
     },
     {
       "id": "canonical-synthesis",
-      "status": "pending"
+      "status": "complete_named_slice_and_unresolved_adapter_seam"
     },
     {
       "id": "exact-validation-review-publication",
-      "status": "pending"
+      "status": "requires_two_exact_candidate_gates_and_two_independent_reviews_recorded_externally"
     }
   ],
   "owner_questions": []

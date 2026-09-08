@@ -6,6 +6,21 @@ last-updated: 2026-09-07
 
 # Recursion v3 interactive terminal and persistent session runtime
 
+## Replay and flow recovery distinction — 2026-09-07
+
+FMC-001: the immutable [M1B wire profile](M1B-WIRE-PROFILE.md) requires RESET before any further
+same-stream message after detecting a replay gap. ACK, CREDIT, INPUT, RESIZE, HELLO, WELCOME and
+SNAPSHOT cannot bypass that rule; an intervening message permanently refuses the trace even when
+RESET follows. Ordinary credit exhaustion is distinct: it remains unrecovered until RESET but
+does not itself impose the replay-gap-continuation refusal. Missing CREDIT also preserves its
+own permanent refusal. Event cursors advance by exactly one; ACK cursors cannot move backward.
+
+Owner Stop is outside the closed M1B broker-message union. The formal slice assumes a separately
+typed direct control path and checks its progress while global admission, a downstream stage or
+a partial-frame buffer is full. This does not demonstrate a physical reserve through ingress,
+framing, scheduling, canonical writing and view delivery. Signaled loss handling also does not
+establish real SDK loss detection. These remain explicit implementation and mapping assumptions.
+
 ## Observed Windows launch gap — 2026-09-07
 
 IPR-001: the bounded Windows probe reproduced the create-suspended-before-association gap.

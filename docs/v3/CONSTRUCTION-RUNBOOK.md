@@ -6,6 +6,20 @@ last-updated: 2026-09-07
 
 # Recursion v3 construction runbook
 
+## First formal packet — 2026-09-07
+
+Continue from [the formal handoff](construction/formal-comparison-20260907/handoff.md) on its
+separate review branch. Its frozen start is the reviewed interface candidate `a497bae`; PR #94
+is its publication dependency. Preserve that worktree for historical gate replay. The current
+packet's source snapshots, raw model results, two final gates and two independent reviews are
+retained outside the candidate under `research-attestations/formal-comparison/`.
+
+This packet checks a smaller preventive flow/control specification and exposes the incomplete
+wire-audit adapter mapping. It does not complete the full formal comparison. The [coverage ledger](construction/formal-comparison-20260907/coverage.json)
+keeps all obligations and trace rows, with partial/unimplemented/not-selected states. Follow-on
+construction needs a fresh bounded GoalSpec and exact inputs under the continuing Owner
+authorization; it does not need renewed approval of already accepted routine direction.
+
 ## Owner-authorized testing continuation — 2026-09-07
 
 The Owner's subsequent authorization permits isolated testing/setup and review-branch commits

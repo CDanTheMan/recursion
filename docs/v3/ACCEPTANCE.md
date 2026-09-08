@@ -6,6 +6,21 @@ last-updated: 2026-09-07
 
 # Recursion v3 acceptance hypothesis
 
+## Formal packet acceptance is scoped — 2026-09-07
+
+The first [formal construction results](construction/formal-comparison-20260907/results.json)
+advance foundation readiness to a checked finite preventive subsystem and calibrated checking
+methods. Full contract readiness remains conditional. Traces 01, 02 and 26 have partial modeled
+coverage only; the complete six obligations, 27-row corpus and full core/cross-area profiles remain
+required. Rights-extension trace 22 remains not-selected/unrun. Full formal freeze is false.
+
+The [packet gate](../../experiments/v3/formal-comparison/check.py) must reproduce the current model
+result, bind retained execution bytes, validate the unchanged contract coverage and reject
+weakened claims/fixtures. It also runs all 25 unchanged regressions on the candidate and preserves
+historical checks against their named frozen worktrees. Two complete passes and two independent
+reviews of the identical clean commit precede review-branch publication; external receipts are
+under `research-attestations/formal-comparison/<candidate>/` in the Git common directory.
+
 ## Interface campaign acceptance boundary — 2026-09-07
 
 Foundation readiness has advanced to observed installed-harness/OS mechanisms and finite
