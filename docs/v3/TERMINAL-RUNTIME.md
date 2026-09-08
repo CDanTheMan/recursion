@@ -456,3 +456,25 @@ GCM-003 checks a previously admitted permit separately from local task revocatio
 EEJ-002 observes the literal running/PAUSE pair through the immutable M1A kernel. The same otherwise-valid observation payload accepts while running and refuses `E-PAUSED` after an admitted current-immediate pause. Refusal emits no event and leaves the canonical projection unchanged; its separate receipt journal grows. An exact duplicate accepted before PAUSE returns the original receipt without an event because duplicate handling precedes current admission. Do not describe that as fresh admission.
 
 M1C can classify retained historical evidence while current context is paused; its trace has no current PAUSE-state field. Preserve the original admission's running state and carry current PAUSE outside the trace. Actual M1A ambiguity/quarantine persists after a later admitted success observation. A runtime bridge needs an explicit canonical resolution protocol; an adapter, terminal reconnect or historical classification cannot silently clear it. Three Stop modes, all ten terminal controls and preserved forks remain unchanged. [Literal controls and limits](construction/effect-evidence-20260908/results.json).
+
+## Shared snapshot installation boundary — 2026-09-08
+
+SCM-003 distinguishes captured, copied, advertised, emitted and installed content.
+Restart after recovery emission cannot imply application installation. Installation
+preserves newer broker-owned source entries; an ordered finite witness retains
+a prequeued newer entry through installation, grants fresh credit and delivers it
+while current evidence hold and quarantine remain intact. Stop applies from a
+saturated presentation queue through its independently enabled control path.
+
+The experiment queue is broker-side undelivered source ownership. It is not the
+M1B receiver pending/unacknowledged queue. M1B-WIRE-PROFILE still requires a gap or
+exhaustion before RESET, clears receiver credit/pending state, and requires fresh
+CREDIT before later EVENT. The new internal model incorporates gap/credit limits
+but does not prove complete wire, byte-credit, ACK, framing or restart-handshake
+correspondence. Internal phase actions must not be advertised as observed upstream
+integration. All ten terminal controls, three Stop modes, preserved forks and
+persistent assistants remain required.
+
+See [shared-model evidence](construction/shared-composition-20260908/evidence.json)
+and the literal-wire follow-up in
+[next probes](construction/shared-composition-20260908/next-probes.md).

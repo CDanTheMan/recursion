@@ -1,0 +1,5045 @@
+{
+  "status": "shared-composition-pass",
+  "classification": "modeled",
+  "profiles": {
+    "recovery-trigger-probe": {
+      "inclusive": {
+        "states": 52,
+        "edges": 159,
+        "frontier": 0,
+        "graph_sha256": "b7acb0beedae7562b83eb26250347eaf7621f23353b90a599bd4146f3849836e"
+      },
+      "split": {
+        "states": 52,
+        "edges": 159,
+        "frontier": 0,
+        "graph_sha256": "b7acb0beedae7562b83eb26250347eaf7621f23353b90a599bd4146f3849836e"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "recovery-trigger-probe",
+          "trace": [
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "copy",
+            "advertise"
+          ],
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 1,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ]
+            ],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 3,
+            "restarted": false,
+            "done": 63
+          }
+        }
+      ]
+    },
+    "free-shared-core": {
+      "inclusive": {
+        "states": 40700,
+        "edges": 248437,
+        "frontier": 0,
+        "graph_sha256": "b36eb1d76be5d5ede487ad5011c96724a6f9877df02034c815b4ee7b38c61516"
+      },
+      "split": {
+        "states": 40700,
+        "edges": 248437,
+        "frontier": 0,
+        "graph_sha256": "b36eb1d76be5d5ede487ad5011c96724a6f9877df02034c815b4ee7b38c61516"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "free-shared-core",
+          "trace": [
+            "capsule",
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "install",
+            "reader_wait",
+            "return",
+            "release",
+            "second",
+            "stage",
+            "publish",
+            "reclaim"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 2,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": true,
+            "actor": 3,
+            "pin": false,
+            "reader": 0,
+            "copied": true,
+            "waited": true,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 2,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                2
+              ]
+            ],
+            "ingested": 1,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              1,
+              1
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 131071
+          }
+        }
+      ]
+    },
+    "ownership-probes": {
+      "inclusive": {
+        "states": 421,
+        "edges": 1832,
+        "frontier": 0,
+        "graph_sha256": "f6dc96b1e54ba615680d070dde17b15ccf1506a97f2808e1c680f983aa72548a"
+      },
+      "split": {
+        "states": 421,
+        "edges": 1832,
+        "frontier": 0,
+        "graph_sha256": "f6dc96b1e54ba615680d070dde17b15ccf1506a97f2808e1c680f983aa72548a"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "ownership-probes",
+          "trace": [
+            "capsule",
+            "return",
+            "release",
+            "stage",
+            "publish",
+            "reclaim:probe"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 2,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": true,
+            "actor": 3,
+            "pin": false,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                2,
+                0
+              ]
+            ],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 119
+          }
+        }
+      ]
+    },
+    "recipient-refusal": {
+      "inclusive": {
+        "states": 34,
+        "edges": 98,
+        "frontier": 0,
+        "graph_sha256": "fb697cf1208a04a1bbb7215cd47866c37c531782b2bcf65de62d4a4121d66517"
+      },
+      "split": {
+        "states": 34,
+        "edges": 98,
+        "frontier": 0,
+        "graph_sha256": "fb697cf1208a04a1bbb7215cd47866c37c531782b2bcf65de62d4a4121d66517"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "recipient-refusal",
+          "trace": [
+            "pause",
+            "fence",
+            "execute",
+            "receipt"
+          ],
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": true,
+            "fence": 2,
+            "remote": 3,
+            "executions": 0,
+            "cut": 4,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                4
+              ]
+            ],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 5
+          }
+        },
+        {
+          "name": "Stop-before-recipient-install",
+          "trace": [
+            "stop",
+            "execute"
+          ],
+          "before": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": true,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 0
+          },
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": true,
+            "paused": false,
+            "fence": 1,
+            "remote": 1,
+            "executions": 1,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 1
+          }
+        }
+      ]
+    },
+    "old-cut-new-attempt": {
+      "inclusive": {
+        "states": 136,
+        "edges": 505,
+        "frontier": 0,
+        "graph_sha256": "7a65dfee45077af8fa97b54376fb558b47ec7117d2a33f85942161981e3878f9"
+      },
+      "split": {
+        "states": 136,
+        "edges": 505,
+        "frontier": 0,
+        "graph_sha256": "7a65dfee45077af8fa97b54376fb558b47ec7117d2a33f85942161981e3878f9"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "old-cut-new-attempt",
+          "trace": [
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "second",
+            "install"
+          ],
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 1,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 2,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                1,
+                2
+              ]
+            ],
+            "ingested": 1,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              1,
+              1
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 1023
+          }
+        }
+      ]
+    },
+    "reader-reclaim-install": {
+      "inclusive": {
+        "states": 2633,
+        "edges": 13877,
+        "frontier": 0,
+        "graph_sha256": "efff469583e73c15a3de8b2c9a66d6dfb841736f3203863604ed4e115e7ab57e"
+      },
+      "split": {
+        "states": 2633,
+        "edges": 13877,
+        "frontier": 0,
+        "graph_sha256": "efff469583e73c15a3de8b2c9a66d6dfb841736f3203863604ed4e115e7ab57e"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "reader-reclaim-install",
+          "trace": [
+            "capsule",
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "reader_wait",
+            "return",
+            "release",
+            "stage",
+            "publish",
+            "reclaim",
+            "install"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 2,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": true,
+            "actor": 3,
+            "pin": false,
+            "reader": 0,
+            "copied": true,
+            "waited": true,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ]
+            ],
+            "ingested": 1,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              1,
+              1
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 130559
+          }
+        },
+        {
+          "name": "reclaim-blocked-by-independent-reader",
+          "trace": [
+            "capsule",
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "return",
+            "release",
+            "stage",
+            "publish",
+            "reclaim_early"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": true,
+            "actor": 3,
+            "pin": false,
+            "reader": 1,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ]
+            ],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 1,
+            "restarted": false,
+            "done": 1023
+          }
+        },
+        {
+          "name": "ordered-reader-reclaim-install",
+          "trace": [
+            "capsule",
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "detect_gap",
+            "return",
+            "release",
+            "stage",
+            "publish",
+            "reclaim_early",
+            "copy",
+            "advertise",
+            "emit_reset",
+            "reader_wait",
+            "reclaim",
+            "install"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 2,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": true,
+            "actor": 3,
+            "pin": false,
+            "reader": 0,
+            "copied": true,
+            "waited": true,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ]
+            ],
+            "ingested": 1,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              1,
+              1
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 131071
+          }
+        }
+      ]
+    },
+    "writer-serial-and-boot": {
+      "inclusive": {
+        "states": 75,
+        "edges": 239,
+        "frontier": 0,
+        "graph_sha256": "ac505c2fe9f6daf46e7ceb1827684c2bb0719dea7996946c199e13c6e392a647"
+      },
+      "split": {
+        "states": 75,
+        "edges": 239,
+        "frontier": 0,
+        "graph_sha256": "ac505c2fe9f6daf46e7ceb1827684c2bb0719dea7996946c199e13c6e392a647"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "writer-serial-and-boot",
+          "trace": [
+            "replace",
+            "stage",
+            "publish_old",
+            "refresh",
+            "publish",
+            "writer_boot",
+            "writer_ack"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 2,
+            "serial": 2,
+            "ticket": [
+              1,
+              2
+            ],
+            "reply": true,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                2,
+                0
+              ]
+            ],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 127
+          }
+        },
+        {
+          "name": "stale-ticket-denial",
+          "trace": [
+            "replace",
+            "stage",
+            "publish_old"
+          ],
+          "before": {
+            "g": 1,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 2,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 3
+          },
+          "state": {
+            "g": 1,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 2,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 7
+          }
+        }
+      ]
+    },
+    "writer-stale-boot": {
+      "inclusive": {
+        "states": 55,
+        "edges": 174,
+        "frontier": 0,
+        "graph_sha256": "f13c2aa5907561ec91f88c6b454d6385edb72d54f2d28227bd20905af57a1a8d"
+      },
+      "split": {
+        "states": 55,
+        "edges": 174,
+        "frontier": 0,
+        "graph_sha256": "f13c2aa5907561ec91f88c6b454d6385edb72d54f2d28227bd20905af57a1a8d"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "writer-stale-boot",
+          "trace": [
+            "stage",
+            "writer_boot",
+            "publish_old",
+            "refresh",
+            "publish"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 2,
+            "serial": 1,
+            "ticket": [
+              2,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                2,
+                0
+              ]
+            ],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 31
+          }
+        },
+        {
+          "name": "stale-ticket-denial",
+          "trace": [
+            "stage",
+            "writer_boot",
+            "publish_old"
+          ],
+          "before": {
+            "g": 1,
+            "residents": 3,
+            "staged": true,
+            "term": 2,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 3
+          },
+          "state": {
+            "g": 1,
+            "residents": 3,
+            "staged": true,
+            "term": 2,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 7
+          }
+        }
+      ]
+    },
+    "writer-unstaged": {
+      "inclusive": {
+        "states": 34,
+        "edges": 98,
+        "frontier": 0,
+        "graph_sha256": "7d6e9fdf3c4bfffaa6c9772cb7b5d30a589e74deddf6add907375e9e0846b928"
+      },
+      "split": {
+        "states": 34,
+        "edges": 98,
+        "frontier": 0,
+        "graph_sha256": "7d6e9fdf3c4bfffaa6c9772cb7b5d30a589e74deddf6add907375e9e0846b928"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "writer-unstaged",
+          "trace": [
+            "publish_old",
+            "stage",
+            "publish"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                2,
+                0
+              ]
+            ],
+            "ingested": 0,
+            "queue": [],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 7
+          }
+        }
+      ]
+    },
+    "queue-gap-stop": {
+      "inclusive": {
+        "states": 325,
+        "edges": 1134,
+        "frontier": 0,
+        "graph_sha256": "42d3cffd88017198b2607847845fe15c0f561ce9eb33b45ce958c9e5f2f50649"
+      },
+      "split": {
+        "states": 325,
+        "edges": 1134,
+        "frontier": 0,
+        "graph_sha256": "42d3cffd88017198b2607847845fe15c0f561ce9eb33b45ce958c9e5f2f50649"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "queue-gap-stop",
+          "trace": [
+            "execute",
+            "complete",
+            "receipt",
+            "ingest:1",
+            "stage",
+            "publish",
+            "ingest:2",
+            "lose_queue",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "install",
+            "stop"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 2,
+            "copied": true,
+            "waited": false,
+            "stopped": true,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ]
+            ],
+            "ingested": 2,
+            "queue": [],
+            "loss": 1,
+            "credit": 0,
+            "gap": false,
+            "view": 2,
+            "content": [
+              2,
+              1
+            ],
+            "snapshot": [
+              2,
+              2,
+              1
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 32511
+          }
+        },
+        {
+          "name": "saturated-queue-Stop",
+          "trace": [
+            "execute",
+            "complete",
+            "receipt",
+            "ingest:1",
+            "stage",
+            "publish",
+            "ingest:2",
+            "stop"
+          ],
+          "before": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ]
+            ],
+            "ingested": 2,
+            "queue": [
+              1,
+              2
+            ],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 127
+          },
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 0,
+            "copied": false,
+            "waited": false,
+            "stopped": true,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ]
+            ],
+            "ingested": 2,
+            "queue": [
+              1,
+              2
+            ],
+            "loss": 0,
+            "credit": 1,
+            "gap": false,
+            "view": 0,
+            "content": [
+              1,
+              0
+            ],
+            "snapshot": [],
+            "phase": 0,
+            "restarted": false,
+            "done": 127
+          }
+        }
+      ]
+    },
+    "late-evidence-local-death": {
+      "inclusive": {
+        "states": 2552,
+        "edges": 12784,
+        "frontier": 0,
+        "graph_sha256": "3f0563929d1ba760eb5cd5f6602198c10b6b0ef4dcdbdae025c1ce12fa5eed39"
+      },
+      "split": {
+        "states": 2552,
+        "edges": 12784,
+        "frontier": 0,
+        "graph_sha256": "3f0563929d1ba760eb5cd5f6602198c10b6b0ef4dcdbdae025c1ce12fa5eed39"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "late-evidence-local-death",
+          "trace": [
+            "execute",
+            "complete",
+            "kill",
+            "stage",
+            "publish",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "install",
+            "wait",
+            "receipt",
+            "release"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 2,
+            "pin": false,
+            "reader": 2,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                2,
+                0
+              ],
+              [
+                2,
+                1
+              ]
+            ],
+            "ingested": 1,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              2,
+              0
+            ],
+            "snapshot": [
+              2,
+              1,
+              0
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 65151
+          }
+        }
+      ]
+    },
+    "conflict-pause": {
+      "inclusive": {
+        "states": 105,
+        "edges": 342,
+        "frontier": 0,
+        "graph_sha256": "1e613bdaa307618036a7b656105fbfcaa93ebf5da4c185efeef00053bfec7e0a"
+      },
+      "split": {
+        "states": 105,
+        "edges": 342,
+        "frontier": 0,
+        "graph_sha256": "1e613bdaa307618036a7b656105fbfcaa93ebf5da4c185efeef00053bfec7e0a"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "conflict-pause",
+          "trace": [
+            "execute",
+            "complete",
+            "pause",
+            "receipt",
+            "conflict",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "install",
+            "fresh_write"
+          ],
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 1,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": true,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 3,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 2,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                1,
+                3
+              ]
+            ],
+            "ingested": 2,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 2,
+            "content": [
+              1,
+              3
+            ],
+            "snapshot": [
+              1,
+              2,
+              3
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 2047
+          }
+        }
+      ]
+    },
+    "reset-restart-future-output": {
+      "inclusive": {
+        "states": 577,
+        "edges": 2465,
+        "frontier": 0,
+        "graph_sha256": "7856ddc558f5c5b8ce07c0e6b0724acbff1205d7f4a92d7c0e4d446c9ee3e7f2"
+      },
+      "split": {
+        "states": 577,
+        "edges": 2465,
+        "frontier": 0,
+        "graph_sha256": "7856ddc558f5c5b8ce07c0e6b0724acbff1205d7f4a92d7c0e4d446c9ee3e7f2"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "reset-restart-future-output",
+          "trace": [
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "broker_restart",
+            "advertise:again",
+            "detect_gap:again",
+            "emit_reset:again",
+            "second",
+            "install",
+            "ingest:1"
+          ],
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 1,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 2,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                1,
+                2
+              ]
+            ],
+            "ingested": 2,
+            "queue": [
+              2
+            ],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              1,
+              1
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 5,
+            "restarted": true,
+            "done": 127999
+          }
+        },
+        {
+          "name": "queued-future-retained-then-delivered",
+          "trace": [
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "broker_restart",
+            "advertise:again",
+            "detect_gap:again",
+            "emit_reset:again",
+            "ingest:1",
+            "second",
+            "ingest:2",
+            "install",
+            "fresh_credit",
+            "event:after_install"
+          ],
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 1,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 2,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ],
+              [
+                1,
+                2
+              ]
+            ],
+            "ingested": 2,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 2,
+            "content": [
+              1,
+              2
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 5,
+            "restarted": true,
+            "done": 522239
+          }
+        }
+      ]
+    },
+    "reset-incarnation-accounting": {
+      "inclusive": {
+        "states": 1044,
+        "edges": 4848,
+        "frontier": 0,
+        "graph_sha256": "22574d40708f4a185cb292886fa90fa310ff0e56dc66bcdf36ffae3125963f79"
+      },
+      "split": {
+        "states": 1044,
+        "edges": 4848,
+        "frontier": 0,
+        "graph_sha256": "22574d40708f4a185cb292886fa90fa310ff0e56dc66bcdf36ffae3125963f79"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "reset-incarnation-accounting",
+          "trace": [
+            "execute",
+            "complete",
+            "receipt",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "install",
+            "reset",
+            "return",
+            "release",
+            "spawn2",
+            "old_ack",
+            "finish2"
+          ],
+          "state": {
+            "g": 1,
+            "residents": 1,
+            "staged": false,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 3,
+            "pin": false,
+            "reader": 1,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 2,
+            "executions": 1,
+            "cut": 1,
+            "hold": false,
+            "quarantine": true,
+            "incarnation": 2,
+            "closed2": true,
+            "spent": 2,
+            "reset": true,
+            "ack": 1,
+            "write_result": 0,
+            "journal": [
+              [
+                1,
+                1
+              ]
+            ],
+            "ingested": 1,
+            "queue": [],
+            "loss": 0,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              1,
+              1
+            ],
+            "snapshot": [
+              1,
+              1,
+              1
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 32767
+          }
+        }
+      ]
+    },
+    "pre-ingress-gap": {
+      "inclusive": {
+        "states": 999,
+        "edges": 3962,
+        "frontier": 0,
+        "graph_sha256": "71cbe28dbcf02698c8bfeb0d806a9a946702187f461904033ef40adb6e060970"
+      },
+      "split": {
+        "states": 999,
+        "edges": 3962,
+        "frontier": 0,
+        "graph_sha256": "71cbe28dbcf02698c8bfeb0d806a9a946702187f461904033ef40adb6e060970"
+      },
+      "exact_graph_equal": true,
+      "witnesses": [
+        {
+          "name": "pre-ingress-gap",
+          "trace": [
+            "stage",
+            "publish",
+            "lose_ingress",
+            "capture",
+            "copy",
+            "advertise",
+            "detect_gap",
+            "emit_reset",
+            "install"
+          ],
+          "state": {
+            "g": 2,
+            "residents": 3,
+            "staged": true,
+            "term": 1,
+            "serial": 1,
+            "ticket": [
+              1,
+              1
+            ],
+            "reply": false,
+            "capsule": false,
+            "actor": 0,
+            "pin": true,
+            "reader": 2,
+            "copied": true,
+            "waited": false,
+            "stopped": false,
+            "paused": false,
+            "fence": 1,
+            "remote": 0,
+            "executions": 0,
+            "cut": 0,
+            "hold": true,
+            "quarantine": true,
+            "incarnation": 1,
+            "closed2": false,
+            "spent": 1,
+            "reset": false,
+            "ack": 0,
+            "write_result": 0,
+            "journal": [
+              [
+                2,
+                0
+              ]
+            ],
+            "ingested": 1,
+            "queue": [],
+            "loss": 1,
+            "credit": 0,
+            "gap": false,
+            "view": 1,
+            "content": [
+              2,
+              0
+            ],
+            "snapshot": [
+              2,
+              1,
+              0
+            ],
+            "phase": 5,
+            "restarted": false,
+            "done": 16163
+          }
+        }
+      ]
+    }
+  },
+  "states_per_boundary": 49742,
+  "mutants": [
+    {
+      "guard": "unexpected-reset",
+      "profile": "recovery-trigger-probe",
+      "obligation": "complete independent enabledness / responsive Stop",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "copy",
+        "advertise"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        3,
+        false,
+        63
+      ],
+      "after": null
+    },
+    {
+      "guard": "reset-keeps-credit",
+      "profile": "old-cut-new-attempt",
+      "obligation": "complete independent postcondition emit_reset",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "copy",
+        "advertise",
+        "detect_gap",
+        "emit_reset"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        true,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        3,
+        false,
+        623
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        4,
+        false,
+        751
+      ]
+    },
+    {
+      "guard": "control-apply",
+      "profile": "queue-gap-stop",
+      "obligation": "complete independent postcondition stop",
+      "trace": [
+        "stop"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        0
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        0
+      ]
+    },
+    {
+      "guard": "replay-settlement",
+      "profile": "old-cut-new-attempt",
+      "obligation": "authority/ownership write footprint: install",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "copy",
+        "advertise",
+        "detect_gap",
+        "emit_reset",
+        "second",
+        "install"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        2,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        0,
+        [],
+        0,
+        0,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        4,
+        false,
+        767
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        1,
+        [],
+        0,
+        0,
+        false,
+        1,
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        5,
+        false,
+        1023
+      ]
+    },
+    {
+      "guard": "status-only-hold",
+      "profile": "old-cut-new-attempt",
+      "obligation": "complete independent postcondition second",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "second"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        1,
+        false,
+        15
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        2,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        1,
+        false,
+        31
+      ]
+    },
+    {
+      "guard": "pending-only-hold",
+      "profile": "conflict-pause",
+      "obligation": "complete independent postcondition conflict",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "conflict"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        7
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        3,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        15
+      ]
+    },
+    {
+      "guard": "invocation-release",
+      "profile": "ownership-probes",
+      "obligation": "complete independent enabledness / responsive Stop",
+      "trace": [],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        0
+      ],
+      "after": null
+    },
+    {
+      "guard": "other-reader-release",
+      "profile": "reader-reclaim-install",
+      "obligation": "authority/ownership write footprint: release",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "return",
+        "release"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        3,
+        true,
+        1,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        1,
+        false,
+        79
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        3,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        1,
+        false,
+        207
+      ]
+    },
+    {
+      "guard": "copy-release",
+      "profile": "reader-reclaim-install",
+      "obligation": "authority/ownership write footprint: copy",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "copy"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        1,
+        false,
+        15
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        2,
+        false,
+        1039
+      ]
+    },
+    {
+      "guard": "reclaim-reader",
+      "profile": "reader-reclaim-install",
+      "obligation": "reclamation requires all independent owners",
+      "trace": [
+        "capsule",
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "return",
+        "release",
+        "stage",
+        "publish",
+        "reclaim_early"
+      ],
+      "before": [
+        2,
+        3,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        true,
+        3,
+        false,
+        1,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        1,
+        false,
+        511
+      ],
+      "after": [
+        2,
+        2,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        true,
+        3,
+        false,
+        1,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        1,
+        false,
+        1023
+      ]
+    },
+    {
+      "guard": "reclaim-history",
+      "profile": "ownership-probes",
+      "obligation": "reclamation requires all independent owners",
+      "trace": [
+        "return",
+        "release",
+        "stage",
+        "publish",
+        "reclaim:probe"
+      ],
+      "before": [
+        2,
+        3,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        3,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            2,
+            0
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        23
+      ],
+      "after": [
+        2,
+        2,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        3,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            2,
+            0
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        87
+      ]
+    },
+    {
+      "guard": "reclaim-invocation",
+      "profile": "ownership-probes",
+      "obligation": "reclamation requires all independent owners",
+      "trace": [
+        "capsule",
+        "stage",
+        "publish",
+        "reclaim:probe"
+      ],
+      "before": [
+        2,
+        3,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        true,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            2,
+            0
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        35
+      ],
+      "after": [
+        2,
+        2,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        true,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            2,
+            0
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        99
+      ]
+    },
+    {
+      "guard": "stale-term",
+      "profile": "writer-stale-boot",
+      "obligation": "complete current writer ticket and admission before commit",
+      "trace": [
+        "stage",
+        "writer_boot",
+        "publish_old"
+      ],
+      "before": [
+        1,
+        3,
+        true,
+        2,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        3
+      ],
+      "after": [
+        2,
+        3,
+        true,
+        2,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            2,
+            0
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        7
+      ]
+    },
+    {
+      "guard": "stale-serial",
+      "profile": "writer-serial-and-boot",
+      "obligation": "complete current writer ticket and admission before commit",
+      "trace": [
+        "replace",
+        "stage",
+        "publish_old"
+      ],
+      "before": [
+        1,
+        3,
+        true,
+        1,
+        2,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        3
+      ],
+      "after": [
+        2,
+        3,
+        true,
+        1,
+        2,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            2,
+            0
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        7
+      ]
+    },
+    {
+      "guard": "unstaged",
+      "profile": "writer-unstaged",
+      "obligation": "complete current writer ticket and admission before commit",
+      "trace": [
+        "publish_old"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        0
+      ],
+      "after": [
+        2,
+        3,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            2,
+            0
+          ]
+        ],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        1
+      ]
+    },
+    {
+      "guard": "gap-order",
+      "profile": "queue-gap-stop",
+      "obligation": "complete independent enabledness / responsive Stop",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "ingest:1",
+        "stage",
+        "publish",
+        "ingest:2",
+        "lose_queue"
+      ],
+      "before": [
+        2,
+        3,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ]
+        ],
+        2,
+        [
+          2
+        ],
+        1,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        255
+      ],
+      "after": null
+    },
+    {
+      "guard": "reset-order",
+      "profile": "reset-restart-future-output",
+      "obligation": "complete independent enabledness / responsive Stop",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "copy",
+        "advertise",
+        "detect_gap",
+        "emit_reset",
+        "broker_restart",
+        "advertise:again",
+        "detect_gap:again",
+        "emit_reset:again",
+        "fresh_credit",
+        "ingest:1"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        1,
+        [
+          1
+        ],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        4,
+        true,
+        242431
+      ],
+      "after": null
+    },
+    {
+      "guard": "future-loss",
+      "profile": "reset-restart-future-output",
+      "obligation": "install exact copied cut, retain newer entries",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "copy",
+        "advertise",
+        "detect_gap",
+        "emit_reset",
+        "broker_restart",
+        "advertise:again",
+        "detect_gap:again",
+        "emit_reset:again",
+        "ingest:1",
+        "second",
+        "ingest:2",
+        "install"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        2,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        2,
+        [
+          1,
+          2
+        ],
+        0,
+        0,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        4,
+        true,
+        112639
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        2,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        2,
+        [],
+        0,
+        0,
+        false,
+        1,
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        5,
+        true,
+        129023
+      ]
+    },
+    {
+      "guard": "control-pressure",
+      "profile": "queue-gap-stop",
+      "obligation": "complete independent enabledness / responsive Stop",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "ingest:1",
+        "stage",
+        "publish",
+        "ingest:2"
+      ],
+      "before": [
+        2,
+        3,
+        true,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ]
+        ],
+        2,
+        [
+          1,
+          2
+        ],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        127
+      ],
+      "after": null
+    },
+    {
+      "guard": "recipient-fence",
+      "profile": "recipient-refusal",
+      "obligation": "installed recipient fence refusal",
+      "trace": [
+        "pause",
+        "fence",
+        "execute"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        true,
+        2,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        0
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        true,
+        2,
+        1,
+        1,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        1
+      ]
+    },
+    {
+      "guard": "local-death",
+      "profile": "late-evidence-local-death",
+      "obligation": "authority/ownership write footprint: kill",
+      "trace": [
+        "kill"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        0
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        1,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        4
+      ]
+    },
+    {
+      "guard": "quarantine-clear",
+      "profile": "conflict-pause",
+      "obligation": "authority/ownership write footprint: install",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "conflict",
+        "capture",
+        "copy",
+        "advertise",
+        "detect_gap",
+        "emit_reset",
+        "install"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        3,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        0,
+        [],
+        0,
+        0,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        4,
+        false,
+        1279
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        3,
+        true,
+        false,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        2,
+        [],
+        0,
+        0,
+        false,
+        2,
+        [
+          1,
+          3
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        5,
+        false,
+        1535
+      ]
+    },
+    {
+      "guard": "ack-completion",
+      "profile": "reset-incarnation-accounting",
+      "obligation": "authority/ownership write footprint: old_ack",
+      "trace": [
+        "return",
+        "release",
+        "spawn2",
+        "old_ack"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        3,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        2,
+        false,
+        2,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        7
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        3,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        2,
+        true,
+        2,
+        false,
+        1,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        23
+      ]
+    },
+    {
+      "guard": "reset-spend",
+      "profile": "reset-incarnation-accounting",
+      "obligation": "authority/ownership write footprint: reset",
+      "trace": [
+        "reset"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        0
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        0,
+        false,
+        false,
+        false,
+        false,
+        1,
+        0,
+        0,
+        0,
+        true,
+        true,
+        1,
+        false,
+        0,
+        true,
+        0,
+        0,
+        [],
+        0,
+        [],
+        0,
+        1,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [],
+        0,
+        false,
+        8
+      ]
+    },
+    {
+      "guard": "emission-install",
+      "profile": "reset-restart-future-output",
+      "obligation": "authority/ownership write footprint: broker_restart",
+      "trace": [
+        "execute",
+        "complete",
+        "receipt",
+        "capture",
+        "copy",
+        "advertise",
+        "detect_gap",
+        "emit_reset",
+        "broker_restart"
+      ],
+      "before": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        0,
+        false,
+        0,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        4,
+        false,
+        32895
+      ],
+      "after": [
+        1,
+        1,
+        false,
+        1,
+        1,
+        [
+          1,
+          1
+        ],
+        false,
+        false,
+        0,
+        true,
+        1,
+        true,
+        false,
+        false,
+        false,
+        1,
+        2,
+        1,
+        1,
+        false,
+        true,
+        1,
+        false,
+        1,
+        false,
+        0,
+        0,
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        0,
+        [],
+        0,
+        0,
+        false,
+        1,
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        2,
+        true,
+        33023
+      ]
+    }
+  ],
+  "calibrations": [
+    "wrong-initial",
+    "missing-edge",
+    "changed-edge",
+    "Stop-present-but-not-applied",
+    "truncated-frontier"
+  ],
+  "literal": {
+    "mappings": {
+      "success": {
+        "status": "succeeded",
+        "pending": [],
+        "hold": false,
+        "runtime_permission": false,
+        "canonical_writes": 0
+      },
+      "late-receipt": {
+        "status": "succeeded",
+        "pending": [],
+        "hold": false,
+        "runtime_permission": false,
+        "canonical_writes": 0
+      },
+      "later-start-only": {
+        "status": "succeeded",
+        "pending": [
+          "attempt:2"
+        ],
+        "hold": true,
+        "runtime_permission": false,
+        "canonical_writes": 0
+      },
+      "later-unresolved": {
+        "status": "ambiguous",
+        "pending": [
+          "attempt:2"
+        ],
+        "hold": true,
+        "runtime_permission": false,
+        "canonical_writes": 0
+      },
+      "prior-unresolved": {
+        "status": "ambiguous",
+        "pending": [
+          "attempt:1"
+        ],
+        "hold": true,
+        "runtime_permission": false,
+        "canonical_writes": 0
+      },
+      "conflict": {
+        "status": "ambiguous",
+        "pending": [],
+        "hold": true,
+        "runtime_permission": false,
+        "canonical_writes": 0
+      },
+      "stale-paused": {
+        "status": "succeeded",
+        "pending": [],
+        "hold": false,
+        "runtime_permission": false,
+        "canonical_writes": 0
+      }
+    },
+    "actual_m1a_controls": {
+      "running": {
+        "receipt": {
+          "receipt_schema_version": "m1a-receipt-1",
+          "receipt_id": "RCPT-F-M1A-014-pause-12",
+          "command_id": "CMD-F-M1A-014-pause-12",
+          "command_digest": "c2ae5bcf12bd439b491792d2c78595b2b497f4e7de4b13f01531d78905b8a5c0",
+          "disposition": "accepted",
+          "primary_error": null,
+          "related_errors": [],
+          "witness": null,
+          "state_before_digest": "2968c18550ac465e4cb26510e941fa5a7b6d2e785802de341299b9e6e565f08e",
+          "state_after_digest": "1760a8fd1b82b006ffb367a034a19143a113817c24a15fa4c958cf02d2b8cbe6",
+          "event_ids": [
+            "EV-F-M1A-014-pause-12-0001"
+          ],
+          "first_event_sequence": 8,
+          "last_event_sequence": 8,
+          "content_digest": "2fdc5c80bd794b5a1607c38fd4e9d05e1b35d24e46ccc2277753d3cf50b8daa5"
+        },
+        "events": [
+          {
+            "event_schema_version": "m1a-event-1",
+            "event_id": "EV-F-M1A-014-pause-12-0001",
+            "stream_id": "STREAM-M1A",
+            "sequence": 8,
+            "previous_event_digest": "dc0f02c40a9ea11760e09fa7c9467a4eb3a21e776decb20638c866a05fe3104f",
+            "logical_time": 9,
+            "command_id": "CMD-F-M1A-014-pause-12",
+            "command_digest": "c2ae5bcf12bd439b491792d2c78595b2b497f4e7de4b13f01531d78905b8a5c0",
+            "event_type": "EffectObservationRecorded",
+            "primary_record": {
+              "causation_id": "CMD-F-M1A-014-pause-12",
+              "content_digest": "d0c0b1521d2a1bd841ae78242402d3385d94779eb6fa9954e10d849dbb164859",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-FIXTURE",
+              "created_logical_time": 9,
+              "created_under_lease": null,
+              "id": "EFFECT-OBS-PAUSED",
+              "object_type": "effect-observation",
+              "payload": {
+                "dispatch_state": "dispatched",
+                "effect_id": "EFFECT-ID-PAUSED",
+                "effect_key": "EFFECT-SYNTHETIC",
+                "idempotency_key_digest": "2918d3a39661b502bd6ee5898d3ce32092efb2313665e3109e0cfb2470b482b1",
+                "observation": "observed-failure",
+                "provider_operation_id_digest": "fb2bdaaafd5ac4304f87ccd820ac7f6f59d1708e335da9416d66a9fe5ba9df86",
+                "quarantine": false,
+                "receipt_digest": "101cd019ef301729595f98690bec664516ac18f5074fa8be764cb350f3c6c34a",
+                "work_packet_ref": {
+                  "content_digest": "87dfcd9bf7ed5543317ce70f28b131f906f485faf9487697117383d7b8331944",
+                  "id": "PACKET-ec421341dea33a152e3732bb00622e93",
+                  "object_type": "work-packet",
+                  "version": 1
+                }
+              },
+              "schema_version": "m1a-effect-observation-1",
+              "version": 1
+            },
+            "related_records": [],
+            "state_delta_digest": "e427bfcbaa1eeb1c87d2dbb0d16a6eb513d9fb02698df921b3e44fbfea4ed9f2",
+            "content_digest": "a53b6e4752327ac9e226d4d6085a1cd162c4d015c45472088299dee877cfa2e7"
+          }
+        ]
+      },
+      "paused": {
+        "receipt": {
+          "receipt_schema_version": "m1a-receipt-1",
+          "receipt_id": "RCPT-F-M1A-014-pause-12",
+          "command_id": "CMD-F-M1A-014-pause-12",
+          "command_digest": "6fe3daaba12aef52bd441f7138be124c3b182ee11fcdf5d05667619806fd2778",
+          "disposition": "refused",
+          "primary_error": "E-PAUSED",
+          "related_errors": [],
+          "witness": null,
+          "state_before_digest": "94c269491e4c980a005c2095decffaa6a5ac6b924f5fb2f634f4feb450644673",
+          "state_after_digest": "94c269491e4c980a005c2095decffaa6a5ac6b924f5fb2f634f4feb450644673",
+          "event_ids": [],
+          "first_event_sequence": null,
+          "last_event_sequence": null,
+          "content_digest": "fa09699173d95d81ce6bc5c7bca78aa57e5a7806849709b106fdf73d9d4e9e4e"
+        },
+        "events": [],
+        "projection_unchanged": true,
+        "journal_growth": 1
+      },
+      "guard_mutant": {
+        "receipt": {
+          "receipt_schema_version": "m1a-receipt-1",
+          "receipt_id": "RCPT-F-M1A-014-pause-12",
+          "command_id": "CMD-F-M1A-014-pause-12",
+          "command_digest": "6fe3daaba12aef52bd441f7138be124c3b182ee11fcdf5d05667619806fd2778",
+          "disposition": "accepted",
+          "primary_error": null,
+          "related_errors": [],
+          "witness": null,
+          "state_before_digest": "94c269491e4c980a005c2095decffaa6a5ac6b924f5fb2f634f4feb450644673",
+          "state_after_digest": "d11c01e39d0f93617e2c25a318b5658a0e01171ec32a08c9ca78e13f58017e7d",
+          "event_ids": [
+            "EV-F-M1A-014-pause-12-0001"
+          ],
+          "first_event_sequence": 9,
+          "last_event_sequence": 9,
+          "content_digest": "282ae5849fcb4c54b87da150c05b3f4600601bd05ec881ea528b0ff2619484bf"
+        },
+        "events": [
+          {
+            "event_schema_version": "m1a-event-1",
+            "event_id": "EV-F-M1A-014-pause-12-0001",
+            "stream_id": "STREAM-M1A",
+            "sequence": 9,
+            "previous_event_digest": "9f82c3b8537c936a67c21b5b1a742e7330cfe1befdff60bcb87b4cee68b26acc",
+            "logical_time": 9,
+            "command_id": "CMD-F-M1A-014-pause-12",
+            "command_digest": "6fe3daaba12aef52bd441f7138be124c3b182ee11fcdf5d05667619806fd2778",
+            "event_type": "EffectObservationRecorded",
+            "primary_record": {
+              "causation_id": "CMD-F-M1A-014-pause-12",
+              "content_digest": "d0c0b1521d2a1bd841ae78242402d3385d94779eb6fa9954e10d849dbb164859",
+              "correlation_id": "CORR-M1A",
+              "created_by_actor_id": "KERNEL-FIXTURE",
+              "created_logical_time": 9,
+              "created_under_lease": null,
+              "id": "EFFECT-OBS-PAUSED",
+              "object_type": "effect-observation",
+              "payload": {
+                "dispatch_state": "dispatched",
+                "effect_id": "EFFECT-ID-PAUSED",
+                "effect_key": "EFFECT-SYNTHETIC",
+                "idempotency_key_digest": "2918d3a39661b502bd6ee5898d3ce32092efb2313665e3109e0cfb2470b482b1",
+                "observation": "observed-failure",
+                "provider_operation_id_digest": "fb2bdaaafd5ac4304f87ccd820ac7f6f59d1708e335da9416d66a9fe5ba9df86",
+                "quarantine": false,
+                "receipt_digest": "101cd019ef301729595f98690bec664516ac18f5074fa8be764cb350f3c6c34a",
+                "work_packet_ref": {
+                  "content_digest": "87dfcd9bf7ed5543317ce70f28b131f906f485faf9487697117383d7b8331944",
+                  "id": "PACKET-ec421341dea33a152e3732bb00622e93",
+                  "object_type": "work-packet",
+                  "version": 1
+                }
+              },
+              "schema_version": "m1a-effect-observation-1",
+              "version": 1
+            },
+            "related_records": [],
+            "state_delta_digest": "e427bfcbaa1eeb1c87d2dbb0d16a6eb513d9fb02698df921b3e44fbfea4ed9f2",
+            "content_digest": "a5a4a418952256cf1c2528996fc4778bfd1fb9c576497af1b45cbb2556326cfd"
+          }
+        ]
+      },
+      "duplicate_after_pause": {
+        "receipt": {
+          "receipt_schema_version": "m1a-receipt-1",
+          "receipt_id": "RCPT-F-M1A-014-pause-12",
+          "command_id": "CMD-F-M1A-014-pause-12",
+          "command_digest": "c2ae5bcf12bd439b491792d2c78595b2b497f4e7de4b13f01531d78905b8a5c0",
+          "disposition": "accepted",
+          "primary_error": null,
+          "related_errors": [],
+          "witness": null,
+          "state_before_digest": "2968c18550ac465e4cb26510e941fa5a7b6d2e785802de341299b9e6e565f08e",
+          "state_after_digest": "1760a8fd1b82b006ffb367a034a19143a113817c24a15fa4c958cf02d2b8cbe6",
+          "event_ids": [
+            "EV-F-M1A-014-pause-12-0001"
+          ],
+          "first_event_sequence": 8,
+          "last_event_sequence": 8,
+          "content_digest": "2fdc5c80bd794b5a1607c38fd4e9d05e1b35d24e46ccc2277753d3cf50b8daa5"
+        },
+        "events": [],
+        "projection_unchanged": true
+      },
+      "quarantine": {
+        "ambiguous_receipt": {
+          "receipt_schema_version": "m1a-receipt-1",
+          "receipt_id": "RCPT-F-M1A-014-pause-12",
+          "command_id": "CMD-F-M1A-014-pause-12",
+          "command_digest": "bafe3a186f153a12dbceb0345cfb6f21b40c5afb02fa9296487b8d55f310ed6f",
+          "disposition": "accepted",
+          "primary_error": null,
+          "related_errors": [],
+          "witness": null,
+          "state_before_digest": "2968c18550ac465e4cb26510e941fa5a7b6d2e785802de341299b9e6e565f08e",
+          "state_after_digest": "3cd33768418078d14b7cfb6ab5c26e846f587d65a4dedbe5b8bd65c6e9624392",
+          "event_ids": [
+            "EV-F-M1A-014-pause-12-0001"
+          ],
+          "first_event_sequence": 8,
+          "last_event_sequence": 8,
+          "content_digest": "b7bac17899312520a863fa41e7c797578f8c3ac4be266dc70090583ff9bfafd3"
+        },
+        "success_receipt": {
+          "receipt_schema_version": "m1a-receipt-1",
+          "receipt_id": "RCPT-EFFECT-LATE-SUCCESS",
+          "command_id": "CMD-EFFECT-LATE-SUCCESS",
+          "command_digest": "9b1447ce3a152939619750d564a4731a80f7861015c74f3b38eb3e2cc65c3866",
+          "disposition": "accepted",
+          "primary_error": null,
+          "related_errors": [],
+          "witness": null,
+          "state_before_digest": "3cd33768418078d14b7cfb6ab5c26e846f587d65a4dedbe5b8bd65c6e9624392",
+          "state_after_digest": "0ef4aa775f11ea9101bb5a3de6e8ddb7e27869d31bb664ec2847fb2edb2ebe71",
+          "event_ids": [
+            "EV-EFFECT-LATE-SUCCESS-0001"
+          ],
+          "first_event_sequence": 9,
+          "last_event_sequence": 9,
+          "content_digest": "c8b3698c23adc4594cabc66c6ab57560bc0430540c4132962fc053908fb23225"
+        },
+        "ambiguous_refs": [
+          {
+            "object_type": "effect-observation",
+            "id": "EFFECT-OBS-PAUSED",
+            "version": 1,
+            "content_digest": "b52900faa3900fc717d1bb164c6e061f388b5eb9aa370e3d3c53b680fa741bf0"
+          }
+        ],
+        "prior_object_states_preserved": true
+      }
+    }
+  },
+  "formal_freeze": false,
+  "full_comparison_complete": false,
+  "runtime_integration_support": false,
+  "live_provider_calls": 0,
+  "new_owner_questions": []
+}
