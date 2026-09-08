@@ -9,6 +9,7 @@ class Child:
     def __init__(self,campaign,case,role,args):
         self.c=campaign;self.case=case;self.role=role;self.id=f'child{len(campaign.children)+1}';self.q=queue.Queue();self.held=None;self.waited=False
         command=[sys.executable,'-X','utf8','-B',str(CODE/('authority.py' if role=='authority' else 'actor.py')),*args]
+        require(sum(p.p.poll() is None for p in campaign.children)<5,'live-child-admission-cap')
         self.p=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf8',creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0));campaign.children.append(self);campaign.event(case,{'kind':'spawn','child':self.id,'role':role,'pid':self.p.pid,'command':command})
         require(sum(p.p.poll() is None for p in campaign.children)<=5,'live-child-cap')
         def drain():
@@ -77,6 +78,8 @@ class Campaign:
     def pin(self,case,a,owner='reader-a',cut=None):
         s=self.state(case);return self.rpc(case,a,'pin',generation=s['selected'],expected_revision=s['revision'],owner=owner,actor_nonce=uuid.uuid4().hex,cut=cut)
     def reader(self,case,t,point='reader:pinned'):
+        if self.state(case)['pins'].get(t['pin'])!=t:
+            self.event(case,{'kind':'reader-admission-refusal','pin':t,'reason':'not-a-durable-pin'});return None
         p=case/(t['owner']+'-'+t['pin']+'.json');p.write_bytes(encode(t));a=Child(self,case,'reader',['reader','--root',str(case/'fixture'),'--ticket',str(p)]);a.until(phase=point);return a
     def finish_reader(self,case,a,t):
         a.resume(phase='reader:read');a.stop();self.note(case,'reader-exit',a.p.returncode,0)
@@ -112,11 +115,11 @@ class Campaign:
             elif name in ('stale_writer_cancel','publisher_death'):
                 w=self.claim(case,a);writer=self.writer(case,w)
                 if name=='publisher_death':writer.stop(kill=True)
-                self.rpc(case,a,'revoke_writer',writer=w,reason='controller-observed-death' if name=='publisher_death' else 'owner-cancel');w2=self.claim(case,a,'writer-b');writer2=self.writer(case,w2);self.note(case,'same-term-stale-permit',self.publish(case,a,w)['reason'],'stale-writer');self.note(case,'replacement-publisher',self.publish(case,a,w2)['status'],'ok');writer.stop();writer2.stop()
+                self.rpc(case,a,'revoke_writer',writer=w,reason='controller-observed-death' if name=='publisher_death' else 'controller-cancel');w2=self.claim(case,a,'writer-b');writer2=self.writer(case,w2);self.note(case,'same-term-stale-permit',self.publish(case,a,w)['reason'],'stale-writer');self.note(case,'replacement-publisher',self.publish(case,a,w2)['status'],'ok');writer.stop();writer2.stop()
             elif name in ('pin_staged_loss','pin_reply_loss'):
                 self.pin(case,a,cut='pin:staged' if name=='pin_staged_loss' else 'pin:committed');a=self.start_authority(case,instance);expected=0 if name=='pin_staged_loss' else 1;self.note(case,'pin-survives-only-commit',len(self.state(case)['pins']),expected)
                 if expected:
-                    t=next(iter(self.state(case)['pins'].values()));self.note(case,'orphan-pin-valid',self.rpc(case,a,'validate_pin',pin=t)['status'],'ok');self.release(case,a,t,reason='owner-cancel')
+                    t=next(iter(self.state(case)['pins'].values()));self.note(case,'orphan-pin-valid',self.rpc(case,a,'validate_pin',pin=t)['status'],'ok');self.release(case,a,t,reason='controller-cancel')
             elif name in ('publish_staged_loss','publish_reply_loss','retire_intent_loss','retire_partial_loss'):
                 w=self.claim(case,a);writer=self.writer(case,w)
                 if name.startswith('publish_'):
@@ -127,7 +130,14 @@ class Campaign:
             elif name=='lock_exclusion':
                 other=self.start_authority(case,instance);self.note(case,'second-authority-lock-refused',other.p.returncode,3);control=self.start_authority(case,instance,offset=1,lock_only=True);self.note(case,'wrong-offset-is-ineffective',control.held,'lock:held');control.stop();before=self.state(case)['boot'];a.stop(kill=True);a=self.start_authority(case,instance);self.note(case,'lock-reacquired-after-wait',self.state(case)['boot'],before+1)
             elif name=='negative_tokens':
-                t=self.pin(case,a)['pin'];bad=dict(t,owner='other');self.note(case,'wrong-holder-refused',self.rpc(case,a,'release_pin',pin=bad,reason='reader-complete')['reason'],'invalid-pin');bad=dict(t,instance='other');self.note(case,'transplanted-pin-refused',self.rpc(case,a,'validate_pin',pin=bad)['reason'],'invalid-pin');self.note(case,'duplicate-holder-refused',self.pin(case,a)['reason'],'duplicate-reader');self.release(case,a,t,reason='owner-cancel');self.note(case,'released-pin-refused',self.rpc(case,a,'validate_pin',pin=t)['reason'],'invalid-pin');w=self.claim(case,a);writer=self.writer(case,w);bad=dict(w,manifest_sha256='0'*64);self.note(case,'substituted-publisher-digest',self.publish(case,a,bad)['reason'],'stale-writer');bad=dict(w,parent_revision=99);self.note(case,'substituted-parent',self.publish(case,a,bad)['reason'],'stale-writer');self.note(case,'valid-publication',self.publish(case,a,w)['status'],'ok');writer.stop();self.note(case,'two-generation-backpressure',self.rpc(case,a,'claim',owner='extra',actor_nonce=uuid.uuid4().hex,expected_revision=1,manifest_sha256='0'*64)['reason'],'domain-generation-limit')
+                t=self.pin(case,a)['pin'];bad=dict(t,owner='other');self.note(case,'wrong-holder-refused',self.rpc(case,a,'release_pin',pin=bad,reason='reader-complete')['reason'],'invalid-pin');bad=dict(t,instance='other');self.note(case,'transplanted-pin-refused',self.rpc(case,a,'validate_pin',pin=bad)['reason'],'invalid-pin');self.note(case,'duplicate-holder-refused',self.pin(case,a)['reason'],'duplicate-reader');self.release(case,a,t,reason='controller-cancel');self.note(case,'released-pin-refused',self.rpc(case,a,'validate_pin',pin=t)['reason'],'invalid-pin');self.note(case,'released-reader-launch-refused',self.reader(case,t),None)
+                w=self.claim(case,a);writer=self.writer(case,w);bad=dict(w,manifest_sha256='0'*64);self.note(case,'substituted-publisher-digest',self.publish(case,a,bad)['reason'],'stale-writer');bad=dict(w,parent_revision=99);self.note(case,'substituted-parent',self.publish(case,a,bad)['reason'],'stale-writer')
+                for member,reason in [('snapshot.json','generation-content'),('event3.json','generation-membership')]:
+                    target=case/'fixture/store'/w['directory']/member;original=target.read_bytes()
+                    if member=='snapshot.json':target.write_bytes(b'{}')
+                    else:target.unlink()
+                    self.event(case,{'kind':'injected-stage-fault','path':target.relative_to(case/'fixture').as_posix(),'original_sha256':sha(original),'fault':'corrupt' if member=='snapshot.json' else 'missing'});self.snapshot(case,'stage-fault');self.note(case,'valid-permit-rejects-'+member,self.publish(case,a,w)['reason'],reason);self.note(case,'fault-preserves-selection',self.state(case)['selected'],1);target.write_bytes(original);self.event(case,{'kind':'restored-stage-fault','path':target.relative_to(case/'fixture').as_posix(),'sha256':sha(original)});self.snapshot(case,'stage-restored')
+                self.note(case,'valid-publication',self.publish(case,a,w)['status'],'ok');writer.stop();fresh=self.pin(case,a,'reader-current')['pin'];current_reader=self.reader(case,fresh);self.note(case,'current-reader-allows-old-reclaim',self.rpc(case,a,'reclaim')['status'],'ok');self.finish_reader(case,current_reader,fresh);self.release(case,a,fresh,current_reader);self.note(case,'two-generation-backpressure',self.rpc(case,a,'claim',owner='extra',actor_nonce=uuid.uuid4().hex,expected_revision=1,manifest_sha256='0'*64)['reason'],'domain-generation-limit')
             a.stop();self.snapshot(case,'final');row={'case':case.name,'policy':policy,'unit':unit,'schedule':name,'checks':[{'name':e['name'],'value':e['actual']} for e in self.journals[case.name] if e['kind']=='assertion'],'final_selected':self.state(case)['selected'],'final_old_status':self.state(case)['generations']['1']['status']};self.rows.append(row);(case/'result.json').write_bytes(encode(row))
         finally:
             for child in self.children:

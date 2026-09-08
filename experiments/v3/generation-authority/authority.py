@@ -40,7 +40,7 @@ class Authority:
         if op in ('publish','revoke_writer'):
             require(s['writer'] is not None and r['writer']==s['writer'],'stale-writer')
             if op=='revoke_writer':
-                require(r['reason'] in ('owner-cancel','controller-observed-death'),'revocation-reason');s['writer']=None;s['draining']=False;self.commit(s,'revoke_writer');return {'status':'ok'}
+                require(r['reason'] in ('controller-cancel','controller-observed-death'),'revocation-reason');s['writer']=None;s['draining']=False;self.commit(s,'revoke_writer');return {'status':'ok'}
             require(s['writer']['parent_revision']==s['revision'] and s['writer']['boot']==s['boot'],'stale-parent')
             verify(self.root/'store',dict(s['writer'],unit=s['unit']))
             if s['policy']=='drain-before-publish' and s['pins']:
@@ -52,7 +52,7 @@ class Authority:
         if op in ('validate_pin','release_pin'):
             p=r['pin'];require(s['pins'].get(p.get('pin'))==p,'invalid-pin')
             if op=='validate_pin':return {'status':'ok','pin':p}
-            require(r['reason'] in ('reader-complete','owner-cancel','controller-observed-death'),'release-reason');del s['pins'][p['pin']];self.commit(s,'release_pin');return {'status':'ok'}
+            require(r['reason'] in ('reader-complete','controller-cancel','controller-observed-death'),'release-reason');del s['pins'][p['pin']];self.commit(s,'release_pin');return {'status':'ok'}
         if op=='reclaim':
             require(s['selected']==2,'cannot-reclaim-current');require(not any(p['generation']==1 for p in s['pins'].values()),'generation-pinned')
             if s['generations']['1']['status']=='removed':return {'status':'ok','already_removed':True}

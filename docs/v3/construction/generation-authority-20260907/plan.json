@@ -1,5 +1,5 @@
 {
-  "status": "preregistered-before-first-execution",
+  "status": "revised-preregistration-before-expanded-execution",
   "start_commit": "04b664c58bddb72674d297f4bcf4bef5435bda0f",
   "policies": [
     "drain-before-publish",
@@ -56,5 +56,12 @@
   "publisher_staging": "One unique directory per boot/permit serial; stale staged candidates cannot overwrite the selected directory by naming the same generation. Cooperating staged workers stop writing before proposing publication; no OS-ACL or malicious-writer guarantee.",
   "recovery": "Restart advances writer term and preserves durable pins. Commit-before-reply is authoritative, not the reply. Interrupted retiring state resumes deletion of the explicit g1 file list; lock file is stable and separate.",
   "lock": "Precreated one-byte stable file; offset0 LK_NBLCK exclusion with at most0.5 seconds bounded EACCES retry, not arbitrary OSError retry. Offset1 lock-only helper is an explicitly ineffective exclusion control; no lock file replacement/deletion.",
-  "source_scope": "Existing CPython3.12.10/Windows/NTFS, no installations/providers/config changes. Runtime and source bytes are prospectively admitted."
+  "source_scope": "Existing CPython3.12.10/Windows/NTFS, no installations/providers/config changes. Runtime and source bytes are prospectively admitted.",
+  "additional_controls": [
+    "After publication admit a real g2 reader; reclaim g1 while g2 pin remains live; complete g2 read",
+    "Valid unchanged permit plus corrupt snapshot or missing event must refuse publication without changing selection; restore actual bytes then succeed",
+    "Controller refuses launching a released pin; issuer refuses changed holder and instance",
+    "Child capacity checked before spawn; fixture code inspected for no network/provider operations, no audit sandbox claimed"
+  ],
+  "controller_boundary": "Trusted private controller mediates reader launch and lifetime: it checks durable pin before launch and waits an owned reader before completed/death release. Authority validates token/state and trusts caller release reason; raw actors do not independently authenticate tickets. Administrative cancel does not claim reader death."
 }

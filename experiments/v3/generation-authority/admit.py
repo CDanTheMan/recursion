@@ -26,7 +26,7 @@ def execute(directory):
         if raw.replace(b'\r\n',b'\n')!=blob.replace(b'\r\n',b'\n'):raise ValueError('source differs from commit')
         dest=directory/'source'/path;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(raw);rows.append({'path':path,'working_sha256':sha(raw),'git_blob_sha256':sha(blob)})
     command=[sys.executable,'-X','utf8','-B',CODE+'experiment.py','--output',str(directory/'cases')]
-    admission={'status':'admitted-before-execution','started_at':now(),'source_commit':source,'source_files':rows,'command':command,'host':host(),'limits':LIMITS,'new_metered_spend':0,'network':'helper audit hook denies socket/subprocess/system events; synthetic parent performs no network operation; not OS isolation','cleanup':'Retain forensic fixture files; wait all owned child handles; no service.'};save(directory/'admission.json',admission)
+    admission={'status':'admitted-before-execution','started_at':now(),'source_commit':source,'source_files':rows,'command':command,'host':host(),'limits':LIMITS,'new_metered_spend':0,'network':'No network/provider calls are present in inspected probe code; no OS or Python audit sandbox is claimed.','cleanup':'Retain forensic fixture files; wait all owned child handles; no service.'};save(directory/'admission.json',admission)
     execution={'status':'started','started_at':now()};save(directory/'execution.json',execution)
     with (directory/'stdout.txt').open('w',encoding='utf8') as output:
         try:r=subprocess.run(command,cwd=ROOT,stdout=output,stderr=subprocess.STDOUT,timeout=650);execution.update(status='finished',exit_code=r.returncode)
