@@ -70,3 +70,23 @@ The new historical-command harness allows600seconds per frozen gate because imme
 predecessor working gate tookabout280seconds; historical scripts/commands unchanged.
 No full formal freeze, common-writer migration, physical persistence/receiver recovery,
 general rights coupling, live runtime integration or unbounded liveness claim follows.
+
+Construction review refinement before run02: run01 exhausts its declared graphs but
+fails the duplicate-mutation detector on a legitimate first observation; no pass claimed.
+Validate signed attempt mapping against actual ordered original starts and reservation
+attempt, and typed source version against original prefix/full-cut extension. Negative
+cases include wrong/empty mapping, negative version and bool/int version alias. A valid
+MAC alone does not make these semantic fields authoritative. The third relation checks
+them independently, including the concrete wrong-attempt A-release/B-admission probe.
+
+Each modeled observation now invokes the actual immutable M1A kernel with that joined
+cut's exact effect-observation payload. Runtime record metadata is resealed at synthetic
+logical time20 and synthetic candidate authority, preserving original retained record
+identity separately; expected-state envelopes change under literal apply-pause. Compare
+real receipt/events/projection/refusal journal for running/paused/duplicate/conflict.
+This is a finite fixture correspondence, not an operational M1A/M1C migration bridge.
+
+Current settlement authority in this product means modeled system reconciliation with
+current-immediate PAUSE running, independently checked cut/ownership and quarantine.
+Worker goal/lease/process/Stop tokens do not authorize it and do not independently block
+safe system settlement; authenticated current common-writer proof remains a residual.

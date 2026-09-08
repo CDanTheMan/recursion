@@ -34,7 +34,7 @@ def add(name,steps,core=(),outcomes=OUTCOMES):
 add('pause-before-reserve',['pause','admitA','intent','send','admitB'])
 add('pause-before-permit',['admitA','intent','pause','send','admitB'])
 add('issued-before-pause',['admitA','intent','send','pause','remote','lose','query']+CUT('terminal')+['observe','reconcile','admitB'])
-for name in ('success','failure','late-receipt','conflict','prior-unresolved','later-unresolved','later-start-only','stale-paused','missing-original','contradictory','omitted','reordered','bad-mac','wrong-role','foreign','foreign-attempt','generic-failure'):
+for name in ('success','failure','late-receipt','conflict','prior-unresolved','later-unresolved','later-start-only','stale-paused','missing-original','contradictory','omitted','reordered','bad-mac','wrong-role','foreign','foreign-attempt','generic-failure','bad-attempt-map','missing-attempt-map','bad-source-version','bool-source-version'):
  add('cut-'+name,SETUP+CUT(name)+['reconcile','admitB'],outcomes=(2,) if name in ('failure','generic-failure') else (1,))
 add('paused-observation',SETUP+CUT('terminal')+['pause','observe','classify','reconcile','admitB'])
 add('duplicate-before-pause',SETUP+CUT('terminal')+['observe','pause','observe','observe-conflict','reconcile'])

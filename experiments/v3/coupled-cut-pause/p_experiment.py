@@ -64,7 +64,8 @@ def hazard(m,s,k,n):
  if m in ('cut-freshness','cut-hold','quarantine','nonexecution','pause-settle'):return k=='reconcile' and n['reserved'][0]<s['reserved'][0]
  if m=='pause-admission':return s['paused'] and n['reserved']!=s['reserved']
  if m=='pause-permit':return s['paused'] and n['sent']>s['sent']
- if m in ('pause-observation','duplicate-observation','classification-write'):return n['runtime_observations']>s['runtime_observations']
+ if m=='duplicate-observation':return bool(s['observation_receipt']) and n['runtime_observations']>s['runtime_observations']
+ if m in ('pause-observation','classification-write'):return n['runtime_observations']>s['runtime_observations']
  return predecessor.hazard(m,s,k,n)
 
 def mutant(m,u='event',outcome=2):
