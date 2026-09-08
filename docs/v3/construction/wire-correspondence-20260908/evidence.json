@@ -142,5 +142,13 @@
   ],
   "formal_freeze": false,
   "new_owner_questions": [],
-  "superseded_candidate_validations": []
+  "superseded_candidate_validations": [
+    {
+      "candidate": "54510f006d794227e4bc86404a1dca5d75d6cb6b",
+      "disposition": "superseded-not-a-pass",
+      "files": {
+        "working-attempt.json": "2ea4b13badf7ffd451bb387dd8ec1ecc757b31cc3b9e6d9b0fb0bb32d4ce76ab"
+      }
+    }
+  ]
 }

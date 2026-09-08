@@ -1,7 +1,7 @@
 # SC-WIRE-02 research — 2026-09-08
 
-Primary sources: immutable [M1B wire profile](../../../M1B-WIRE-PROFILE.md),
-[execution contracts](../../../M1B-EXECUTION-CONTRACTS.md), frozen execution oracle
+Primary sources: immutable [M1B wire profile](../../M1B-WIRE-PROFILE.md),
+[execution contracts](../../M1B-EXECUTION-CONTRACTS.md), frozen execution oracle
 and schema/strict decoder; prior reset-mapping, flow-recovery-integration and shared
 composition sources in manifest.json. Read-only independent challenge confirmed:
 GAP is a WELCOME-established retention fact; WELCOME advances wire cursor before
