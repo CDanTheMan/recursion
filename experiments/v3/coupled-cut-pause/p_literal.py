@@ -52,7 +52,7 @@ def controls():
  # The shared oracle is independently challenged by a projection from complete original records.
  for n in cases.EXPECTED:
   x=fixture(n);r=rows[n]['joined'];exact=copy.deepcopy(x['original']['cut']['trace_header']);exact['observations']=x['original']['records'];exact.update({k:x['original']['cut']['assessment'][k] for k in ('current_admission_epoch','current_fence_epoch')});ec.require(r['trace']==exact,'independent full original trace')
- return {'cases':rows,'inputs':{n:fixture(n) for n in NAMES},'literal_pause':old.literal_controls(),'coupled_observations':{n+'/'+str(paused)+'/'+str(duplicate):observation(n,paused,n if duplicate else '') for n in cases.EXPECTED for paused in (False,True) for duplicate in (False,True)},'keys':'Public synthetic fixture keys only; not operational credentials','production_authentication':False}
+ return {'cases':rows,'inputs':{n:fixture(n) for n in NAMES},'literal_pause':old.literal_controls(),'coupled_observations':{n+'/'+str(paused)+'/'+str(duplicate):observation(n,paused,n if duplicate else '') for n in cases.EXPECTED for paused in (False,True) for duplicate in (False,True)},'coupled_pause_guard_mutants':{n:observation(n,True,remove_pause=True) for n in cases.EXPECTED},'keys':'Public synthetic fixture keys only; not operational credentials','production_authentication':False}
 
 @functools.lru_cache(None)
 def observation(name,paused,previous='',conflict=False,remove_pause=False):
@@ -65,16 +65,23 @@ def observation(name,paused,previous='',conflict=False,remove_pause=False):
     original_current=copy.deepcopy(current)
     if previous:
         prior,pa=command(previous);state,events,receipt,journal=ec.kernel.admit(state,state['content_digest'],prior,pa,policies,journal)
-        ec.require(receipt['disposition']=='accepted' and len(events)==1,'coupled prior observation admitted')
+        ec.require(receipt['disposition']=='accepted' and len(events)==1,'coupled prior observation admitted');prior_receipt=copy.deepcopy(receipt)
     if paused:
         pc,pa=old.authorized(fixture,fixture['commands'][0],state,30)
         state,events,receipt,journal=ec.kernel.admit(state,state['content_digest'],pc,pa,policies,journal)
         ec.require(receipt['disposition']=='accepted','coupled literal apply-pause')
-    current=ec.rebind(current,state);before=copy.deepcopy(state);prior_journal=len(journal);guard=ec.contracts.PAUSE_SENSITIVE
+    if not previous:current=ec.rebind(current,state)
+    before=copy.deepcopy(state);prior_journal=len(journal);guard=ec.contracts.PAUSE_SENSITIVE
     try:
         if remove_pause:ec.contracts.PAUSE_SENSITIVE=guard-{'record-effect-observation'}
         after,events,receipt,newjournal=ec.kernel.admit(state,state['content_digest'],current,authorities,policies,journal)
     finally:ec.contracts.PAUSE_SENSITIVE=guard
+    ec.require(len(newjournal)==prior_journal+1,'literal receipt journal includes duplicate awareness')
+    if previous and not conflict and globals()['fixture'](previous)['original']['cut']['context']['observation']['payload']==globals()['fixture'](name)['original']['cut']['context']['observation']['payload']:
+        ec.require(receipt==prior_receipt and not events and after==before,'exact duplicate returns original receipt without event')
+    elif previous:ec.require(receipt['primary_error']=='E-IDEMPOTENCY-CONFLICT' and not events and after==before,'literal command conflict')
+    elif paused and not remove_pause:ec.require(receipt['primary_error']=='E-PAUSED' and not events and after==before,'literal same joined observation pause refusal')
+    else:ec.require(receipt['disposition']=='accepted' and len(events)==1 and after!=before,'literal same joined observation admitted')
     source=globals()['fixture'](name)['original']['cut']['context']['observation']
     ec.require(original_current['payload']==current['payload'],'otherwise identical running/paused command payload')
     if not conflict:ec.require(source['payload']==current['payload']['payload'],'actual joined observation payload preserved')

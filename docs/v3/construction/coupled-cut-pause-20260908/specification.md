@@ -90,3 +90,11 @@ Current settlement authority in this product means modeled system reconciliation
 current-immediate PAUSE running, independently checked cut/ownership and quarantine.
 Worker goal/lease/process/Stop tokens do not authorize it and do not independently block
 safe system settlement; authenticated current common-writer proof remains a residual.
+
+Construction refinement before run03: run02 fails actual nominal duplicate correspondence.
+Preserve the EXACT original accepted command envelope when replaying; rebind only fresh
+commands. Frozen M1A appends a duplicate awareness receipt to its journal even though it
+returns the original receipt with no new canonical event/projection change. Model that
+receipt journal separately from refusal-only counts and runtime event count. Require
+all44 joined-source running/paused/duplicate controls and11 actual in-memory removed-PAUSE
+controls to assert their outcomes, rather than merely record them. No M1 file is edited.

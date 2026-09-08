@@ -17,7 +17,7 @@ def facts(name):
  return dict(accepted=name not in NEGATIVE and mapping_ok and version_ok,binding=tuple(body['reservation']),status=current,hold=bool(pending) or current=='ambiguous',reasons=reasons,version=body['source_version'],nonexecution=source=='failure' and name!='generic-failure',payload=x['original']['cut']['context']['observation']['content_digest'],quarantine=x['original']['cut']['context']['observation']['payload']['quarantine'])
 def initialization(s,u):
  base.initialization(d.project(s),u)
- expected=dict(paused=False,pause_epoch=('pause','owner','runtime-admission',1),plan_accepted=True,cut_offer='',cut_delivery='',cut_received='',joined_cut='',classified_cut='',source_version=1,cut_status='',cut_hold=True,runtime_observations=0,observation_receipt='',observation_payload='',refusal_journal=0,canonical_quarantine=False,nonexecution=False)
+ expected=dict(paused=False,pause_epoch=('pause','owner','runtime-admission',1),plan_accepted=True,cut_offer='',cut_delivery='',cut_received='',joined_cut='',classified_cut='',source_version=1,cut_status='',cut_hold=True,runtime_observations=0,observation_receipt='',observation_payload='',refusal_journal=0,receipt_journal=0,canonical_quarantine=False,nonexecution=False)
  d.require({k:s[k] for k in d.EXTRA}==expected,'complete independent extension initialization');invariant(s)
 def invariant(s):
  base.invariant(d.project(s));d.require(s['source_version'] in (1,2) and type(s['paused']) is bool,'cut/admission types')
@@ -58,6 +58,7 @@ def check(s,a,n,p,u,outcome):
  elif k in ('observe','observe-conflict'):
   if not s['joined_cut']:reason='unjoined'
   else:
+   changes['receipt_journal']=s['receipt_journal']+1
    f=facts(s['joined_cut']);payload=f['payload']+('changed' if k=='observe-conflict' else '')
    if s['observation_receipt'] and s['observation_payload']!=payload:reason='E-IDEMPOTENCY-CONFLICT';changes['refusal_journal']=s['refusal_journal']+1
    elif s['observation_receipt']:reason='duplicate'
@@ -81,7 +82,7 @@ def check(s,a,n,p,u,outcome):
   expected=copy.deepcopy(s);expected.update(changes,done=s['done']|(1<<p['actions'].index(a)),decision=k+':'+reason);d.require(n==expected,'complete independent extension postcondition '+k)
  invariant(n)
  if k in ('classify','join-cut','cut-deliver','cut-receive') or k.startswith('cut:'):
-  for field in ('free','reserved','consumed','revision','runtime_observations','canonical_quarantine','sent'):d.require(n[field]==s[field],'pure retained evidence cannot authorize write '+field)
+  for field in ('free','reserved','consumed','revision','runtime_observations','receipt_journal','canonical_quarantine','sent'):d.require(n[field]==s[field],'pure retained evidence cannot authorize write '+field)
  if s['canonical_quarantine']:d.require(n['canonical_quarantine'],'canonical quarantine is not cleared by evidence')
  if n['reserved'][0]<s['reserved'][0]:d.require(not s['paused'] and not s['cut_hold'] and not s['canonical_quarantine'] and s['classified_cut'] and facts(s['classified_cut'])['version']==s['source_version'],'settlement independent current-cut authority')
  if s['paused']:d.require(n['runtime_observations']==s['runtime_observations'] and n['sent']==s['sent'],'PAUSE closes new runtime writes and permits')
@@ -91,6 +92,7 @@ def check(s,a,n,p,u,outcome):
   previous=next((name for name in lit.NAMES if lit.fixture(name)['original']['cut']['context']['observation']['content_digest']==s['observation_payload']), '') if s['observation_receipt'] else ''
   actual=lit.observation(s['joined_cut'],s['paused'],previous,k=='observe-conflict')
   d.require(len(actual['events'])==n['runtime_observations']-s['runtime_observations'],'actual joined observation event count')
+  d.require(actual['journal_growth']==n['receipt_journal']-s['receipt_journal']==1,'literal receipt journal includes exact duplicates')
   if n['decision'].endswith('E-PAUSED'):d.require(actual['receipt']['primary_error']=='E-PAUSED' and actual['projection_unchanged'] and actual['journal_growth']==1,'actual otherwise-valid joined PAUSE refusal')
   elif n['decision'].endswith('E-IDEMPOTENCY-CONFLICT'):d.require(actual['receipt']['primary_error']=='E-IDEMPOTENCY-CONFLICT' and actual['projection_unchanged'],'actual same command payload conflict')
   else:d.require(actual['receipt']['disposition']=='accepted','actual joined observation/duplicate admitted')

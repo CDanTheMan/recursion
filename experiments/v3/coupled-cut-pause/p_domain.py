@@ -5,10 +5,10 @@ sys.path.insert(0,str(ROOT/'experiments/v3/coupled-construction'))
 import c_domain as base
 from c_domain import canonical,require,ready_actions,sequence,UNITS,OUTCOMES,COSTS,EVENTS,GRANTS,QUEUE_EVENTS,QUEUE_BYTES,CHANNEL,INFLIGHT,RETAINED,FRAME,TOKENS,SCHEMA,evaluate,REQUESTS
 import p_literal as lit
-EXTRA=('paused','pause_epoch','plan_accepted','cut_offer','cut_delivery','cut_received','joined_cut','classified_cut','source_version','cut_status','cut_hold','runtime_observations','observation_receipt','observation_payload','refusal_journal','canonical_quarantine','nonexecution')
+EXTRA=('paused','pause_epoch','plan_accepted','cut_offer','cut_delivery','cut_received','joined_cut','classified_cut','source_version','cut_status','cut_hold','runtime_observations','observation_receipt','observation_payload','refusal_journal','receipt_journal','canonical_quarantine','nonexecution')
 BASE_FIELDS=base.AUTH+base.FLOW+base.VIEW
 AUTH=base.AUTH+EXTRA;FLOW=base.FLOW;VIEW=base.VIEW;Split=base.Split
-DEFAULTS=dict(paused=False,pause_epoch=('pause','owner','runtime-admission',1),plan_accepted=True,cut_offer='',cut_delivery='',cut_received='',joined_cut='',classified_cut='',source_version=1,cut_status='',cut_hold=True,runtime_observations=0,observation_receipt='',observation_payload='',refusal_journal=0,canonical_quarantine=False,nonexecution=False)
+DEFAULTS=dict(paused=False,pause_epoch=('pause','owner','runtime-admission',1),plan_accepted=True,cut_offer='',cut_delivery='',cut_received='',joined_cut='',classified_cut='',source_version=1,cut_status='',cut_hold=True,runtime_observations=0,observation_receipt='',observation_payload='',refusal_journal=0,receipt_journal=0,canonical_quarantine=False,nonexecution=False)
 def initial(u):return dict(base.initial(u),**copy.deepcopy(DEFAULTS))
 def project(s):return {k:s[k] for k in BASE_FIELDS}
 def split(s):return Split(*({k:s[k] for k in names} for names in (AUTH,FLOW,VIEW)))

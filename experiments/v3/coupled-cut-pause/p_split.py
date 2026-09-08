@@ -37,6 +37,7 @@ def step(state,action,profile,unit,outcome):
  elif k=='observe' or k=='observe-conflict':
   if s['joined_cut']=='':decision='unjoined'
   else:
+   au['receipt_journal']+=1
    value=lit.evaluate(s['joined_cut'])['joined']['observation_digest']
    if k=='observe-conflict':value+='changed'
    if s['observation_receipt']!='':

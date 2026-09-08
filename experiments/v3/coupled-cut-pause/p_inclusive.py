@@ -41,6 +41,7 @@ def step(s,a,p,u,outcome,mutant=None):
  elif k in ('observe','observe-conflict'):
   if not s['joined_cut']:deny('unjoined')
   else:
+   n['receipt_journal']+=1
    payload=lit.evaluate(s['joined_cut'])['joined']['observation_digest']+('changed' if k=='observe-conflict' else '')
    if s['observation_receipt'] and payload!=s['observation_payload']:deny('E-IDEMPOTENCY-CONFLICT');n['refusal_journal']+=1
    elif s['observation_receipt']:
