@@ -1,7 +1,7 @@
 {
   "status": "literal-effect-evidence-pass",
   "classification": "locally observed",
-  "case_count": 55,
+  "case_count": 60,
   "positive": {
     "success": {
       "type": "RestrictedEffectJoinResult@1",
@@ -555,6 +555,31 @@
       "name": "dispatch-start-bool",
       "stage": "join",
       "detail": "original-starts"
+    },
+    {
+      "name": "cut-collector-bool",
+      "stage": "join",
+      "detail": "cut-identity-profile"
+    },
+    {
+      "name": "cut-dispatch-bool",
+      "stage": "join",
+      "detail": "original-dispatch-binding"
+    },
+    {
+      "name": "cut-evidence-bool",
+      "stage": "join",
+      "detail": "ordered-envelope"
+    },
+    {
+      "name": "cut-empty",
+      "stage": "join",
+      "detail": "cut-identity-profile"
+    },
+    {
+      "name": "cut-bool-alias",
+      "stage": "join",
+      "detail": "cut-identity-profile"
     },
     {
       "name": "inventory-omission-control",

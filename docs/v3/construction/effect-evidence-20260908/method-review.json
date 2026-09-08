@@ -14,7 +14,8 @@
     "Exact positive reason sets and bool/int supplemental-type controls",
     "Unsettled-start diagnostic separate from literal M1C status",
     "No canonical quarantine clearing inferred from late settlement",
-    "Exact contract review rejected 0a46def after reproducing separately signed bool/int aliases; canonical-byte equality plus three targeted negatives repaired the issue"
+    "Exact contract review rejected 0a46def after reproducing separately signed bool/int aliases; canonical-byte equality plus three targeted negatives repaired the issue",
+    "Exact gate review rejected a01def after reproducing signed cut-ID bool/int aliases; declared string profile and five targeted negatives repaired the remaining identity boundary"
   ],
   "coverage_disposition": "Partial support for traces13/14/15; all six obligations and27 trace rows preserved",
   "new_owner_questions": []

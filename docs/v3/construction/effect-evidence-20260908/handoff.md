@@ -70,7 +70,7 @@ clear canonical quarantine or release an unrelated attempt's resource reservatio
 
 ## Evidence and validation
 
-Accepted run04 executes55 bounded checks:11 positive evidence cuts,36 rejected
+Accepted run05 executes60 bounded checks:11 positive evidence cuts,41 rejected
 joins,3 adapter mutants and5 literal control groups. Results are **locally observed
 synthetic fixture behavior**. They do not measure real provider support, workflow
 performance, distributed durability, operational authentication or end-user quality.
@@ -81,7 +81,7 @@ common author remains a possible shared-error source despite independent review.
 Retain every admitted attempt: run01 failed on the test's nonexistent `error_code`
 field; run02 passed the earlier narrow tests but is superseded by context/type and
 unsettled-start corrections; run03 is also superseded after exact review found bool/int aliases across separately
-signed dispatch records; run04 is accepted. A read-only setup inspection also
+signed dispatch records; run04 is superseded by cut-ID type controls; run05 is accepted. A read-only setup inspection also
 initially used `state_digest` instead of `content_digest`; it produced no campaign
 result and was corrected before the admitted tests. Raw sources, synthetic input
 bundles, test-only keys, stdout/stderr, execution outcomes and hashes remain under
@@ -95,6 +95,13 @@ hash-bound in evidence.json. All eight frozen worktrees remained clean. It has n
 complete gate pass. Canonical-byte dispatch comparisons and three targeted controls
 were committed before run04. The repaired candidate requires fresh exact reviews
 and two full gates; no earlier conditional approval transfers.
+
+Candidate `a01def82039373cebd037bf9cf4b5f9887c51b0f` was likewise withheld after
+the other exact reviewer reproduced collector cut_id=true joining dispatcher and
+evidence cut_id=1. Its owned gate tree was stopped and all reported PIDs were
+confirmed absent. Partial evidence and review dispositions remain hash-bound. The
+new string cut-ID profile and five targeted controls were committed before run05.
+Both superseded candidates have no complete gate pass; neither approval transfers.
 
 Prospective admissions freeze committed source bytes, original fixtures, schema,
 oracle, Python/OS identity and installed jsonschema version. One process performs

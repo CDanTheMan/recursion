@@ -108,9 +108,12 @@ def claims(e):
     for r in e['claims']:require(r['state']=='locally observed' and '| '+r['id']+' | '+r['statement']+' | locally observed |' in ledger and r['canonical'] in CANONICAL and r['id'] in (ROOT/r['canonical']).read_text(encoding='utf-8'),'claim provenance')
 def evidence(e,expected):
     require(e['start_commit']==BASE and e['formal_freeze'] is False and e['new_owner_questions']==[] and e['semantic_sha256']==sha(canonical(expected).encode()),'evidence scope')
-    superseded=e['superseded_candidate_validation'];require(superseded['candidate']=='0a46def3c9fd9e2df37d03d34e9ac8ae2689b1ef' and superseded['disposition']=='aborted-after-exact-review-not-a-pass','superseded validation disposition')
-    old=bound(cache(),superseded['candidate']);require({p.relative_to(old).as_posix():sha(p.read_bytes()) for p in old.rglob('*') if p.is_file()}==superseded['files'],'superseded validation retention')
-    require(load(old/'aborted-gate.json')['status']=='superseded-gate-aborted-not-pass','aborted gate status')
+    superseded=e['superseded_candidate_validations']
+    require(len(superseded)==2 and {v['candidate'] for v in superseded}=={'0a46def3c9fd9e2df37d03d34e9ac8ae2689b1ef','a01def82039373cebd037bf9cf4b5f9887c51b0f'},'superseded validation closure')
+    for record in superseded:
+        require(record['disposition']=='aborted-after-exact-review-not-a-pass','superseded validation disposition')
+        old=bound(cache(),record['candidate']);require({p.relative_to(old).as_posix():sha(p.read_bytes()) for p in old.rglob('*') if p.is_file()}==record['files'],'superseded validation retention')
+        require(load(old/'aborted-gate.json')['status']=='superseded-gate-aborted-not-pass','aborted gate status')
     rows=e['retained_runs'];all_dirs={d.name for d in (cache()/'discovery').iterdir() if d.is_dir() and (d/'admission.json').exists()}
     require(len(rows)==len(all_dirs) and {r['id'] for r in rows}==all_dirs,'all attempts retained');count=0
     for row in rows:
@@ -138,7 +141,7 @@ def adversarial(actual,a,x,directory):
         elif change=='bad-source':bad['accepted_source_commit']='0'*40
         else:bad['claims'][0]['state']='measured'
         reject(lambda v:evidence(v,actual),bad);labels.append('evidence/'+change)
-    bad=copy.deepcopy(read('evidence.json'));bad['superseded_candidate_validation']['files']['aborted-gate.json']='0'*64;reject(lambda v:evidence(v,actual),bad);labels.append('evidence/erase-aborted-validation')
+    bad=copy.deepcopy(read('evidence.json'));bad['superseded_candidate_validations'][0]['files']['aborted-gate.json']='0'*64;reject(lambda v:evidence(v,actual),bad);labels.append('evidence/erase-aborted-validation')
     for change in ('missing-source','command','host','time','limit'):
         bad=copy.deepcopy(a)
         if change=='missing-source':bad['sources'].pop(next(iter(bad['sources'])))
