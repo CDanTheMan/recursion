@@ -47,6 +47,7 @@ def sequence(*actions, source=1):
     return profile(actions,(actions,),source)
 
 PROFILES = {
+ 'free-reservation-core': profile(('transfer_debit','transfer_install','reserve0','reserve1','intent0','send0','accept0','lose0','restart','quota_reset','capture','copy','install','resend0')),
  'free-admission': profile(('read0','read1','reserve0','reserve1','duplicate0','duplicate1','restart','quota_reset')),
  'stale-read-race': sequence('read0','read1','reserve0','reserve1'),
  'lost-receipt-restart': sequence('transfer_debit','transfer_install','reserve0','intent0','send0','accept0','lose0','restart','duplicate0','resend0','reserve1'),

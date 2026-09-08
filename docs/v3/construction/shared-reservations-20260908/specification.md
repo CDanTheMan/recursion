@@ -124,3 +124,5 @@ integration, recipient relocation/retirement, general ownership reassignment,
 physical persistence and unbounded liveness remain unproved. No language/store/
 framework selection, installations, providers, spend/reset credits, operational
 configuration changes, deployment or merge.
+
+Prospective revision2 after run-01: add free-reservation-core with14 unordered one-shot actions spanning admission, intent, send, acceptance, loss, restart, quota, snapshot and transfer. Run-01 remains retained preliminary evidence; this additional profile is declared before its run. Only actual guards restrict its interleavings. It does not import the original complete core/cross product.

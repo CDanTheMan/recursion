@@ -36,7 +36,7 @@ def witness_check(name,design,w):
     if name in ('free-admission','stale-read-race'):
         if design=='central':audit.require(s['reserved']==(6,0) and events['reserve1']['label']=='reserve1=denied','original central6+6 schedule')
         else:audit.require(s['reserved']==(0,0),'initial5/5 rights cannot serve six')
-    elif name in ('lost-receipt-restart','owner-and-identity','snapshot-uncertainty','local-lifetime','pin-and-reservation'):
+    elif name in ('free-reservation-core','lost-receipt-restart','owner-and-identity','snapshot-uncertainty','local-lifetime','pin-and-reservation'):
         audit.require(s['reserved']==(6,0) and s['sent']==(1,0) and s['receipt']==(0,0) and s['classification']==(0,0),'same unknown operation reservation survives')
         if 'resend0' in events:audit.require(events['resend0']['label']=='resend0=blocked','no blind resend')
         if name=='snapshot-uncertainty':audit.require(s['installed'][2]==(0,0) and s['reserved']==(6,0),'old snapshot distinct from current reservation')
