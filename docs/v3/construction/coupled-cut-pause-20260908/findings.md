@@ -50,8 +50,11 @@ Two failed admitted attempts remain. Run01 exposed an overbroad duplicate counte
 detector; construction challenge also found that a wrong signed attempt mapping could
 release A and admit B. Run02 exposed the literal duplicate-envelope mismatch after
 actual joined-payload M1A checks replaced the detached control. Both failures, sources,
-admissions and stderr are retained; neither counts as a pass. Run03 is accepted:
-about228 modeled seconds,99,991,552 sampled peak bytes,90,840,658 artifact bytes,
+admissions and stderr are retained; neither counts as a pass. Run03 passed but was superseded by a publication-metadata correction. The first
+working candidate failed the unchanged publication scan on its tracked absolute host
+path; that failure is retained externally. Exact host paths remain in raw admissions.
+Run04 is accepted with identical semantic results: about253 modeled seconds,
+99,975,168 sampled peak bytes,90,840,659 artifact bytes,
 inside the600second/2GiB/256MiB admission. Peak sampling precedes serialization and
 is not an OS-enforced whole-lifetime sandbox. Complete compact semantic results are
 tracked; raw run artifacts and exact final attestations remain under Git common.
