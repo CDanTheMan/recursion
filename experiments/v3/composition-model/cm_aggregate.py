@@ -7,7 +7,7 @@ def project(s):return Abstract(*(getattr(s,n) for n in FIELDS))
 def initial():return project(State())
 def step(v,event,policy):
     changes=None
-    if event in ('status','status_hold','inspect_fork','invalid_receipt_refused','query_same_operation','stale_writer_refused'):changes={}
+    if event in ('status','status_hold','inspect_fork','invalid_receipt_refused','query_same_operation','stale_writer_refused','wrong_operation_refused','wrong_payload_refused','unauthenticated_refused'):changes={}
     elif event=='request_g3' and v.selected==2 and not v.requested:changes={'requested':True}
     elif event=='prepare' and not v.candidate and not v.reply and v.selected<3 and v.resident.bit_count()<2 and (v.selected==1 or v.requested):
         g=v.selected+1;changes={'candidate':g,'resident':v.resident|(1<<(g-1)),'writer':v.term}

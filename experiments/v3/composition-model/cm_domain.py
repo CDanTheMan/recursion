@@ -62,7 +62,7 @@ class Split(NamedTuple):
     broker:Broker=Broker()
 
 POLICIES=('capsule','resident')
-MUTANTS=('capacity','live_pin','fork_loss','writer_fence','early_selection','recipient_fence','receipt_identity','old_ack','receipt_attempt','reset_budget','death_settlement','blind_retry','fork_authority')
+MUTANTS=('capacity','live_pin','fork_loss','writer_fence','early_selection','recipient_fence','receipt_identity','old_ack','receipt_attempt','reset_budget','death_settlement','blind_retry','fork_authority','publish_unstaged','skip_first_delete','wrong_operation','wrong_payload','unauthenticated')
 BOOLS={'staged','reply','requested','pin','capsule','receipt','ack','reset','fork'}
 def bit(g):return 1<<(g-1)
 def normalize(s):

@@ -14,6 +14,8 @@ def successors(s,policy,mutant=None):
         if mutant=='capacity' or s.resident.bit_count()<=1:
             n=s.selected+1;put('prepare',candidate=n,resident=s.resident|(2**(n-1)),writer=s.term)
     if s.candidate!=0:
+        if mutant=='publish_unstaged' and not s.staged and s.term==s.writer:
+            put('publish',selected=s.candidate,candidate=0,writer=0,staged=False,reply=True)
         if not s.staged:
             if mutant=='early_selection':put('stage',staged=True,selected=s.candidate)
             else:put('stage',staged=True)
@@ -28,7 +30,7 @@ def successors(s,policy,mutant=None):
         flag=2**(generation-1)
         if (s.resident&flag)==0:continue
         if s.retiring&flag:
-            if s.half&flag:put('reclaim_'+str(generation),resident=s.resident^flag,retiring=s.retiring^flag,half=s.half^flag)
+            if s.half&flag or mutant=='skip_first_delete':put('reclaim_'+str(generation),resident=s.resident^flag,retiring=s.retiring^flag,half=s.half&~flag)
             else:put('delete_first_'+str(generation),half=s.half|flag)
         else:
             invocation_blocks=(generation==1 and s.pin and mutant!='live_pin')
@@ -45,6 +47,9 @@ def successors(s,policy,mutant=None):
         name='current_receipt' if s.incarnation==1 and s.admission==1 else 'late_receipt'
         if mutant=='receipt_attempt' and s.incarnation==2:put(name,receipt=True,closed=s.closed|2)
         else:put(name,receipt=True)
+    for bad_input in ('wrong_operation','wrong_payload','unauthenticated'):
+        if mutant==bad_input and s.effect==2 and not s.receipt:put(bad_input+'_refused',receipt=True)
+        else:put(bad_input+'_refused')
     if mutant=='receipt_identity' and s.effect!=2:put('invalid_receipt_refused',receipt=True)
     else:put('invalid_receipt_refused')
     if s.actor==0:
