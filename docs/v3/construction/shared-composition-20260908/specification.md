@@ -84,7 +84,7 @@ ticket, not a substitute for those runtime bindings.
 ## Required checks
 
 Before the first execution, the concrete domain narrows the environment to the
-13 named schedule profiles in `sc_domain.py`. Every profile starts at the same
+initial13 named schedule profiles in `sc_domain.py`. Every profile starts at the same
 initial state. Its named external actions are one-shot, with explicit prerequisite
 edges; all their enabled interleavings are explored. Status, applicable Stop,
 PAUSE and recipient installation remain independently enabled in every profile.
@@ -94,6 +94,16 @@ Cartesian product of all capabilities. The restricted schedules, including two
 writer denial/retry sequences, are applicability limits; arbitrary extra retries,
 multiple snapshots, multiple readers and general scheduling remain unproven.
 No schedule is chosen from a successful run after the fact.
+
+Prospective revision2, after retained run01 and independent static challenge:
+add a fourteenth `free-shared-core` profile with16 externally unordered one-shot
+actions across generation, evidence, replay and lifetime. Only actual transition
+guards constrain their interleavings. Strengthen the serial-denial profile to
+stage before submitting the old ticket, so missing staging cannot explain denial.
+Require complete independent postconditions and edge-based Stop/exposure witnesses.
+Run01 remains superseded evidence; its state-only witnesses did not establish those
+orders. This revision is committed before its own run and does not promote the
+original broad comparison to complete coverage.
 
 Exhaustively enumerate every reachable state and transition of the declared
 profile in both representations; a nonempty frontier or resource limit is

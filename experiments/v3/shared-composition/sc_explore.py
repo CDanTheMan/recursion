@@ -53,5 +53,6 @@ def calibrate():
     rejects('wrong-initial',lambda:audit.initial(replace(s,spent=0)))
     rejects('missing-edge',lambda:audit.enabled(s,p,[a for a,_ in actual if a!='stop']))
     rejects('changed-edge',lambda:audit.edge(s,'status',replace(s,quarantine=False),p))
+    rejects('Stop-present-but-not-applied',lambda:audit.edge(s,'stop',s,p))
     rejects('truncated-frontier',lambda:explore(p,'inclusive',limit=1))
     return labels

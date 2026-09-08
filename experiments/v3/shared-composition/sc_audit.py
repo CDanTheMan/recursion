@@ -2,6 +2,7 @@
 
 No imports from either concrete transition implementation.
 """
+from dataclasses import replace
 from sc_domain import State,NAMES,PROFILES
 
 def need(condition,label):
@@ -110,6 +111,50 @@ def edge(s,name,n,profile):
     if op=='fresh_write':need(n.write_result==(2 if s.paused else 1),'PAUSE checked by fresh writer separately')
     for flag in ('stopped','paused','quarantine','capsule'):
         need(not getattr(s,flag) or getattr(n,flag),'monotone retained '+flag)
+    exact_postcondition(s,op,n)
     invariant(n)
+
+def exact_postcondition(s,op,n):
+    """Complete third relation, including broker-only and denied transitions.
+
+The write footprint alone cannot establish that a present Stop edge applies
+Stop. These independently specified assignments require every changed AND
+unchanged field, including hidden transport stages, to have its exact value.
+"""
+    fixed={
+      'status':{},'stop':{'stopped':True},'pause':{'paused':True},'fence':{'fence':2},
+      'replace':{'serial':2},'writer_boot':{'term':2},'writer_ack':{'reply':True},
+      'capsule':{'capsule':True},'return':{'actor':3},'kill':{'actor':1},'wait':{'actor':2},
+      'release':{'pin':False},'complete':{'remote':2},'finish2':{'closed2':True},
+      'old_ack':{'ack':1},'reset':{'reset':True},'copy':{'copied':True,'phase':2},
+      'reader_wait':{'reader':0,'waited':True},'advertise':{'phase':3},
+      'emit_reset':{'phase':4},'broker_restart':{'phase':2,'restarted':True}
+    }
+    if op in fixed:expected=fixed[op]
+    elif op=='stage':expected={'staged':True,'residents':s.residents|2}
+    elif op=='refresh':expected={'ticket':(s.term,s.serial)}
+    elif op in ('publish','publish_old'):
+        ticket=(1,1) if op=='publish_old' else s.ticket
+        admitted=s.g==1 and s.staged and not s.stopped and not s.paused and ticket==(s.term,s.serial)
+        expected={'g':2,'residents':3,'journal':s.journal+((2,s.cut),)} if admitted else {}
+    elif op in ('reclaim','reclaim_early'):
+        admitted=s.g==2 and not s.pin and s.reader!=1 and s.capsule
+        expected={'residents':2} if admitted else {}
+    elif op=='execute':expected={'remote':3 if s.fence==2 else 1,'executions':0 if s.fence==2 else 1}
+    elif op in ('receipt','second','conflict'):
+        cut=(1 if s.remote==2 else 4) if op=='receipt' else (2 if op=='second' else 3)
+        expected={'cut':cut,'hold':cut in (2,3),'journal':s.journal+((s.g,cut),)}
+    elif op=='spawn2':expected={'incarnation':2,'spent':s.spent+1}
+    elif op=='fresh_write':expected={'write_result':2 if s.paused else 1}
+    elif op=='capture':expected={'reader':s.g,'snapshot':(s.g,len(s.journal),s.cut),'phase':1}
+    elif op=='install':
+        gen,cursor,cut=s.snapshot
+        expected={'view':cursor,'content':(gen,cut),'phase':5,'ingested':max(cursor,s.ingested),'queue':tuple(i for i in s.queue if i>cursor)}
+    elif op=='ingest':expected={'ingested':s.ingested+1,'queue':(*s.queue,s.ingested+1)}
+    elif op=='lose_ingress':expected={'ingested':s.ingested+1,'loss':s.ingested+1}
+    elif op=='lose_queue':expected={'queue':s.queue[1:],'loss':s.queue[0]}
+    elif op=='event':expected={'view':s.queue[0],'content':s.journal[s.queue[0]-1],'queue':s.queue[1:],'credit':0}
+    else:raise ValueError('unspecified transition '+op)
+    need(n==replace(s,done=n.done,**expected),'complete independent postcondition '+op)
 
 def initial(s):need(s==State(),'initial state correspondence')

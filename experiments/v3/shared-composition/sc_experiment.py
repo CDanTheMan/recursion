@@ -13,6 +13,7 @@ def peak_bytes():
     return c.PeakWorkingSetSize
 
 WITNESSES={
+ 'free-shared-core':lambda s:s.phase==5 and s.g==2 and s.cut==2 and s.snapshot[2]==1 and s.waited and not s.pin and s.residents==2,
  'old-cut-new-attempt':lambda s:s.phase==5 and s.snapshot[2]==1 and s.cut==2 and s.hold,
  'reader-reclaim-install':lambda s:s.phase==5 and s.snapshot[0]==1 and s.residents==2 and s.waited,
  'writer-serial-and-boot':lambda s:s.g==2 and s.term==2 and s.serial==2 and s.reply,
@@ -28,6 +29,7 @@ WITNESSES={
  'recipient-refusal':lambda s:s.cut==4 and s.remote==3 and not s.hold,
 }
 MUTANTS={
+ 'control-apply':'queue-gap-stop',
  'replay-settlement':'old-cut-new-attempt','status-only-hold':'old-cut-new-attempt',
  'pending-only-hold':'conflict-pause','invocation-release':'ownership-probes',
  'other-reader-release':'reader-reclaim-install','copy-release':'reader-reclaim-install',
@@ -81,11 +83,17 @@ def run(directory,limits):
                 if found:break
             ex.audit.need(found,'blocked reader reclaim witness');witnesses.append(found)
         if name=='queue-gap-stop':
-            index=next((i for i,s in enumerate(av) if len(s.queue)==2 and s.stopped),None)
-            ex.audit.need(index is not None,'Stop with saturated queue');witnesses.append({'name':'saturated-queue-Stop','trace':ex.path(parents,index),'state':asdict(av[index])})
+            found=next(((i,j) for i,s in enumerate(av) if len(s.queue)==2 and not s.stopped for action,j in ag[i] if action=='stop' and av[j].stopped),None)
+            ex.audit.need(found is not None,'Stop applies from saturated queue');i,j=found
+            witnesses.append({'name':'saturated-queue-Stop','trace':ex.path(parents,i)+['stop'],'before':asdict(av[i]),'state':asdict(av[j])})
         if name=='recipient-refusal':
-            index=next((i for i,s in enumerate(av) if s.stopped and s.fence==1 and s.remote==1),None)
-            ex.audit.need(index is not None,'Stop before recipient installation exposure');witnesses.append({'name':'Stop-before-recipient-install','trace':ex.path(parents,index),'state':asdict(av[index])})
+            found=next(((i,j) for i,s in enumerate(av) if s.stopped and s.fence==1 and s.remote==0 for action,j in ag[i] if action=='execute' and av[j].remote==1),None)
+            ex.audit.need(found is not None,'Stop precedes still-eligible in-flight effect');i,j=found
+            witnesses.append({'name':'Stop-before-recipient-install','trace':ex.path(parents,i)+['execute'],'before':asdict(av[i]),'state':asdict(av[j])})
+        if name in ('writer-serial-and-boot','writer-stale-boot'):
+            found=next(((i,j) for i,s in enumerate(av) if s.staged and not s.stopped and not s.paused and s.g==1 and (s.serial==2 if name=='writer-serial-and-boot' else s.term==2) for action,j in ag[i] if action=='publish_old' and av[j].g==1),None)
+            ex.audit.need(found is not None,'staged admitted writer denied only by stale ticket');i,j=found
+            witnesses.append({'name':'stale-ticket-denial','trace':ex.path(parents,i)+['publish_old'],'before':asdict(av[i]),'state':asdict(av[j])})
         profiles[name]={'inclusive':ex.graph_receipt(av,ag),'split':ex.graph_receipt(bv,bg),'exact_graph_equal':True,'witnesses':witnesses}
         total+=len(av)
         ex.audit.need(total<=limits['states_per_boundary'],'total declared profile state admission')

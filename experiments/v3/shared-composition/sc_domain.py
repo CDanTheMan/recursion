@@ -55,6 +55,7 @@ def fact(s,**kw):
 # declared external schedule; production guards are independently implemented.
 # Stop, status, PAUSE and recipient installation are available in every profile.
 PROFILES={
+ 'free-shared-core':[(a,()) for a in ('stage','publish','execute','complete','receipt','second','capture','copy','reader_wait','advertise','emit_reset','install','return','release','capsule','reclaim')],
  'ownership-probes':[
   ('stage',()),('publish',('stage',)),('return',()),('release:early',()),
   ('release',('return',)),('capsule',()),('reclaim:probe',('publish',))],
@@ -71,7 +72,7 @@ PROFILES={
   ('reclaim',('publish','release','reader_wait','capsule')),('advertise',('copy',)),
   ('emit_reset',('advertise',)),('install',('emit_reset','reclaim'))],
  'writer-serial-and-boot':[
-  ('stage',()),('replace',()),('publish_old',('replace',)),
+  ('stage',()),('replace',()),('publish_old',('replace','stage')),
   ('refresh',('publish_old',)),('publish',('refresh','stage')),
   ('writer_boot',('publish',)),('writer_ack',('writer_boot',))],
  'writer-stale-boot':[

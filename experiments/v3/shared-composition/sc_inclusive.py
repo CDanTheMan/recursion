@@ -89,7 +89,7 @@ def step(s,name,mutant=''):
 def edges(s,profile,mutant=''):
     yield 'status',s
     if not s.stopped and not(mutant=='control-pressure' and (len(s.queue)==2 or s.phase==4)):
-        yield 'stop',replace(s,stopped=True)
+        yield 'stop',s if mutant=='control-apply' else replace(s,stopped=True)
     if not s.paused:yield 'pause',replace(s,paused=True)
     if (s.stopped or s.paused) and s.fence==1:yield 'fence',replace(s,fence=2)
     for a,bit in scheduled(s,profile):
