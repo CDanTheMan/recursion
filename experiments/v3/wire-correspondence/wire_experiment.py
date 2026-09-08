@@ -21,6 +21,9 @@ def explore(c,limit=500000,seconds=600,mutant=None,calibration=None):
   s,trace=todo.popleft();aa=model.inclusive(s,c,mutant);bb=model.separated(d.split(s),c)
   if calibration=='missing-edge' and aa:aa=aa[1:]
   if calibration=='no-op' and aa:aa=[(aa[0][0],s)]+aa[1:]
+  if mutant and {a for a,n in aa}!=audit.enabled(s,c):
+   bad=[(a,n) for a,n in aa if a not in audit.enabled(s,c)];d.require(bool(bad),'mutant removed expected action');a,n=bad[0]
+   return {'guard':mutant,'schedule':trace+[a],'before':s,'after':n,'failure':'complete enabledness: forbidden '+a}
   d.require({a for a,n in aa}==audit.enabled(s,c),'complete enabledness')
   d.require(len({a for a,n in aa})==len(aa),'no duplicate action labels')
   if not mutant:d.require({a:d.canonical(n) for a,n in aa}=={a:d.canonical(d.flatten(n)) for a,n in bb},'independent representation transitions')
