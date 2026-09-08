@@ -55,10 +55,11 @@ class Campaign:
         self.snap+=1;files={}
         for p in sorted((case/'fixture').rglob('*')):
             if p.is_file():
+                if p.name=='authority.lock':continue
                 b=p.read_bytes();h=sha(b);dest=self.out/'blobs'/h
                 if not dest.exists():dest.write_bytes(b)
                 files[p.relative_to(case/'fixture').as_posix()]=h
-        self.event(case,{'kind':'snapshot','snapshot':self.snap,'label':label,'files':files});return files
+        lock=(case/'fixture/authority.lock').stat();self.event(case,{'kind':'snapshot','snapshot':self.snap,'label':label,'files':files,'lock_identity':{'device':lock.st_dev,'inode':lock.st_ino,'size':lock.st_size}});return files
     def note(self,case,name,actual,expected):
         require(actual==expected,name+': '+repr(actual));self.event(case,{'kind':'assertion','name':name,'actual':actual,'expected':expected});return actual
     def start_authority(self,case,instance,**kw):
