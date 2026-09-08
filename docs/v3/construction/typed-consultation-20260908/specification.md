@@ -66,3 +66,11 @@ draftPR publication. Sources precede every admitted run; retain failed/supersede
 attempts externally. Coupled reservation/wire/epoch composition remains next, along
 with full formal comparison and common-writer migration. No language/store/framework,
 provider, service, operational change, deployment or merge.
+
+Construction clarification before first admitted run:15 profiles are declared,
+including the12-action unordered core. Every named action is a single offered call;
+failed calls consume that one-shot opportunity with a typed refusal. These bounds
+do not assert retry fairness or eventual progress. Directed profiles provide the
+required successful and stale ordered witnesses. Executor ownership records its
+actual lease/incarnation binding separately from current authority. Duplicate request
+inputs carry actual immutable tuples and compare a changed payload, not just labels.
