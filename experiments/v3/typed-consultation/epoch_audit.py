@@ -2,7 +2,7 @@
 import epoch_domain as d
 
 def eligible(s,packet):
- if packet is None or s['request'] is None or packet!=s['request'] or s['stopped']:return False
+ if packet is None or s['request'] is None or packet!=s['request'] or s['stopped'] or not s['alias_active']:return False
  if any(type(v[4]) is not int for v in packet[1:5]):return False
  return packet[1:5]==tuple(s['tokens'][x] for x in ['goal','lease','process','delivery'])
 
@@ -11,7 +11,7 @@ def expected(s,a):
  if a=='request':
   if s['stopped']:reason='expired-operation'
   else:
-   packet=('operation-a',t['goal'],t['lease'],t['process'],t['delivery'],'context-1','payload-1','head','consultant','grant-a');changes.update(request=packet,input_request=packet)
+   packet=('operation-a',t['goal'],t['lease'],t['process'],t['delivery'],'context-1','payload-1','head','consultant','grant-a');changes.update(request=packet,input_request=packet,alias_active=True)
  elif a in ['duplicate-request','conflict-request']:
   if s['request'] is None:reason='missing-request'
   else:
@@ -36,7 +36,7 @@ def expected(s,a):
  elif a in ['ingest','duplicate-reply']:
   if s['reply'] is None:reason='missing-reply'
   elif s['evidence'] is not None:reason='duplicate'
-  elif s['reply'][4]==s['tokens']['delivery']:changes['evidence']=s['reply']
+  elif s['alias_active'] and s['reply'][4]==s['tokens']['delivery']:changes['evidence']=s['reply']
   else:reason='expired-delivery-missing';changes['missing']=True
  elif a in ['adopt','adopt-again']:
   if s['adopted'] is not None:reason='duplicate'
@@ -53,8 +53,8 @@ def expected(s,a):
  elif a=='restart':
   t['process']=('process','goal-a','kernel-a','head',2,'process-identity-2')
   if s['executor']=='head':changes.update(executor='free',executor_binding=None,wait='recovered',wait_graph=())
- elif a=='expire':t['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
- elif a=='stop':changes['stopped']=True;t['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
+ elif a=='expire':changes['alias_active']=False;t['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
+ elif a=='stop':changes['stopped']=True;changes['alias_active']=False;t['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
  elif a=='cancel-deliver':
   if s['stopped']:changes['cancel_delivered']=True
   else:reason='not-stopped'
@@ -82,14 +82,16 @@ def invariant(s):
  d.require(s['reserved']==6 and s['free']==4 and s['remote_outcome']=='unknown','uncertain effect ownership')
  d.require(s['adoption_count'] in (0,1) and s['wake_count'] in (0,1),'idempotent operation accounting')
  d.require((s['adopted'] is not None)==bool(s['adoption_count']),'historical adoption retained')
+ d.require(not s['stopped'] or not s['alias_active'],'stopped operation alias retired')
  d.require(s['unrelated'] in ('active','completed'),'borrowed operation scope')
  d.require(s['wait']!='suspended' or s['executor']!='head','suspended wait must release serial executor')
  d.require((s['executor']=='free')==(s['executor_binding'] is None),'executor ownership binding')
  d.require(s['goal_record'][1]==s['tokens']['goal'][4],'immutable goal version binding')
 
 def initialization(s):
- expected={'tokens':{tag:(tag,'operation-a' if tag=='delivery' else 'goal-a','owner' if tag=='goal' else 'kernel-a','head',1,tag+'-identity-1') for tag in d.TAGS},'goal_record':('goal-a',1,'goal-digest-1'),'request':None,'input_request':None,'reply':None,'evidence':None,'adopted':None,'adoption_count':0,'wake_count':0,'started':False,'stopped':False,'cancel_delivered':False,'remote_outcome':'unknown','missing':False,'executor':'head','executor_binding':(('lease','goal-a','kernel-a','head',1,'lease-identity-1'),('process','goal-a','kernel-a','head',1,'process-identity-1')),'wait':'none','wait_graph':(),'unrelated':'active','reserved':6,'free':4,'done':(),'decision':'initial'}
+ expected={'tokens':{tag:(tag,'operation-a' if tag=='delivery' else 'goal-a','owner' if tag=='goal' else 'kernel-a','head',1,tag+'-identity-1') for tag in d.TAGS},'goal_record':('goal-a',1,'goal-digest-1'),'request':None,'input_request':None,'reply':None,'evidence':None,'adopted':None,'adoption_count':0,'wake_count':0,'started':False,'alias_active':True,'stopped':False,'cancel_delivered':False,'remote_outcome':'unknown','missing':False,'executor':'head','executor_binding':(('lease','goal-a','kernel-a','head',1,'lease-identity-1'),('process','goal-a','kernel-a','head',1,'process-identity-1')),'wait':'none','wait_graph':(),'unrelated':'active','reserved':6,'free':4,'done':(),'decision':'initial'}
  d.require(s==expected,'complete independent initialization');invariant(s)
 
 def check(s,a,n,name):
+ if a in ('ingest','duplicate-reply') and not s['alias_active']:d.require(n['evidence']==s['evidence'],'retired alias cannot create evidence')
  d.require(a in enabled(s,name),'enabled action');d.require(n==expected(s,a),'complete independent postcondition '+a);invariant(n)

@@ -3,7 +3,7 @@ import copy
 import epoch_domain as d
 
 def authorized(authority,binding):
- if binding is None or authority['request'] is None or authority['stopped']:return False
+ if binding is None or authority['request'] is None or authority['stopped'] or not authority['alias_active']:return False
  if any(not isinstance(v,tuple) or len(v)!=6 or type(v[4]) is not int for v in binding[1:5]):return False
  expected=authority['request']
  if binding!=expected:return False
@@ -15,7 +15,7 @@ def step(state,event):
  def refuse(reason):br['decision']=event+':'+reason
  if event=='request':
   if au['stopped']:refuse('expired-operation')
-  else:au['request']=tuple(['operation-a',*[tokens[k] for k in ('goal','lease','process','delivery')],'context-1','payload-1','head','consultant','grant-a']);au['input_request']=au['request']
+  else:au['request']=tuple(['operation-a',*[tokens[k] for k in ('goal','lease','process','delivery')],'context-1','payload-1','head','consultant','grant-a']);au['input_request']=au['request'];au['alias_active']=True
  elif event=='duplicate-request' or event=='conflict-request':
   if au['request'] is None:refuse('missing-request')
   else:
@@ -42,7 +42,7 @@ def step(state,event):
  elif event in ('ingest','duplicate-reply'):
   if br['reply'] is None:refuse('missing-reply')
   elif au['evidence'] is not None:refuse('duplicate')
-  elif br['reply'][4]!=tokens['delivery']:br['missing']=True;refuse('expired-delivery-missing')
+  elif not au['alias_active'] or br['reply'][4]!=tokens['delivery']:br['missing']=True;refuse('expired-delivery-missing')
   else:au['evidence']=br['reply']
  elif event in ('adopt','adopt-again'):
   if au['adopted'] is not None:refuse('duplicate')
@@ -59,8 +59,8 @@ def step(state,event):
  elif event=='restart':
   tokens['process']=('process','goal-a','kernel-a','head',2,'process-identity-2')
   if br['executor']=='head':br.update(executor='free',executor_binding=None,wait='recovered',wait_graph=())
- elif event=='expire':tokens['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
- elif event=='stop':au['stopped']=True;tokens['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
+ elif event=='expire':au['alias_active']=False;tokens['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
+ elif event=='stop':au['stopped']=True;au['alias_active']=False;tokens['delivery']=('delivery','operation-a','kernel-a','head',2,'delivery-identity-2')
  elif event=='cancel-deliver':
   if au['stopped']:br['cancel_delivered']=True
   else:refuse('not-stopped')

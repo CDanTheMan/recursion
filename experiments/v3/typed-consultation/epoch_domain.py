@@ -6,8 +6,8 @@ def token(tag,serial=1,issuer=None):return (tag,'goal-a' if tag!='delivery' else
 def canonical(x):return json.dumps(x,sort_keys=True,separators=(',',':'))
 def require(x,m):
  if not x:raise ValueError(m)
-def initial():return {'tokens':{t:token(t) for t in TAGS},'goal_record':('goal-a',1,'goal-digest-1'),'request':None,'input_request':None,'reply':None,'evidence':None,'adopted':None,'adoption_count':0,'wake_count':0,'started':False,'stopped':False,'cancel_delivered':False,'remote_outcome':'unknown','missing':False,'executor':'head','executor_binding':(token('lease'),token('process')),'wait':'none','wait_graph':(),'unrelated':'active','reserved':6,'free':4,'done':(),'decision':'initial'}
-AUTH=('tokens','goal_record','request','input_request','evidence','adopted','adoption_count','wake_count','stopped','reserved','free')
+def initial():return {'tokens':{t:token(t) for t in TAGS},'goal_record':('goal-a',1,'goal-digest-1'),'request':None,'input_request':None,'reply':None,'evidence':None,'adopted':None,'adoption_count':0,'wake_count':0,'started':False,'alias_active':True,'stopped':False,'cancel_delivered':False,'remote_outcome':'unknown','missing':False,'executor':'head','executor_binding':(token('lease'),token('process')),'wait':'none','wait_graph':(),'unrelated':'active','reserved':6,'free':4,'done':(),'decision':'initial'}
+AUTH=('tokens','goal_record','request','input_request','evidence','adopted','adoption_count','wake_count','alias_active','stopped','reserved','free')
 BROKER=('reply','started','cancel_delivered','remote_outcome','missing','executor','executor_binding','wait','wait_graph','unrelated','done','decision')
 class Split(NamedTuple):
  authority:dict
@@ -30,6 +30,7 @@ PROFILES={
  'owner-only':PREFIX+('ingest','advice-amend','owner-amend','adopt','wake'),
  'wrong-domain':PREFIX+('wrong-domain','ingest','adopt','wake'),
  'three-leases':PREFIX+('ingest','adopt','lease2','lease3','wake'),
+ 'expiry-request-stop':('expire','request','suspend','start','reply','stop','ingest','unrelated','adopt','wake'),
  'free-core':('request','suspend','start','reply','ingest','adopt','lease2','restart','expire','stop','wake','unrelated'),
 }
 # Ordered profiles are explicit witness environments; only free-core is unordered.

@@ -35,6 +35,7 @@ def witness_check(name,w):
  elif name in ('historical-adoption','three-leases'):d.require(s['adopted'] is not None and s['adoption_count']==1 and s['wake_count']==0,'historical adoption retained without authority')
  elif name=='duplicates':d.require(s['adoption_count']==s['wake_count']==1 and events['conflict-request']['after']['decision'].endswith('payload-conflict') and events['conflict-request']['after']['input_request']!=s['request'],'actual payload conflict and dedup')
  elif name=='owner-only':d.require(events['advice-amend']['before']['goal_record']==events['advice-amend']['after']['goal_record'] and s['goal_record'][1]==2,'Owner-only amendment')
+ elif name=='expiry-request-stop':d.require(events['request']['after']['request'][4][4]==2 and events['request']['after']['alias_active'] and s['missing'] and s['evidence'] is None and not s['alias_active'] and s['unrelated']=='completed','Stop retires generation2 alias')
  elif name=='free-core':pass
  else:raise ValueError('missing witness obligation')
 

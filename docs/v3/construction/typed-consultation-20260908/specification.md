@@ -74,3 +74,11 @@ do not assert retry fairness or eventual progress. Directed profiles provide the
 required successful and stale ordered witnesses. Executor ownership records its
 actual lease/incarnation binding separately from current authority. Duplicate request
 inputs carry actual immutable tuples and compare a changed payload, not just labels.
+
+Prospective revision2 after independent common-mode counterexample: run01 passed its
+incomplete relation but is superseded. Expiry before the first request advances to
+generation2; a new admitted request activates that alias. Stop must deactivate it
+even when the serial is already2. Add explicit alias-active state, retire it on
+expiry/Stop, reactivate only on the single admitted request, and independently forbid
+new evidence through inactive aliases. Add expiry-request-stop as the16th profile.
+Two generations remain sufficient; there is no wrap or post-Stop readmission.

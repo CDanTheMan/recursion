@@ -16,14 +16,14 @@ def current(s,b,mutant=None):
  for i,tag in ((1,'goal'),(2,'lease'),(3,'process'),(4,'delivery')):
   if mutant=={'goal':'omit-goal','lease':'omit-lease','process':'omit-incarnation','delivery':'omit-delivery'}[tag]:continue
   if not equal(b[i],s['tokens'][tag],mutant):return False
- return not s['stopped']
+ return not s['stopped'] and s['alias_active']
 
 def step(s,a,mutant=None):
  n=copy.deepcopy(s);n['done']=tuple(sorted((*s['done'],a)));n['decision']=a+':accepted';t=n['tokens']
  def deny(reason):n['decision']=a+':'+reason
  if a=='request':
   if s['stopped']:deny('expired-operation')
-  else:n['request']=('operation-a',t['goal'],t['lease'],t['process'],t['delivery'],'context-1','payload-1','head','consultant','grant-a');n['input_request']=n['request']
+  else:n['request']=('operation-a',t['goal'],t['lease'],t['process'],t['delivery'],'context-1','payload-1','head','consultant','grant-a');n['input_request']=n['request'];n['alias_active']=True
  elif a in ('duplicate-request','conflict-request'):
   if s['request'] is None:deny('missing-request')
   else:
@@ -53,7 +53,7 @@ def step(s,a,mutant=None):
  elif a in ('ingest','duplicate-reply'):
   if s['reply'] is None:deny('missing-reply')
   elif s['evidence'] is not None:deny('duplicate')
-  elif equal(s['reply'][4],s['tokens']['delivery'],mutant) or mutant=='omit-delivery':n['evidence']=s['reply']
+  elif (s['alias_active'] and equal(s['reply'][4],s['tokens']['delivery'],mutant)) or mutant=='omit-delivery':n['evidence']=s['reply']
   else:n['missing']=True;deny('expired-delivery-missing')
  elif a in ('adopt','adopt-again'):
   if s['adopted'] is not None:
@@ -74,10 +74,10 @@ def step(s,a,mutant=None):
   t['process']=d.token('process',2 if mutant!='restore-incarnation' else 1)
   if s['executor']=='head':n['executor']='free';n['executor_binding']=None;n['wait']='recovered';n['wait_graph']=()
  elif a=='expire':
-  t['delivery']=d.token('delivery',2)
+  t['delivery']=d.token('delivery',2);n['alias_active']=False
   if mutant=='erase-evidence':n['evidence']=None
  elif a=='stop':
-  n['stopped']=True
+  n['stopped']=True;n['alias_active']=False
   if mutant!='stop-generation':t['delivery']=d.token('delivery',2)
   if mutant=='cancel-all':n['unrelated']='stopped'
   if mutant=='release-reservation':n['reserved']=0;n['free']=10
