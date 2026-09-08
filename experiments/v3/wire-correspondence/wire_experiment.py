@@ -82,16 +82,24 @@ def controls():
  for name,(messages,status,reason) in cases.items():
   decision=d.evaluate(tuple(messages),c);d.require(decision['status']==status and reason in decision['reasons'],'literal control '+name);rows[name]={'messages':[json.loads(x) for x in messages],'decision':decision}
  # The exact accepted bytes contain no application/reservation state.
+ byte_config=('utf8-byte',2,1,1);byte_state=d.initial(byte_config)
+ for action in ('gap','reset','install','credit','emit'):byte_state=dict(model.inclusive(byte_state,byte_config))[action]
+ byte_wire=list(byte_state['wire']);bad_event=json.loads(byte_wire[-1]);bad_event['cursor']=3;byte_wire[-1]=d.canonical(bad_event)
+ byte_decision=d.evaluate(tuple(byte_wire),byte_config);d.require(byte_decision['status']=='refused' and 'utf8-byte-cursor-mismatch' in byte_decision['reasons'],'wrong byte cursor')
+ rows['wrong-byte-cursor']={'configuration':byte_config,'messages':[json.loads(x) for x in byte_wire],'decision':byte_decision}
  rows['wire-cannot-prove-install-or-reservation']={'messages':[json.loads(x) for x in prefix],'decision':d.evaluate(tuple(prefix),c),'finding':'Identical accepted wire after omitting installation or corrupting hidden reservation; independent local obligations reject those mutants.'}
- malformed={'duplicate-key':b'{"type":0,"type":1}','invalid-utf8':bytes([255]),'bom':bytes([239,187,191])+b'{}','unterminated':b'{','oversized':b'x'*262145,'float':b'{"x":1.2}','negative-zero':b'{"x":-0}','nan':b'{"x":NaN}','depth':b'['*65+b'0'+b']'*65}
+ malformed={'duplicate-key':b'{"type":0,"type":1}','invalid-utf8':bytes([255]),'bom':bytes([239,187,191])+b'{}','unterminated':b'{','oversized':b'"'+b'x'*262143+b'"','float':b'{"x":1.2}','negative-zero':b'{"x":-0}','nan':b'{"x":NaN}','depth':b'['*65+b'0'+b']'*65}
  framing={}
  for name,raw in malformed.items():
+  if name=='oversized':d.require(len(json.loads(raw))==262143,'valid JSON oversized control')
   try:d.SCHEMA['strict_loads'](raw)
-  except (ValueError,UnicodeError) as e:framing[name]={'input_sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'disposition':'typed-invalid-input','failure_type':type(e).__name__}
+  except (ValueError,UnicodeError) as e:
+   if name=='oversized':d.require(str(e)=='object exceeds byte ceiling','byte limit distinguished from parse error')
+   framing[name]={'input_sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'disposition':'typed-invalid-input','failure_type':type(e).__name__}
   else:raise ValueError('decoder accepted '+name)
  bad=json.loads(credit);bad['bytes']=True
  try:d.SCHEMA['validate'](bad,'BrokerMessage')
- except Exception as e:framing['boolean-credit']={'disposition':'typed-invalid-input','failure_type':type(e).__name__}
+ except d.SCHEMA['jsonschema'].ValidationError as e:framing['boolean-credit']={'disposition':'typed-invalid-input','failure_type':type(e).__name__}
  else:raise ValueError('boolean credit accepted')
  return {'literal_cases':rows,'strict_decoder_controls':framing,'framing_limit':'Complete immutable-object decoder controls; streaming pre-ingress progress remains separately frozen flow model, not imported here.'}
 

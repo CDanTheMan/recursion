@@ -56,3 +56,8 @@ cursor records snapshot installation, not subsequent incremental renderer progre
 Run01 failed while recording a guard-removal enabledness witness; no semantic pass
 was admitted. Run02 passed the earlier equivalent fixed snapshot boundary and is
 superseded by this explicit cursor representation before final evidence.
+
+Prospective revision3 after independent challenge: add correctly typed UTF-8 byte
+cursor with wrong advancement and a syntactically valid oversized JSON object.
+Require the exact byte-ceiling error so malformed syntax cannot make that negative
+control pass vacuously. Earlier run03 remains superseded before admitted rerun.
