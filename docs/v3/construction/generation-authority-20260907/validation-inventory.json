@@ -1,0 +1,295 @@
+{
+  "start_commit": "04b664c58bddb72674d297f4bcf4bef5435bda0f",
+  "regression_commands": [
+    [
+      "python",
+      "-B",
+      "schemas/control-plane/v3/planning/materialize.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/materialize_fixtures.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/red_fixture.test.py",
+      "--validate-only"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/adversarial.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/conformance.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/property.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/red_fixture.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/schema.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/static.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/validation.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "schemas/control-plane/v3/execution/materialize.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/materialize_fixtures.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/adversarial.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/conformance.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/fixture.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/schema.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/static.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "schemas/control-plane/v3/integrity/materialize.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/materialize_fixtures.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/adversarial.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/conformance.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/fixture.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/schema.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/static.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "-u",
+      "scripts/tests/recursion-v2-mvp.test.py"
+    ]
+  ],
+  "regression_entrypoints": [
+    {
+      "path": "schemas/control-plane/v3/execution/materialize.py",
+      "sha256": "785db10cd36d24824a6d11699c0f11141d41456b6afc608af5918c9cdc5a56da"
+    },
+    {
+      "path": "schemas/control-plane/v3/integrity/materialize.py",
+      "sha256": "098711b603bc50e005be9f89f091ccd715b634666b3ab19bc6a01b14ba999a94"
+    },
+    {
+      "path": "schemas/control-plane/v3/planning/materialize.py",
+      "sha256": "5b7a2bcd4afcc451ad17b8b443f622d1f6475a5f9a662b43a12fa99c72390e05"
+    },
+    {
+      "path": "scripts/tests/recursion-v2-mvp.test.py",
+      "sha256": "5ef947883af95e24be5124505f729d4ae8b79637894ce1ca3db8ea426adb8f4f"
+    },
+    {
+      "path": "scripts/tests/v3/execution/adversarial.test.py",
+      "sha256": "f949f948c8bbebb574b7647829a5a11e299e0c37de4d2f9469e40692611e367e"
+    },
+    {
+      "path": "scripts/tests/v3/execution/conformance.test.py",
+      "sha256": "f432774225fcc2bd886c125601aee6ba8feda0932780ce235499c8aeb2f899a7"
+    },
+    {
+      "path": "scripts/tests/v3/execution/fixture.test.py",
+      "sha256": "0c40b822aa8e66847e7f12bf44415a5a495d7375a4a2b3642041c54551a906bc"
+    },
+    {
+      "path": "scripts/tests/v3/execution/materialize_fixtures.py",
+      "sha256": "caefcda267474b2cb32ee21a7a8c272c5b2f00bc54cc2e489683f7cfe3d28eb7"
+    },
+    {
+      "path": "scripts/tests/v3/execution/schema.test.py",
+      "sha256": "4aa358183a4e8cf6a98196132deb929fd23b2987d054d7d461d55567ee302143"
+    },
+    {
+      "path": "scripts/tests/v3/execution/static.test.py",
+      "sha256": "e6ca8af2ac9ae58a0650198a509b60fb5ee5844ccfbece25897a90a9ee98aa53"
+    },
+    {
+      "path": "scripts/tests/v3/integrity/adversarial.test.py",
+      "sha256": "bd457317bf9501799a3fc745cc392a05734739065f15de7918defe6ee487d8d0"
+    },
+    {
+      "path": "scripts/tests/v3/integrity/conformance.test.py",
+      "sha256": "f0b677023fb650af1c4c981bb540472a3832f49116435744af85b114f1377ee3"
+    },
+    {
+      "path": "scripts/tests/v3/integrity/fixture.test.py",
+      "sha256": "df356c8e57648c29f33a733df94ba37fd4638c90a3383d5a4d5b858b8d02cf7f"
+    },
+    {
+      "path": "scripts/tests/v3/integrity/materialize_fixtures.py",
+      "sha256": "b9cb241115badd8d0420d3a5d6f3cf857d7ff3cf3450a0c35499dc31e93842d2"
+    },
+    {
+      "path": "scripts/tests/v3/integrity/schema.test.py",
+      "sha256": "42dd5bd201ebcb0587d4a21cc6c70eb426ddd62f43ba4c1a59d8654a3d8519e3"
+    },
+    {
+      "path": "scripts/tests/v3/integrity/static.test.py",
+      "sha256": "994517449258efac4ea2b4b9da8c7ae96af33ecabaa46ef93e39517374e6fcc5"
+    },
+    {
+      "path": "scripts/tests/v3/planning/adversarial.test.py",
+      "sha256": "19b8a13ae5a25e06ace98a5fca5d7d6ae5888345549e0b0997ea41c07c04482f"
+    },
+    {
+      "path": "scripts/tests/v3/planning/conformance.test.py",
+      "sha256": "c1ee3dff7046cd329151d11fa0ea21643fb810e4adb887e0846bafb8908f7434"
+    },
+    {
+      "path": "scripts/tests/v3/planning/materialize_fixtures.py",
+      "sha256": "db50021de5cb390c7018d536f7d00c63b81a90f4c2df3138b729326f6270fa9d"
+    },
+    {
+      "path": "scripts/tests/v3/planning/property.test.py",
+      "sha256": "79e2fcfaee2ff75da669253d8e55a89c59867b1949f36ad46222777c16c08727"
+    },
+    {
+      "path": "scripts/tests/v3/planning/red_fixture.test.py",
+      "sha256": "38af28605a5f60c93ed3f46eb357ae5a8490b2115f09903a3077b0fc8d3a68d3"
+    },
+    {
+      "path": "scripts/tests/v3/planning/schema.test.py",
+      "sha256": "f736294f0e488780f8ba7217fedec52fbd029275a63c00a6cbe8d692ca58fc01"
+    },
+    {
+      "path": "scripts/tests/v3/planning/static.test.py",
+      "sha256": "c773b3f93f5d60114db89228d250f14f7d9f75d45344877a37bef0f1212bc709"
+    },
+    {
+      "path": "scripts/tests/v3/planning/validation.test.py",
+      "sha256": "d6929e6cbb3c9f901c5aacf986c98ca06007babcc1bbf80d4fef5e7a913feb16"
+    }
+  ],
+  "artifacts": {
+    "docs/v3/ACCEPTANCE.md": "a4b46f6b09c42a07a8cdac594728c036c4c350b3eebf1617a5c237cdd3175af5",
+    "docs/v3/ARCHITECTURE.md": "c7d10b4fcbec33c6af0eb31e322857086844251bfa158302626c246e79d0d3f6",
+    "docs/v3/CLAIM-LEDGER.md": "9c0520a4a5645e843497c31ec85d0e0b848d398593ef25808d2f5011e7889ac8",
+    "docs/v3/CLAIM-REGISTRY.json": "cd468a84382813877c6e5087694610af4b494b65063c9f4a2abda7b69b95618d",
+    "docs/v3/CONSTRUCTION-RUNBOOK.md": "2341ba6719d3ed9ff931a484e61dab08f33bb3f6d994e46ced2ac6ed5c947fd5",
+    "docs/v3/EXECUTION-FABRIC.md": "fd889360a5c4ed7f98a955c94b0f86196a218e51ac02ad7f66586ccd03e383ce",
+    "docs/v3/ROADMAP.md": "9a1bbd0e3bbd5553e9716719960a370cb713bea42e67ab0762b083b1297128ee",
+    "docs/v3/TERMINAL-RUNTIME.md": "5f501ac3ddd024338cf59f4ea1923a41fcbeb1a9d1d11081051e19fff0fc6d26",
+    "docs/v3/construction/generation-authority-20260907/dossier.md": "44d9aa38a358b2aabb9b207d398f8b0a1b158ff49c804df9d3a1069ecd0429b2",
+    "docs/v3/construction/generation-authority-20260907/evidence.json": "381bc7557b90eff5ffc3eceb4c6624e11d50ea42abede219744cceb13ccab321",
+    "docs/v3/construction/generation-authority-20260907/goal.json": "cd98549ba9763642ccb0a67e3e9c1081a6b11300a805871e832a85a628fb71e1",
+    "docs/v3/construction/generation-authority-20260907/headroom-assessment.md": "b7152572da667a9f432aacd0d263c4f1ca94aa26f4f1659f1768a960a4e75097",
+    "docs/v3/construction/generation-authority-20260907/manifest.json": "e1aef096c60d86f6a29c44fcb635f3ec68d7dbc86a0f56df114e20d41803452f",
+    "docs/v3/construction/generation-authority-20260907/plan.json": "5643fac5c381c312c2587ecdbe8140bccb9ba5bf36ce6e6d6940e58a0f82f8ae",
+    "docs/v3/construction/generation-authority-20260907/results.json": "5d95e467d2753e3f66f8f161cb73c0cfa6c4f0cfba42adca6d962fc188902f73",
+    "docs/v3/construction/generation-authority-20260907/source-findings.md": "bc40c4f95890a976e1cb54ad26b05430df2a2cec7758f0b8506c8fcb7ee8104e",
+    "docs/v3/construction/generation-authority-20260907/sources.json": "4d0ce383ea09ef4a4066939187e46e9c3731f8632b7ae5cce8ca9e50fcb3675d",
+    "experiments/v3/generation-authority/actor.py": "d76b99192c61fa5f77b4f7f332719ae4dcff576d24ae87ef112c03934d9ba703",
+    "experiments/v3/generation-authority/admit.py": "37af452040a0a21bcf4d70c0b8a62436f3c16e86eb2bda77a2bf2f50f8506385",
+    "experiments/v3/generation-authority/audit.py": "667517c93b926eca47709ceeee123c39ffd24a0c37356ba34f222bcca20124fc",
+    "experiments/v3/generation-authority/authority.py": "c2fd5911e8cdc8ef3f746b7c7b9e2a81de8e6a3841533df78cbb800e5e2aca5e",
+    "experiments/v3/generation-authority/check.py": "c0ea248095efa3e1ce843bb4919b2a2bdc35d8cf94c0e55718828bb7bcefba76",
+    "experiments/v3/generation-authority/experiment.py": "58ad6b9af33d53df2bed75b840663573082af30e0fdf918847df9fb1308a3908",
+    "experiments/v3/generation-authority/support.py": "738fe0abd22104970c77c127ea2d141b6895923f6e9c49fe72c0f16fa2539737",
+    "experiments/v3/generation-authority/verify.py": "a49a697dc5aab674d4df41332a04c4034cc134aa2e356ba82d8057939dbea673"
+  },
+  "frozen_gates": [
+    {
+      "commit": "04b664c58bddb72674d297f4bcf4bef5435bda0f",
+      "branch": "codex/v3-replay-store-evidence-20260907",
+      "script": "experiments/v3/replay-store-evidence/check.py"
+    },
+    {
+      "commit": "03fd11014a5be99006d637ad5eb692faa0557f8f",
+      "branch": "codex/v3-flow-recovery-integration-20260907",
+      "script": "experiments/v3/flow-recovery-integration/check.py"
+    },
+    {
+      "commit": "f86f169c61ca6db4a3d7870353f270e35ef954d6",
+      "branch": "codex/v3-reset-mapping-20260907",
+      "script": "experiments/v3/reset-mapping/check.py"
+    },
+    {
+      "commit": "c87f492780087772e3bcb06249ef14d89e812a25",
+      "branch": "codex/v3-formal-comparison-20260907",
+      "script": "experiments/v3/formal-comparison/check.py"
+    },
+    {
+      "commit": "a497bae10dddc3adf176242aed878f83b4519316",
+      "branch": "codex/v3-interface-probes-20260907",
+      "script": "experiments/v3/interface-probes/check.py"
+    },
+    {
+      "commit": "51733c48537d91ad17774b0c05c48ec289a75517",
+      "branch": "codex/v3-formal-model-experiment",
+      "script": "docs/v3/foundation-research/mark2-research/mark3-comparison/check.py"
+    }
+  ]
+}

@@ -357,3 +357,11 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | RSE-001 | The admitted local three-event fixture distinguishes complete replay from a selected-namespace gap using fresh reader scans, controller-pinned generation digests and verified snapshot bytes; this is not production authentication. | locally observed | [Bounded local evidence](construction/replay-store-evidence-20260907/evidence.json) |
 | RSE-002 | At the five named writer cuts, the staged-generation fixture preserves an admitted old generation before publication while the tested in-place update blocks; both admit the new gap after publication. | locally observed | [Bounded local evidence](construction/replay-store-evidence-20260907/evidence.json) |
 | RSE-003 | At two receiver cuts the wire oracle accepts RESET while committed application content remains old; a committed content-and-cursor envelope then supports the tested reopen and duplicate-free completion. | locally observed | [Bounded local evidence](construction/replay-store-evidence-20260907/evidence.json) |
+
+## Generation authority local evidence, 2026-09-07
+
+| Claim | Statement | State | Evidence |
+| --- | --- | --- | --- |
+| GRA-001 | The named local schedules preserve fixed-generation reader rights across publication and authority restart under both drain and pinned-generation policies. | locally observed | [Bound evidence](construction/generation-authority-20260907/evidence.json) |
+| GRA-002 | The local stable-range lock excludes a second cooperating authority; restarted or revoked publisher permits refuse selection changes in the named schedules. | locally observed | [Bound evidence](construction/generation-authority-20260907/evidence.json) |
+| GRA-003 | Named local reclamation cuts resume from durable retirement intent, retain pinned bytes and permit old-generation deletion while a current-generation reader remains active. | locally observed | [Bound evidence](construction/generation-authority-20260907/evidence.json) |

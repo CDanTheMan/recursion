@@ -1,0 +1,5100 @@
+{
+  "all_helpers_waited": true,
+  "case_count": 128,
+  "formal_freeze": false,
+  "helper_process_count": 400,
+  "live_provider_calls": 0,
+  "power_loss_durability_established": false,
+  "production_authentication_established": false,
+  "rows": [
+    {
+      "case": "r0-drain-before-publish-event-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_manifest",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-drains",
+          "value": "busy"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "two_pins",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "stale_writer_cancel",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "restart_live_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "publish_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publish_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_intent_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_partial_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "reader_death",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publisher_death",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "lock_exclusion",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "acquisition_race",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-event-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "negative_tokens",
+      "unit": "event"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_manifest",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-drains",
+          "value": "busy"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "two_pins",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "stale_writer_cancel",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "restart_live_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "publish_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publish_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_intent_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_partial_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "reader_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publisher_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "lock_exclusion",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "acquisition_race",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-drain-before-publish-utf8-byte-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "negative_tokens",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-event-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_manifest",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-blocks",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "two_pins",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "stale_writer_cancel",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "restart_live_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "publish_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publish_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_intent_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_partial_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "reader_death",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publisher_death",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "lock_exclusion",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "acquisition_race",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-event-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "negative_tokens",
+      "unit": "event"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_manifest",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-blocks",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "two_pins",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "stale_writer_cancel",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "restart_live_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "publish_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publish_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_intent_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_partial_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "reader_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publisher_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "lock_exclusion",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "acquisition_race",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r0-pinned-generation-utf8-byte-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "negative_tokens",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-event-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_manifest",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-drains",
+          "value": "busy"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "two_pins",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "stale_writer_cancel",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "restart_live_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "publish_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publish_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_intent_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_partial_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "reader_death",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publisher_death",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "lock_exclusion",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "acquisition_race",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-event-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "negative_tokens",
+      "unit": "event"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "overlap_manifest",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-drains",
+          "value": "busy"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "two_pins",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "stale_writer_cancel",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "restart_live_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "pin_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "publish_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publish_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_intent_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "retire_partial_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "reader_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "publisher_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "drain-before-publish",
+      "schedule": "lock_exclusion",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "busy"
+        },
+        {
+          "name": "drain-closes-new-admission",
+          "value": "drain-admission-closed"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "publish-after-drain",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "acquisition_race",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-drain-before-publish-utf8-byte-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "drain-before-publish",
+      "schedule": "negative_tokens",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-event-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_manifest",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-blocks",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "two_pins",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "stale_writer_cancel",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "restart_live_pin",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "publish_staged_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publish_reply_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_intent_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_partial_loss",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "reader_death",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publisher_death",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "lock_exclusion",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "acquisition_race",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-event-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "negative_tokens",
+      "unit": "event"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-overlap_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-overlap_manifest",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "overlap_manifest",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-two_pins",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "third-pin-capacity",
+          "value": "pin-capacity"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "second-pin-still-blocks",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "two_pins",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-stale_writer_cancel",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "stale_writer_cancel",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-restart_live_pin",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "old-writer-after-restart",
+          "value": "stale-writer"
+        },
+        {
+          "name": "old-pin-after-restart",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "restart_live_pin",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-pin_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 0
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-pin_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "pin-survives-only-commit",
+          "value": 1
+        },
+        {
+          "name": "orphan-pin-valid",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "pin_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-publish_staged_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 1
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "publish_staged_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-publish_reply_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-commit-survives",
+          "value": 2
+        },
+        {
+          "name": "old-publish-retry-refused",
+          "value": "stale-writer"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publish_reply_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-retire_intent_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_intent_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-retire_partial_loss",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-intent-survives",
+          "value": "retiring"
+        },
+        {
+          "name": "reclamation-recovered",
+          "value": "removed"
+        },
+        {
+          "name": "recovery-deleted-only-old",
+          "value": false
+        },
+        {
+          "name": "repeat-reclaim-idempotent",
+          "value": true
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "retire_partial_loss",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-reader_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "premature-reader-cleanup",
+          "value": "refused"
+        },
+        {
+          "name": "dead-pin-still-durable",
+          "value": "ok"
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "reader_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-publisher_death",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "same-term-stale-permit",
+          "value": "stale-writer"
+        },
+        {
+          "name": "replacement-publisher",
+          "value": "ok"
+        }
+      ],
+      "final_old_status": "retained",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "publisher_death",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-lock_exclusion",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "second-authority-lock-refused",
+          "value": 3
+        },
+        {
+          "name": "wrong-offset-is-ineffective",
+          "value": "lock:held"
+        },
+        {
+          "name": "lock-reacquired-after-wait",
+          "value": 2
+        }
+      ],
+      "final_old_status": "current",
+      "final_selected": 1,
+      "policy": "pinned-generation",
+      "schedule": "lock_exclusion",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-acquisition_race",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "publication-with-pins",
+          "value": "ok"
+        },
+        {
+          "name": "new-old-selection-refused",
+          "value": "not-current-selection"
+        },
+        {
+          "name": "live-pin-blocks-reclaim",
+          "value": "generation-pinned"
+        },
+        {
+          "name": "stale-selection-between-select-and-pin",
+          "value": "refused"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 1
+        },
+        {
+          "name": "reclaim-after-release",
+          "value": "ok"
+        },
+        {
+          "name": "old-files-removed",
+          "value": false
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "acquisition_race",
+      "unit": "utf8-byte"
+    },
+    {
+      "case": "r1-pinned-generation-utf8-byte-negative_tokens",
+      "checks": [
+        {
+          "name": "authority-ready",
+          "value": null
+        },
+        {
+          "name": "wrong-holder-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "transplanted-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "duplicate-holder-refused",
+          "value": "duplicate-reader"
+        },
+        {
+          "name": "released-pin-refused",
+          "value": "invalid-pin"
+        },
+        {
+          "name": "released-reader-launch-refused",
+          "value": null
+        },
+        {
+          "name": "claim-admitted",
+          "value": "ok"
+        },
+        {
+          "name": "substituted-publisher-digest",
+          "value": "stale-writer"
+        },
+        {
+          "name": "substituted-parent",
+          "value": "stale-writer"
+        },
+        {
+          "name": "valid-permit-rejects-snapshot.json",
+          "value": "generation-content"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-permit-rejects-event3.json",
+          "value": "generation-membership"
+        },
+        {
+          "name": "fault-preserves-selection",
+          "value": 1
+        },
+        {
+          "name": "valid-publication",
+          "value": "ok"
+        },
+        {
+          "name": "current-reader-allows-old-reclaim",
+          "value": "ok"
+        },
+        {
+          "name": "reader-exit",
+          "value": 0
+        },
+        {
+          "name": "read-fixed-generation",
+          "value": 2
+        },
+        {
+          "name": "two-generation-backpressure",
+          "value": "domain-generation-limit"
+        }
+      ],
+      "final_old_status": "removed",
+      "final_selected": 2,
+      "policy": "pinned-generation",
+      "schedule": "negative_tokens",
+      "unit": "utf8-byte"
+    }
+  ],
+  "status": "named-concurrent-schedules-pass"
+}
