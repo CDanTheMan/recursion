@@ -375,3 +375,9 @@ each retained model witness. Actual emitted-exhaustion recovery remains in liter
 the normal-source product admits only funded emissions. No general adapter equivalence, storage
 implementation or common-writer migration clearance follows.
 See [executed results](construction/flow-recovery-integration-20260907/results.json).
+
+## Replay evidence admission, 2026-09-07
+
+RSE-001 establishes a local fixture path from selected namespace bytes to replay admission. The proposed adapter must bind the requested stream, epoch, cursor unit, generation and snapshot identity; derive a contiguous retained suffix; and refuse mixed or unverified evidence. A retained early event does not lower the floor past a later hole. A cursor inside a multibyte payload is not an event boundary. A selected-generation rollback must fail the controller's expected-generation pin even when the old files are intact.
+
+This is a provisional construction refinement beneath unchanged M1B. A notification-queue miss alone is not replay loss. Complete replay from the client cursor advertises that replay baseline in WELCOME; advertising a future snapshot cursor would advance the immutable audit before replaying the intervening events. A true selected-namespace gap uses a verified snapshot at or beyond its derived floor, immediate RESET, and fresh CREDIT before further EVENTs. RSE-001 is confined to the [admitted local three-event experiment](construction/replay-store-evidence-20260907/dossier.md); production authentication, arbitrary concurrency and live upstream support are unknown.

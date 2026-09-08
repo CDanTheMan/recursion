@@ -349,3 +349,11 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | FRI-001 | In the declared four-event mixed-byte domain, separate split and inclusive models correspond over 97,500 reachable split/audit states per cursor profile, with 603,827 transitions and no frontier; this is conditional finite evidence, not full formal freeze. | modeled | [Bounded results](construction/flow-recovery-integration-20260907/evidence.json) |
 | FRI-002 | The integrated witnesses preserve deferred and future candidates through modeled retention loss, separate snapshot availability, WELCOME audit advancement, RESET installation and continued delivery; physical retention and snapshot authenticity remain unproven. | modeled | [Bounded results](construction/flow-recovery-integration-20260907/evidence.json) |
 | FRI-003 | Logical Stop remains enabled across the declared finite queues and recovery phases and completes under named weak fairness; execution fencing, physical termination, parser rejection and data-delivery liveness are not established. | modeled | [Bounded results](construction/flow-recovery-integration-20260907/evidence.json) |
+
+## Replay-store evidence, 2026-09-07
+
+| Claim | Statement | State | Evidence |
+| --- | --- | --- | --- |
+| RSE-001 | The admitted local three-event fixture distinguishes complete replay from a selected-namespace gap using fresh reader scans, controller-pinned generation digests and verified snapshot bytes; this is not production authentication. | locally observed | [Bounded local evidence](construction/replay-store-evidence-20260907/evidence.json) |
+| RSE-002 | At the five named writer cuts, the staged-generation fixture preserves an admitted old generation before publication while the tested in-place update blocks; both admit the new gap after publication. | locally observed | [Bounded local evidence](construction/replay-store-evidence-20260907/evidence.json) |
+| RSE-003 | At two receiver cuts the wire oracle accepts RESET while committed application content remains old; a committed content-and-cursor envelope then supports the tested reopen and duplicate-free completion. | locally observed | [Bounded local evidence](construction/replay-store-evidence-20260907/evidence.json) |

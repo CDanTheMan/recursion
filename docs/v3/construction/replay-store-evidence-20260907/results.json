@@ -20,6 +20,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-3.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -32,6 +33,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0003-receive.json",
         "refused": false,
         "wire": [
           {
@@ -124,6 +126,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-2",
+        "_reader_receipt": "0002-read.json",
         "current_sha256": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -200,6 +204,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-7.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -214,6 +219,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0007-receive.json",
         "refused": false,
         "wire": [
           {
@@ -286,6 +292,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-6",
+        "_reader_receipt": "0006-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -341,6 +349,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-10",
+        "_reader_receipt": "0010-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -365,6 +375,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-13",
+        "_reader_receipt": "0013-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -389,6 +401,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-16",
+        "_reader_receipt": "0016-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/manifest.json": "2059fd66478a2a263c576c685a20e45bf0568f913cd7698daf8d7e60d774ab8c"
@@ -407,6 +421,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-19",
+        "_reader_receipt": "0019-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/manifest.json": "2c155f9d4c8c371b30b22b89f608e22aad1d5437373ba69984f661fdd102c98b"
@@ -434,6 +450,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-23.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -448,6 +465,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0023-receive.json",
         "refused": false,
         "wire": [
           {
@@ -520,6 +538,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-22",
+        "_reader_receipt": "0022-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -582,6 +602,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-27.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -596,6 +617,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0027-receive.json",
         "refused": false,
         "wire": [
           {
@@ -650,6 +672,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-29.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -664,6 +687,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0029-receive.json",
         "refused": false,
         "wire": [
           {
@@ -736,6 +760,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-28",
+        "_reader_receipt": "0028-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -795,6 +821,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-31.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -807,6 +834,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0031-receive.json",
         "refused": false,
         "wire": [
           {
@@ -839,6 +867,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-26",
+        "_reader_receipt": "0026-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -901,6 +931,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-35.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -915,6 +946,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0035-receive.json",
         "refused": false,
         "wire": [
           {
@@ -969,6 +1001,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-37.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -983,6 +1016,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0037-receive.json",
         "refused": false,
         "wire": [
           {
@@ -1055,6 +1089,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-36",
+        "_reader_receipt": "0036-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -1114,6 +1150,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-39.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -1126,6 +1163,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0039-receive.json",
         "refused": false,
         "wire": [
           {
@@ -1158,6 +1196,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-34",
+        "_reader_receipt": "0034-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -1220,6 +1260,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-43.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -1234,6 +1275,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0043-receive.json",
         "refused": false,
         "wire": [
           {
@@ -1288,6 +1330,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-45.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -1300,6 +1343,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0045-receive.json",
         "refused": false,
         "wire": [
           {
@@ -1362,6 +1406,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-44",
+        "_reader_receipt": "0044-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -1421,6 +1467,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-47.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -1433,6 +1480,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0047-receive.json",
         "refused": false,
         "wire": [
           {
@@ -1465,6 +1513,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-42",
+        "_reader_receipt": "0042-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -1529,6 +1579,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-50.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -1541,6 +1592,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0050-receive.json",
         "refused": false,
         "wire": [
           {
@@ -1633,6 +1685,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-49",
+        "_reader_receipt": "0049-read.json",
         "current_sha256": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -1709,6 +1763,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-54.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -1723,6 +1778,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0054-receive.json",
         "refused": false,
         "wire": [
           {
@@ -1795,6 +1851,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-53",
+        "_reader_receipt": "0053-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -1850,6 +1908,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-57",
+        "_reader_receipt": "0057-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -1874,6 +1934,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-60",
+        "_reader_receipt": "0060-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -1898,6 +1960,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-63",
+        "_reader_receipt": "0063-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/manifest.json": "93d152d416725e3a76b59231c065ed69482b875bdb30257f98eebf82002897c8"
@@ -1916,6 +1980,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-66",
+        "_reader_receipt": "0066-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/manifest.json": "b71c092fcfbc4742193f3c7ecb788df6fbb74584a9f5bc522e347ec51a7c4107"
@@ -1943,6 +2009,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-70.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -1957,6 +2024,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0070-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2029,6 +2097,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-69",
+        "_reader_receipt": "0069-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -2091,6 +2161,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-74.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2105,6 +2176,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0074-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2159,6 +2231,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-76.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2173,6 +2246,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0076-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2245,6 +2319,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-75",
+        "_reader_receipt": "0075-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -2304,6 +2380,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-78.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2316,6 +2393,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0078-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2348,6 +2426,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-73",
+        "_reader_receipt": "0073-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -2410,6 +2490,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-82.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2424,6 +2505,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0082-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2478,6 +2560,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-84.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2492,6 +2575,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0084-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2564,6 +2648,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-83",
+        "_reader_receipt": "0083-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -2623,6 +2709,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-86.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2635,6 +2722,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0086-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2667,6 +2755,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-81",
+        "_reader_receipt": "0081-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -2729,6 +2819,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-90.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2743,6 +2834,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0090-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2797,6 +2889,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-92.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2809,6 +2902,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0092-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2871,6 +2965,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-91",
+        "_reader_receipt": "0091-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -2930,6 +3026,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-94.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -2942,6 +3039,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0094-receive.json",
         "refused": false,
         "wire": [
           {
@@ -2974,6 +3072,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-89",
+        "_reader_receipt": "0089-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -3038,6 +3138,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-97.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -3050,6 +3151,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0097-receive.json",
         "refused": false,
         "wire": [
           {
@@ -3142,6 +3244,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-96",
+        "_reader_receipt": "0096-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -3218,6 +3322,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-101.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -3232,6 +3337,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0101-receive.json",
         "refused": false,
         "wire": [
           {
@@ -3304,6 +3410,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-100",
+        "_reader_receipt": "0100-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -3368,6 +3476,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-105.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -3380,6 +3489,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0105-receive.json",
         "refused": false,
         "wire": [
           {
@@ -3472,6 +3582,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-104",
+        "_reader_receipt": "0104-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -3548,6 +3660,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-109.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -3560,6 +3673,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0109-receive.json",
         "refused": false,
         "wire": [
           {
@@ -3652,6 +3766,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-108",
+        "_reader_receipt": "0108-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -3728,6 +3844,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-113.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -3740,6 +3857,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0113-receive.json",
         "refused": false,
         "wire": [
           {
@@ -3832,6 +3950,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-112",
+        "_reader_receipt": "0112-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -3908,6 +4028,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-117.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -3920,6 +4041,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0117-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4012,6 +4134,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-116",
+        "_reader_receipt": "0116-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -4088,6 +4212,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-121.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4102,6 +4227,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0121-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4174,6 +4300,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-120",
+        "_reader_receipt": "0120-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -4236,6 +4364,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-125.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4250,6 +4379,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0125-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4304,6 +4434,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-127.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4318,6 +4449,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0127-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4390,6 +4522,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-126",
+        "_reader_receipt": "0126-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -4449,6 +4583,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-129.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4461,6 +4596,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0129-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4493,6 +4629,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-124",
+        "_reader_receipt": "0124-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -4555,6 +4693,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-133.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4569,6 +4708,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0133-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4623,6 +4763,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-135.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4637,6 +4778,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0135-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4709,6 +4851,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-134",
+        "_reader_receipt": "0134-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -4768,6 +4912,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-137.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4780,6 +4925,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0137-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4812,6 +4958,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-132",
+        "_reader_receipt": "0132-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -4874,6 +5022,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-141.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4888,6 +5037,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0141-receive.json",
         "refused": false,
         "wire": [
           {
@@ -4942,6 +5092,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-143.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -4954,6 +5105,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0143-receive.json",
         "refused": false,
         "wire": [
           {
@@ -5016,6 +5168,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-142",
+        "_reader_receipt": "0142-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -5075,6 +5229,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-145.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -5087,6 +5242,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0145-receive.json",
         "refused": false,
         "wire": [
           {
@@ -5119,6 +5275,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-140",
+        "_reader_receipt": "0140-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -5183,6 +5341,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-148.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -5195,6 +5354,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0148-receive.json",
         "refused": false,
         "wire": [
           {
@@ -5287,6 +5447,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-147",
+        "_reader_receipt": "0147-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -5363,6 +5525,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-152.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -5377,6 +5540,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0152-receive.json",
         "refused": false,
         "wire": [
           {
@@ -5449,6 +5613,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-151",
+        "_reader_receipt": "0151-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -5513,6 +5679,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-156.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -5525,6 +5692,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0156-receive.json",
         "refused": false,
         "wire": [
           {
@@ -5617,6 +5785,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-155",
+        "_reader_receipt": "0155-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -5693,6 +5863,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-160.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -5705,6 +5876,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0160-receive.json",
         "refused": false,
         "wire": [
           {
@@ -5797,6 +5969,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-159",
+        "_reader_receipt": "0159-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -5873,6 +6047,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-164.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -5885,6 +6060,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0164-receive.json",
         "refused": false,
         "wire": [
           {
@@ -5977,6 +6153,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-163",
+        "_reader_receipt": "0163-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -6053,6 +6231,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-168.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6065,6 +6244,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0168-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6157,6 +6337,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-167",
+        "_reader_receipt": "0167-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -6233,6 +6415,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-172.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6247,6 +6430,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0172-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6319,6 +6503,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-171",
+        "_reader_receipt": "0171-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -6381,6 +6567,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-176.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6395,6 +6582,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0176-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6449,6 +6637,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-178.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6463,6 +6652,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0178-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6535,6 +6725,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-177",
+        "_reader_receipt": "0177-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -6594,6 +6786,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-180.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6606,6 +6799,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0180-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6638,6 +6832,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-175",
+        "_reader_receipt": "0175-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -6700,6 +6896,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-184.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6714,6 +6911,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0184-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6768,6 +6966,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-186.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6782,6 +6981,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0186-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6854,6 +7054,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-185",
+        "_reader_receipt": "0185-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -6913,6 +7115,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-188.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -6925,6 +7128,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0188-receive.json",
         "refused": false,
         "wire": [
           {
@@ -6957,6 +7161,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-183",
+        "_reader_receipt": "0183-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -7019,6 +7225,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-192.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -7033,6 +7240,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0192-receive.json",
         "refused": false,
         "wire": [
           {
@@ -7087,6 +7295,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-194.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -7099,6 +7308,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0194-receive.json",
         "refused": false,
         "wire": [
           {
@@ -7161,6 +7371,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-193",
+        "_reader_receipt": "0193-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -7220,6 +7432,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-196.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -7232,6 +7445,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0196-receive.json",
         "refused": false,
         "wire": [
           {
@@ -7264,6 +7478,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-191",
+        "_reader_receipt": "0191-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -7328,6 +7544,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-199.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -7340,6 +7557,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0199-receive.json",
         "refused": false,
         "wire": [
           {
@@ -7432,6 +7650,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-198",
+        "_reader_receipt": "0198-read.json",
         "current_sha256": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -7508,6 +7728,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-203.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -7522,6 +7743,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0203-receive.json",
         "refused": false,
         "wire": [
           {
@@ -7594,6 +7816,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-202",
+        "_reader_receipt": "0202-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -7649,6 +7873,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-206",
+        "_reader_receipt": "0206-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -7673,6 +7899,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-209",
+        "_reader_receipt": "0209-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -7697,6 +7925,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-212",
+        "_reader_receipt": "0212-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/manifest.json": "2059fd66478a2a263c576c685a20e45bf0568f913cd7698daf8d7e60d774ab8c"
@@ -7715,6 +7945,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-215",
+        "_reader_receipt": "0215-read.json",
         "reads": {
           "CURRENT.json": "8f51f19afde01bdc750fda28bcff84d9b0d4be035e3a55cf0c1199b3f38d847f",
           "active/manifest.json": "2c155f9d4c8c371b30b22b89f608e22aad1d5437373ba69984f661fdd102c98b"
@@ -7742,6 +7974,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-219.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -7756,6 +7989,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0219-receive.json",
         "refused": false,
         "wire": [
           {
@@ -7828,6 +8062,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-218",
+        "_reader_receipt": "0218-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -7890,6 +8126,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-223.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -7904,6 +8141,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0223-receive.json",
         "refused": false,
         "wire": [
           {
@@ -7958,6 +8196,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-225.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -7972,6 +8211,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0225-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8044,6 +8284,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-224",
+        "_reader_receipt": "0224-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -8103,6 +8345,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-227.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -8115,6 +8358,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0227-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8147,6 +8391,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-222",
+        "_reader_receipt": "0222-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -8209,6 +8455,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-231.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -8223,6 +8470,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0231-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8277,6 +8525,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-233.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -8291,6 +8540,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0233-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8363,6 +8613,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-232",
+        "_reader_receipt": "0232-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -8422,6 +8674,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-235.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -8434,6 +8687,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0235-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8466,6 +8720,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-230",
+        "_reader_receipt": "0230-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -8528,6 +8784,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-239.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -8542,6 +8799,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0239-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8596,6 +8854,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-241.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -8608,6 +8867,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0241-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8670,6 +8930,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-240",
+        "_reader_receipt": "0240-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -8729,6 +8991,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-243.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -8741,6 +9004,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0243-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8773,6 +9037,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-238",
+        "_reader_receipt": "0238-read.json",
         "current_sha256": "37d00d69db7d8a5c920af22dcd371ad6b384129164398fccbd7ac70c10e2689d",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -8837,6 +9103,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-246.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -8849,6 +9116,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0246-receive.json",
         "refused": false,
         "wire": [
           {
@@ -8941,6 +9209,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-245",
+        "_reader_receipt": "0245-read.json",
         "current_sha256": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -9017,6 +9287,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-250.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9031,6 +9302,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0250-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9103,6 +9375,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-249",
+        "_reader_receipt": "0249-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -9158,6 +9432,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-253",
+        "_reader_receipt": "0253-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -9182,6 +9458,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-256",
+        "_reader_receipt": "0256-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -9206,6 +9484,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-259",
+        "_reader_receipt": "0259-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/manifest.json": "93d152d416725e3a76b59231c065ed69482b875bdb30257f98eebf82002897c8"
@@ -9224,6 +9504,8 @@
       "expected": "blocked",
       "kind": "writer-or-baseline",
       "store": {
+        "_read_snapshot": "read-snapshot-262",
+        "_reader_receipt": "0262-read.json",
         "reads": {
           "CURRENT.json": "e07a4eb00f6e38ced2ee0e21eb075130801bb195eadd2491a919045cba31029c",
           "active/manifest.json": "b71c092fcfbc4742193f3c7ecb788df6fbb74584a9f5bc522e347ec51a7c4107"
@@ -9251,6 +9533,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-266.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9265,6 +9548,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0266-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9337,6 +9621,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-265",
+        "_reader_receipt": "0265-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -9399,6 +9685,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-270.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9413,6 +9700,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0270-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9467,6 +9755,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-272.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9481,6 +9770,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0272-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9553,6 +9843,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-271",
+        "_reader_receipt": "0271-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -9612,6 +9904,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-274.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9624,6 +9917,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0274-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9656,6 +9950,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-269",
+        "_reader_receipt": "0269-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -9718,6 +10014,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-278.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9732,6 +10029,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0278-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9786,6 +10084,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-280.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9800,6 +10099,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0280-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9872,6 +10172,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-279",
+        "_reader_receipt": "0279-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -9931,6 +10233,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-282.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -9943,6 +10246,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0282-receive.json",
         "refused": false,
         "wire": [
           {
@@ -9975,6 +10279,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-277",
+        "_reader_receipt": "0277-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -10037,6 +10343,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-286.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -10051,6 +10358,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0286-receive.json",
         "refused": false,
         "wire": [
           {
@@ -10105,6 +10413,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-288.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -10117,6 +10426,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0288-receive.json",
         "refused": false,
         "wire": [
           {
@@ -10179,6 +10489,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-287",
+        "_reader_receipt": "0287-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -10238,6 +10550,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-290.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -10250,6 +10563,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0290-receive.json",
         "refused": false,
         "wire": [
           {
@@ -10282,6 +10596,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-285",
+        "_reader_receipt": "0285-read.json",
         "current_sha256": "0df1e9e68b742a65b49031092b61613f50e85c033335393275cfaccb6764ba38",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -10346,6 +10662,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-293.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -10358,6 +10675,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0293-receive.json",
         "refused": false,
         "wire": [
           {
@@ -10450,6 +10768,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-292",
+        "_reader_receipt": "0292-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -10526,6 +10846,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-297.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -10540,6 +10861,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0297-receive.json",
         "refused": false,
         "wire": [
           {
@@ -10612,6 +10934,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-296",
+        "_reader_receipt": "0296-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -10676,6 +11000,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-301.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -10688,6 +11013,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0301-receive.json",
         "refused": false,
         "wire": [
           {
@@ -10780,6 +11106,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-300",
+        "_reader_receipt": "0300-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -10856,6 +11184,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-305.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -10868,6 +11197,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0305-receive.json",
         "refused": false,
         "wire": [
           {
@@ -10960,6 +11290,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-304",
+        "_reader_receipt": "0304-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -11036,6 +11368,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-309.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11048,6 +11381,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0309-receive.json",
         "refused": false,
         "wire": [
           {
@@ -11140,6 +11474,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-308",
+        "_reader_receipt": "0308-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -11216,6 +11552,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-313.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11228,6 +11565,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0313-receive.json",
         "refused": false,
         "wire": [
           {
@@ -11320,6 +11658,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-312",
+        "_reader_receipt": "0312-read.json",
         "current_sha256": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01",
         "cursor_unit": "event",
         "derived_floor_cursor": 0,
@@ -11396,6 +11736,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-317.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11410,6 +11751,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0317-receive.json",
         "refused": false,
         "wire": [
           {
@@ -11482,6 +11824,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-316",
+        "_reader_receipt": "0316-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -11544,6 +11888,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-321.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11558,6 +11903,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0321-receive.json",
         "refused": false,
         "wire": [
           {
@@ -11612,6 +11958,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-323.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11626,6 +11973,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0323-receive.json",
         "refused": false,
         "wire": [
           {
@@ -11698,6 +12046,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-322",
+        "_reader_receipt": "0322-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -11757,6 +12107,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-325.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11769,6 +12120,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0325-receive.json",
         "refused": false,
         "wire": [
           {
@@ -11801,6 +12153,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-320",
+        "_reader_receipt": "0320-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -11863,6 +12217,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-329.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11877,6 +12232,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0329-receive.json",
         "refused": false,
         "wire": [
           {
@@ -11931,6 +12287,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-331.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -11945,6 +12302,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0331-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12017,6 +12375,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-330",
+        "_reader_receipt": "0330-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -12076,6 +12436,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-333.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -12088,6 +12449,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0333-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12120,6 +12482,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-328",
+        "_reader_receipt": "0328-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -12182,6 +12546,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-337.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -12196,6 +12561,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0337-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12250,6 +12616,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-339.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -12262,6 +12629,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0339-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12324,6 +12692,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-338",
+        "_reader_receipt": "0338-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -12383,6 +12753,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-341.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -12395,6 +12766,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0341-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12427,6 +12799,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-336",
+        "_reader_receipt": "0336-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -12491,6 +12865,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-344.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -12503,6 +12878,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0344-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12595,6 +12971,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-343",
+        "_reader_receipt": "0343-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -12671,6 +13049,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-348.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -12685,6 +13064,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0348-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12757,6 +13137,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-347",
+        "_reader_receipt": "0347-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -12821,6 +13203,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-352.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -12833,6 +13216,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0352-receive.json",
         "refused": false,
         "wire": [
           {
@@ -12925,6 +13309,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-351",
+        "_reader_receipt": "0351-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -13001,6 +13387,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-356.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -13013,6 +13400,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0356-receive.json",
         "refused": false,
         "wire": [
           {
@@ -13105,6 +13493,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-355",
+        "_reader_receipt": "0355-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -13181,6 +13571,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-360.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -13193,6 +13584,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0360-receive.json",
         "refused": false,
         "wire": [
           {
@@ -13285,6 +13677,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-359",
+        "_reader_receipt": "0359-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -13361,6 +13755,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-364.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -13373,6 +13768,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0364-receive.json",
         "refused": false,
         "wire": [
           {
@@ -13465,6 +13861,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-363",
+        "_reader_receipt": "0363-read.json",
         "current_sha256": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 0,
@@ -13541,6 +13939,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-368.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -13555,6 +13954,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0368-receive.json",
         "refused": false,
         "wire": [
           {
@@ -13627,6 +14027,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-367",
+        "_reader_receipt": "0367-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -13689,6 +14091,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-372.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -13703,6 +14106,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0372-receive.json",
         "refused": false,
         "wire": [
           {
@@ -13757,6 +14161,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-374.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -13771,6 +14176,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0374-receive.json",
         "refused": false,
         "wire": [
           {
@@ -13843,6 +14249,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-373",
+        "_reader_receipt": "0373-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -13902,6 +14310,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-376.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -13914,6 +14323,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0376-receive.json",
         "refused": false,
         "wire": [
           {
@@ -13946,6 +14356,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-371",
+        "_reader_receipt": "0371-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -14008,6 +14420,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-380.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -14022,6 +14435,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0380-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14076,6 +14490,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-382.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -14090,6 +14505,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0382-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14162,6 +14578,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-381",
+        "_reader_receipt": "0381-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -14221,6 +14639,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-384.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -14233,6 +14652,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0384-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14265,6 +14685,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-379",
+        "_reader_receipt": "0379-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -14327,6 +14749,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-388.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -14341,6 +14764,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0388-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14395,6 +14819,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-390.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -14407,6 +14832,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0390-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14469,6 +14895,8 @@
         ]
       },
       "reopened": {
+        "_read_snapshot": "read-snapshot-389",
+        "_reader_receipt": "0389-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -14528,6 +14956,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-392.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -14540,6 +14969,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0392-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14572,6 +15002,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-387",
+        "_reader_receipt": "0387-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -14637,6 +15069,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-394.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -14651,6 +15084,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0394-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14723,6 +15157,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-393",
+        "_reader_receipt": "0393-read.json",
         "current_sha256": "97c6cb64e46bf540e8eb78d8e69b781e84b59210dffd6acdf7fd3525ffadd8d3",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -14790,6 +15226,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-396.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "event",
@@ -14802,6 +15239,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0396-receive.json",
         "refused": false,
         "wire": [
           {
@@ -14894,6 +15332,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-395",
+        "_reader_receipt": "0395-read.json",
         "current_sha256": "79201162d8c7a3f321ca386a009f11036fe4bc0c7c409d3b23c617107ab4a58e",
         "cursor_unit": "event",
         "derived_floor_cursor": 1,
@@ -14960,6 +15400,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-397",
+        "_reader_receipt": "0397-read.json",
         "reads": {
           "CURRENT.json": "64cec4aff5b8d1787d833fec5d99813a1fd0395ada865ae0600964c7c7e9fcef",
           "g2/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -14983,6 +15425,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-398",
+        "_reader_receipt": "0398-read.json",
         "reads": {
           "CURRENT.json": "a2686ebb933394f1b266d31c2b72c29f4a0e26d0994ca06d77b0f5c904e37012",
           "g2/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -15008,6 +15452,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-399",
+        "_reader_receipt": "0399-read.json",
         "reads": {
           "CURRENT.json": "a529543731b9fb494e28a99e0b2023883725d63b54ddcfaec700407dcc64bc9e",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15029,6 +15475,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-400",
+        "_reader_receipt": "0400-read.json",
         "reads": {
           "CURRENT.json": "9c7c7287e4c0f21f9848fbb96a9e3a45e5769ea7da683edf44a84c48a18b4812",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15050,6 +15498,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-401",
+        "_reader_receipt": "0401-read.json",
         "reads": {
           "CURRENT.json": "34d38a641e127f0e56bcf607c46fafd3c9b3c4067558d7f3a45594356a68f139",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15071,6 +15521,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-402",
+        "_reader_receipt": "0402-read.json",
         "reads": {
           "CURRENT.json": "a29f2d5d713ca93e1c5fc5489c055f5afbd6f515a3f1b2e0fa10468aa06805d3",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15092,6 +15544,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-403",
+        "_reader_receipt": "0403-read.json",
         "reads": {
           "CURRENT.json": "1260a9d224118c7e1ff7c2034241a6512c8c205e62aafd596087e126c6c1f43b",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15113,6 +15567,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-404",
+        "_reader_receipt": "0404-read.json",
         "reads": {
           "CURRENT.json": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
           "g2/manifest.json": "2c155f9d4c8c371b30b22b89f608e22aad1d5437373ba69984f661fdd102c98b"
@@ -15131,6 +15587,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-405",
+        "_reader_receipt": "0405-read.json",
         "reads": {
           "CURRENT.json": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15152,6 +15610,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-406",
+        "_reader_receipt": "0406-read.json",
         "reads": {
           "CURRENT.json": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21"
         },
@@ -15171,6 +15631,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-407",
+        "_reader_receipt": "0407-read.json",
         "reads": {
           "CURRENT.json": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
           "g2/manifest.json": "2c155f9d4c8c371b30b22b89f608e22aad1d5437373ba69984f661fdd102c98b"
@@ -15189,6 +15651,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-408",
+        "_reader_receipt": "0408-read.json",
         "reads": {
           "CURRENT.json": "4ecf8232ee868d3a868d458bc75c451472d0eeef47d9a791faf48855584c3c01"
         },
@@ -15203,10 +15667,12 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-409",
+        "_reader_receipt": "0409-read.json",
         "reads": {
-          "CURRENT.json": "55cb469acbd09bb3f4949176698222080fac24ac7811efc03717df07c3c72823"
+          "CURRENT.json": "a3aeec1632e3f82a8cb19b8c03dd786c870c085228d673061b7f92bfedb0d6ca"
         },
-        "reason": "current-pin-mismatch",
+        "reason": "duplicate-json-key",
         "selected_files": [],
         "status": "blocked"
       }
@@ -15225,11 +15691,15 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-411.json",
         "decision": null,
+        "receipt": "0411-receive.json",
         "refused": true,
         "wire": []
       },
       "store": {
+        "_read_snapshot": "read-snapshot-410",
+        "_reader_receipt": "0410-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -15294,11 +15764,15 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-413.json",
         "decision": null,
+        "receipt": "0413-receive.json",
         "refused": true,
         "wire": []
       },
       "store": {
+        "_read_snapshot": "read-snapshot-412",
+        "_reader_receipt": "0412-read.json",
         "current_sha256": "aee3d4cbe84fccf4933fb761a010bf9ec32dcf10bfadc89ac2f9eb1cce63ba21",
         "cursor_unit": "event",
         "derived_floor_cursor": 2,
@@ -15364,6 +15838,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-415.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -15378,6 +15853,7 @@
           "status": "accepted-reset",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0415-receive.json",
         "refused": false,
         "wire": [
           {
@@ -15450,6 +15926,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-414",
+        "_reader_receipt": "0414-read.json",
         "current_sha256": "d70dbf3b21047166747b6ba1f9716358bd1b5743d8f34dd672b6da82673b57c2",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -15517,6 +15995,7 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-417.json",
         "decision": {
           "actor_create_count": 0,
           "cursor_unit": "utf8-byte",
@@ -15529,6 +16008,7 @@
           "status": "accepted",
           "type": "BrokerTraceDecision@1"
         },
+        "receipt": "0417-receive.json",
         "refused": false,
         "wire": [
           {
@@ -15621,6 +16101,8 @@
         ]
       },
       "store": {
+        "_read_snapshot": "read-snapshot-416",
+        "_reader_receipt": "0416-read.json",
         "current_sha256": "4e9dcc1c621b64ba20619db84d9a56c44cd432cab2a81dfa2049649a21eabd51",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 1,
@@ -15687,6 +16169,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-418",
+        "_reader_receipt": "0418-read.json",
         "reads": {
           "CURRENT.json": "48c5c445c0efd90390a4b7c5b94df71025d3d2a4168df4ec062621743d7cb4ca",
           "g2/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -15710,6 +16194,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-419",
+        "_reader_receipt": "0419-read.json",
         "reads": {
           "CURRENT.json": "22b81332565f59bec82782caf38af6d671e1fbade9491a607dbafa9969554c6a",
           "g2/event1.json": "3b620afa1ad60f1a04e75dd8e8b66ad127db9dfbc39a25890b2b3e240e0cef48",
@@ -15735,6 +16221,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-420",
+        "_reader_receipt": "0420-read.json",
         "reads": {
           "CURRENT.json": "f200953f1c2b69179860bc9e5aa2dff60fbd4817b06b0e39ac75462a2102ff08",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15756,6 +16244,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-421",
+        "_reader_receipt": "0421-read.json",
         "reads": {
           "CURRENT.json": "ad3fd4221eeb017ec7a6b40b5b12ea7a361e663038c2dd75a826db79f6dc6268",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15777,6 +16267,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-422",
+        "_reader_receipt": "0422-read.json",
         "reads": {
           "CURRENT.json": "abdaa15fa67e239495015772c925ae7bf5c55ff5322b06801698042d86ad4c9a",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15798,6 +16290,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-423",
+        "_reader_receipt": "0423-read.json",
         "reads": {
           "CURRENT.json": "b589f934f8b9de7cf4cffd1d5d28cb7ce1875fc465d7535c966d9420a12e121f",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15819,6 +16313,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-424",
+        "_reader_receipt": "0424-read.json",
         "reads": {
           "CURRENT.json": "d5e5b15b30601ba204653184a3ae2a21f3832c2be37985f0c8dda2664118b386",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15840,6 +16336,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-425",
+        "_reader_receipt": "0425-read.json",
         "reads": {
           "CURRENT.json": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
           "g2/manifest.json": "b71c092fcfbc4742193f3c7ecb788df6fbb74584a9f5bc522e347ec51a7c4107"
@@ -15858,6 +16356,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-426",
+        "_reader_receipt": "0426-read.json",
         "reads": {
           "CURRENT.json": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
           "g2/event3.json": "971e375f3738a76f00299dcdefe6e4a10dc9d8c030c847176646bf4e5e6964aa",
@@ -15879,6 +16379,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-427",
+        "_reader_receipt": "0427-read.json",
         "reads": {
           "CURRENT.json": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a"
         },
@@ -15898,6 +16400,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-428",
+        "_reader_receipt": "0428-read.json",
         "reads": {
           "CURRENT.json": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
           "g2/manifest.json": "b71c092fcfbc4742193f3c7ecb788df6fbb74584a9f5bc522e347ec51a7c4107"
@@ -15916,6 +16420,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-429",
+        "_reader_receipt": "0429-read.json",
         "reads": {
           "CURRENT.json": "c2fe4d3f18efe7e8a1ea8b7fb2afe265537b690dc6841a85fe2012fc04cc731a"
         },
@@ -15930,10 +16436,12 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-430",
+        "_reader_receipt": "0430-read.json",
         "reads": {
-          "CURRENT.json": "55cb469acbd09bb3f4949176698222080fac24ac7811efc03717df07c3c72823"
+          "CURRENT.json": "83ee0e6b722116ebde27747ed93678c053dc95ae2277d1fca576e9acb1778d28"
         },
-        "reason": "current-pin-mismatch",
+        "reason": "duplicate-json-key",
         "selected_files": [],
         "status": "blocked"
       }
@@ -15952,11 +16460,15 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-432.json",
         "decision": null,
+        "receipt": "0432-receive.json",
         "refused": true,
         "wire": []
       },
       "store": {
+        "_read_snapshot": "read-snapshot-431",
+        "_reader_receipt": "0431-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -16021,11 +16533,15 @@
           "stream": "stream-a",
           "version": 1
         },
+        "application_file": "application-observation-434.json",
         "decision": null,
+        "receipt": "0434-receive.json",
         "refused": true,
         "wire": []
       },
       "store": {
+        "_read_snapshot": "read-snapshot-433",
+        "_reader_receipt": "0433-read.json",
         "current_sha256": "8ad317de74beaeabae9d0cb1d331a32b1969ca7df83ae8d4dca24b333757771a",
         "cursor_unit": "utf8-byte",
         "derived_floor_cursor": 3,
@@ -16082,6 +16598,8 @@
       "expected": "blocked",
       "kind": "namespace-control",
       "store": {
+        "_read_snapshot": "read-snapshot-435",
+        "_reader_receipt": "0435-read.json",
         "reads": {},
         "reason": "cursor-inside-payload-or-outside-catalog",
         "selected_files": [],

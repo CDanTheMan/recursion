@@ -433,3 +433,9 @@ validators, and runs four original working gates in frozen predecessor worktrees
 receipts stay under Git common research-attestations/flow-recovery-integration/<candidate>/.
 Full formal acceptance remains false; the six obligations, 27 rows and all prior probe/scenario
 coverage remain required, including the unresolved event-queue and physical-recovery cases.
+
+## Replay-store evidence gate, 2026-09-07
+
+Accept this scoped local evidence only with two complete gates on the identical clean candidate and two independent exact-commit approvals. The [new gate](../../experiments/v3/replay-store-evidence/check.py) checks prospective source/runtime/filesystem admission, all retained attempts, independent raw child/read/application bindings, 115 named cases and unchanged literal M1B validation. It preserves the 25-command regression inventory and five frozen prior working gates. Final receipts remain outside the candidate.
+
+A passing result supports the stated local mechanism and application-reopen behavior. It does not complete the six-obligation formal comparison, authorize a product store, prove authentication/power-loss durability, establish upstream route eligibility or resolve common-writer migration. See [evidence](construction/replay-store-evidence-20260907/evidence.json).

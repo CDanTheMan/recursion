@@ -268,3 +268,9 @@ tracked content. Check the completion receipt before treating this packet as pub
 An automatic account reset, exploration limit, the 3% capacity reserve or outer deadline ends
 new construction and produces a truthful checkpoint; no manual reset, billing fallback or
 operational configuration change is permitted. The live account feed determines observed reset.
+
+## Next construction requests after replay-store evidence, 2026-09-07
+
+Use the [dossier and handoff](construction/replay-store-evidence-20260907/dossier.md) to continue from the exact reviewed candidate. Request one bounded local campaign for an explicit generation authority, reader pin lifetime and publisher-death recovery; admit concurrent reads only after preregistering interleavings and ownership. The next formal request must integrate the resulting evidence relation into both full model boundaries and retain all shared obligations and the unimplemented trace rows.
+
+Separately prepare expected-revision configuration publication, accepted/applied revisions, disabled-plugin cost and stale-session response controls. The Owner-suggested management UI is pinned inspiration, not route admission or a selected framework. Astra High Standard remains the recommended configuration for these bounded construction tasks; escalate reasoning effort only if a concrete proof ambiguity persists after targeted review. No new Owner decision is raised by the current evidence.

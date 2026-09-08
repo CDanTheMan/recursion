@@ -127,6 +127,12 @@
       "start": 1,
       "end": 3,
       "reserved": []
+    },
+    {
+      "prefix": "RSE",
+      "start": 1,
+      "end": 3,
+      "reserved": []
     }
   ],
   "foreignRegistries": [

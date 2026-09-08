@@ -525,3 +525,9 @@ logical Stop and modeled store facts limit this evidence. The original six oblig
 27-row comparison contract remain authoritative; full freeze is false. Next discriminators are
 independent source evidence, physical control transport, and broader fault-recovery products.
 See [packet evidence](construction/flow-recovery-integration-20260907/evidence.json).
+
+## Local replay-store evidence, 2026-09-07
+
+RSE-002 adds observed support for a staged-generation construction candidate: write and verify an isolated generation, publish one selected-generation pointer, and keep the preceding generation fenced from current replay but available for recovery analysis. Across the five named process cuts, the tested staged layout retains old coherent replay before publication; the tested in-place snapshot/prune layout blocks. This compares these two concrete mechanisms, not every possible in-place transaction or product store. A transactional in-place design remains a competitor for later storage comparison.
+
+The [campaign dossier](construction/replay-store-evidence-20260907/dossier.md) binds source, host, raw observations and limits. Controller-pinned hashes are a synthetic trust anchor. The construction still needs a production authority for generation selection, concurrent-reader and publisher-death handling, and platform-specific durability evidence. No language/store/framework is selected; the full formal-model freeze and common-writer migration blocker remain open.
