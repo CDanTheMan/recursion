@@ -13,6 +13,7 @@ def peak_bytes():
     return c.PeakWorkingSetSize
 
 WITNESSES={
+ 'recovery-trigger-probe':lambda s:s.phase==3 and not s.gap,
  'free-shared-core':lambda s:s.phase==5 and s.g==2 and s.cut==2 and s.snapshot[2]==1 and s.waited and not s.pin and s.residents==2,
  'old-cut-new-attempt':lambda s:s.phase==5 and s.snapshot[2]==1 and s.cut==2 and s.hold,
  'reader-reclaim-install':lambda s:s.phase==5 and s.snapshot[0]==1 and s.residents==2 and s.waited,
@@ -29,6 +30,7 @@ WITNESSES={
  'recipient-refusal':lambda s:s.cut==4 and s.remote==3 and not s.hold,
 }
 MUTANTS={
+ 'unexpected-reset':'recovery-trigger-probe','reset-keeps-credit':'old-cut-new-attempt',
  'control-apply':'queue-gap-stop',
  'replay-settlement':'old-cut-new-attempt','status-only-hold':'old-cut-new-attempt',
  'pending-only-hold':'conflict-pause','invocation-release':'ownership-probes',
@@ -82,6 +84,18 @@ def run(directory,limits):
                             found={'name':'reclaim-blocked-by-independent-reader','trace':ex.path(parents,i)+[action],'state':asdict(av[j])};break
                 if found:break
             ex.audit.need(found,'blocked reader reclaim witness');witnesses.append(found)
+            trace,last=ex.ordered(av,ag,[
+              lambda s,a,n:a=='publish' and s.reader==1 and n.g==2,
+              lambda s,a,n:a=='reclaim_early' and s.reader==1 and not s.pin and s.capsule and n.residents==3,
+              lambda s,a,n:a=='copy',lambda s,a,n:a=='reader_wait',
+              lambda s,a,n:a=='reclaim' and n.residents==2,lambda s,a,n:a=='install'])
+            witnesses.append({'name':'ordered-reader-reclaim-install','trace':trace,'state':asdict(last)})
+        if name=='reset-restart-future-output':
+            trace,last=ex.ordered(av,ag,[
+              lambda s,a,n:a=='install' and s.restarted and s.snapshot[2]==1 and s.cut==2 and 2 in s.queue and 2 in n.queue,
+              lambda s,a,n:a=='fresh_credit',
+              lambda s,a,n:a=='event:after_install' and n.view==2 and n.content[1]==2 and n.hold])
+            witnesses.append({'name':'queued-future-retained-then-delivered','trace':trace,'state':asdict(last)})
         if name=='queue-gap-stop':
             found=next(((i,j) for i,s in enumerate(av) if len(s.queue)==2 and not s.stopped for action,j in ag[i] if action=='stop' and av[j].stopped),None)
             ex.audit.need(found is not None,'Stop applies from saturated queue');i,j=found

@@ -105,6 +105,27 @@ Run01 remains superseded evidence; its state-only witnesses did not establish th
 orders. This revision is committed before its own run and does not promote the
 original broad comparison to complete coverage.
 
+Prospective revision3, after retained run02 and a second contract challenge:
+require explicit gap detection before recovery emission, clear receiver EVENT
+credit on emission, allow one fresh grant after emission (possibly before content
+installation), and prove retained future delivery after installation and that grant.
+Add a fifteenth recovery-trigger negative profile. The queue here owns broker-side
+undelivered source entries; it is NOT M1B's receiver pending/unacknowledged queue.
+Advertisement/copy/install are internal implementation phases. Gap detection is an
+abstract environment assertion of a missing suffix, not a tested HELLO/WELCOME
+exchange. The inherited M1B wire oracle remains unchanged; full wire identity,
+byte-credit, ACK, framing and restart handshake correspondence remain unproved.
+Thus these internal phase graphs must not be reported as observed M1B integration.
+Require single edge-milestone paths for pinned publication → refused reclaim →
+copy/wait → reclaim → install and prequeued future entry → install → fresh grant →
+delivery. Run02 remains superseded, with its source and outcomes retained.
+
+The modeled reply is an acknowledgment received after committed publication;
+publish → writer restart → acknowledgment is tested, but a lost-reply transport is
+not represented. Full goal/lease/issuer epoch namespaces and the outstanding
+external-effect reservation remain inherited assumptions/residuals. Settlement
+hold and lifetime compute are not a substitute for that reservation variable.
+
 Exhaustively enumerate every reachable state and transition of the declared
 profile in both representations; a nonempty frontier or resource limit is
 incomplete. Require per-edge independent authority/evidence/pin write footprints,

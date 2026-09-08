@@ -57,7 +57,11 @@ def step(s,name,mutant=''):
         return replace(s,copied=True,phase=2,reader=0 if mutant=='copy-release' else s.reader)
     if a=='reader_wait':return replace(s,reader=0,waited=True) if s.copied else None
     if a=='advertise':return replace(s,phase=3) if s.phase==2 else None
-    if a=='emit_reset':return replace(s,phase=4) if s.phase==3 else None
+    if a=='detect_gap':return replace(s,gap=True) if len(s.journal)>s.view else None
+    if a=='fresh_credit':return replace(s,credit=1) if s.phase in (4,5) and not s.gap else None
+    if a=='emit_reset':
+        if s.phase!=3 or (not s.gap and mutant!='unexpected-reset'):return None
+        return replace(s,phase=4,gap=False,credit=s.credit if mutant=='reset-keeps-credit' else 0)
     if a=='broker_restart':
         if s.phase!=4:return None
         return replace(s,phase=2,restarted=True,view=s.snapshot[1] if mutant=='emission-install' else s.view)
@@ -80,6 +84,7 @@ def step(s,name,mutant=''):
         return replace(s,queue=s.queue[1:],loss=s.queue[0])
     if a=='event':
         if not s.queue or not s.credit:return None
+        if s.gap:return None
         if s.phase==4 and mutant!='reset-order':return None
         if (s.queue[0]!=s.view+1 or s.view<s.loss) and mutant!='gap-order':return None
         i=s.queue[0]

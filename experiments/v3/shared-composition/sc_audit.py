@@ -20,7 +20,8 @@ FOOTPRINT={
  'conflict':('cut','hold','journal'),'spawn2':('incarnation','spent'),
  'finish2':('closed2',),'old_ack':('ack',),'reset':('reset',),'fresh_write':('write_result',),
  'capture':('snapshot','reader','phase'),'copy':('copied','phase'),
- 'reader_wait':('reader','waited'),'advertise':('phase',),'emit_reset':('phase',),
+ 'reader_wait':('reader','waited'),'advertise':('phase',),'emit_reset':('phase','gap','credit'),
+ 'detect_gap':('gap',),'fresh_credit':('credit',),
  'broker_restart':('phase','restarted'),
  'install':('view','content','phase','queue','ingested'),
  'ingest':('ingested','queue'),'lose_ingress':('ingested','loss'),
@@ -28,6 +29,9 @@ FOOTPRINT={
 }
 
 def invariant(s):
+    default=State()
+    need(all(type(getattr(s,k)) is type(getattr(default,k)) for k in NAMES),'declared field types')
+    need(s.g in (1,2) and s.term in (1,2) and s.serial in (1,2) and s.actor in (0,1,2,3) and s.reader in (0,1,2) and s.phase in range(6) and s.cut in range(5) and s.credit in (0,1),'finite domain bounds')
     need(s.quarantine,'canonical quarantine is not a replay/receipt output')
     need(s.hold==(s.cut not in (1,4)),'settlement hold differs from literal success/pending-only shortcut')
     need(s.spent==s.incarnation and 1<=s.spent<=2,'lifetime compute is independent of quota reset')
@@ -68,13 +72,15 @@ def permitted(s,op):
     if op=='copy':return s.phase==1
     if op=='reader_wait':return s.copied
     if op=='advertise':return s.phase==2
-    if op=='emit_reset':return s.phase==3
+    if op=='detect_gap':return len(s.journal)>s.view
+    if op=='fresh_credit':return s.phase in (4,5) and not s.gap
+    if op=='emit_reset':return s.phase==3 and s.gap
     if op=='broker_restart':return s.phase==4
     if op=='install':return s.phase==4 and s.copied and s.snapshot[1]>=s.view
     if op=='ingest':return len(s.queue)<2 and s.ingested<len(s.journal)
     if op=='lose_ingress':return s.loss==0 and s.ingested<len(s.journal)
     if op=='lose_queue':return s.loss==0 and len(s.queue)>0
-    if op=='event':return s.credit>0 and len(s.queue)>0 and s.queue[0]==s.view+1 and s.loss<=s.view and s.phase!=4
+    if op=='event':return s.credit>0 and not s.gap and len(s.queue)>0 and s.queue[0]==s.view+1 and s.loss<=s.view and s.phase!=4
     return True
 
 def enabled(s,profile,actual):
@@ -128,7 +134,8 @@ unchanged field, including hidden transport stages, to have its exact value.
       'release':{'pin':False},'complete':{'remote':2},'finish2':{'closed2':True},
       'old_ack':{'ack':1},'reset':{'reset':True},'copy':{'copied':True,'phase':2},
       'reader_wait':{'reader':0,'waited':True},'advertise':{'phase':3},
-      'emit_reset':{'phase':4},'broker_restart':{'phase':2,'restarted':True}
+      'emit_reset':{'phase':4,'gap':False,'credit':0},'broker_restart':{'phase':2,'restarted':True},
+      'detect_gap':{'gap':True},'fresh_credit':{'credit':1}
     }
     if op in fixed:expected=fixed[op]
     elif op=='stage':expected={'staged':True,'residents':s.residents|2}

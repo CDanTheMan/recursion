@@ -43,6 +43,22 @@ def graph_receipt(values,graph):
     for s,edges in zip(values,graph):h.update((canonical([d.key(s),edges])+'\n').encode())
     return {'states':len(values),'edges':sum(map(len,graph)),'frontier':0,'graph_sha256':h.hexdigest()}
 
+def ordered(values,graph,steps):
+    """Existential path with required edge milestones, not a final-state shortcut."""
+    parents={(0,0):None};queue=deque([(0,0)])
+    while queue:
+        i,k=queue.popleft()
+        if k==len(steps):
+            result=[];point=(i,k)
+            while parents[point] is not None:
+                point,action=parents[point];result.append(action)
+            return list(reversed(result)),values[i]
+        for action,j in graph[i]:
+            progress=k+1 if steps[k](values[i],action,values[j]) else k
+            point=(j,progress)
+            if point not in parents:parents[point]=((i,k),action);queue.append(point)
+    raise ValueError('required ordered edge path absent')
+
 def calibrate():
     labels=[]
     def rejects(label,fn):

@@ -35,12 +35,13 @@ def edges(record,profile):
       'spawn2':x.actor in (2,3),'finish2':x.incarnation==2,'old_ack':True,
       'reset':True,'fresh_write':True,'capture':bool(x.journal) and not x.snapshot,
       'copy':x.phase==1,'reader_wait':x.copied,'advertise':x.phase==2,
-      'emit_reset':x.phase==3,'broker_restart':x.phase==4,
+      'detect_gap':len(x.journal)>x.view,'fresh_credit':x.phase in (4,5) and not x.gap,
+      'emit_reset':x.phase==3 and x.gap,'broker_restart':x.phase==4,
       'install':x.phase==4 and x.copied and bool(x.snapshot) and x.snapshot[1]>=x.view,
       'ingest':x.ingested<len(x.journal) and len(x.queue)<2,
       'lose_ingress':x.loss==0 and x.ingested<len(x.journal),
       'lose_queue':x.loss==0 and bool(x.queue),
-      'event':bool(x.queue) and x.credit>0 and x.phase!=4 and x.queue[0]==x.view+1 and x.view>=x.loss
+      'event':bool(x.queue) and x.credit>0 and not x.gap and x.phase!=4 and x.queue[0]==x.view+1 and x.view>=x.loss
     }
     changes={
       'status':{},'stop':{'stopped':True},'pause':{'paused':True},'fence':{'fence':2},
@@ -53,7 +54,8 @@ def edges(record,profile):
       'fresh_write':{'write_result':2 if x.paused else 1},
       'capture':{'snapshot':(x.g,len(x.journal),x.cut),'reader':x.g,'phase':1},
       'copy':{'copied':True,'phase':2},'reader_wait':{'reader':0,'waited':True},
-      'advertise':{'phase':3},'emit_reset':{'phase':4},
+      'advertise':{'phase':3},'emit_reset':{'phase':4,'gap':False,'credit':0},
+      'detect_gap':{'gap':True},'fresh_credit':{'credit':1},
       'broker_restart':{'phase':2,'restarted':True},
       'ingest':{'ingested':x.ingested+1,'queue':x.queue+(x.ingested+1,)},
       'lose_ingress':{'ingested':x.ingested+1,'loss':x.ingested+1}

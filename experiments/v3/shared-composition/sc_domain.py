@@ -35,6 +35,7 @@ class State:
     queue:tuple=()
     loss:int=0
     credit:int=1
+    gap:bool=False
     view:int=0
     content:tuple=(1,0)
     snapshot:tuple=()
@@ -42,7 +43,7 @@ class State:
     restarted:bool=False
     done:int=0
 
-BROKER=('reader','copied','waited','ingested','queue','loss','credit','view','content','snapshot','phase','restarted')
+BROKER=('reader','copied','waited','ingested','queue','loss','credit','gap','view','content','snapshot','phase','restarted')
 AUTH=tuple(f.name for f in fields(State) if f.name not in BROKER)
 NAMES=tuple(f.name for f in fields(State))
 def key(s):return tuple(getattr(s,n) for n in NAMES)
@@ -55,6 +56,7 @@ def fact(s,**kw):
 # declared external schedule; production guards are independently implemented.
 # Stop, status, PAUSE and recipient installation are available in every profile.
 PROFILES={
+ 'recovery-trigger-probe': [('execute',()),('complete',('execute',)),('receipt',('complete',)),('capture',('receipt',)),('copy',('capture',)),('advertise',('copy',)),('emit_reset:probe',('advertise',))],
  'free-shared-core':[(a,()) for a in ('stage','publish','execute','complete','receipt','second','capture','copy','reader_wait','advertise','emit_reset','install','return','release','capsule','reclaim')],
  'ownership-probes':[
   ('stage',()),('publish',('stage',)),('return',()),('release:early',()),
@@ -115,6 +117,16 @@ PROFILES={
   ('event',('ingest:1',)),('capture',('lose_ingress',)),('copy',('capture',)),
   ('advertise',('copy',)),('emit_reset',('advertise',)),('install',('emit_reset',))]
 }
+# Revision3: independently detected recovery gap and fresh post-RESET credit.
+# These are internal phase actions, not serialized M1B messages. Queue owns
+# broker-side undelivered entries, not receiver pending/unacknowledged deliveries.
+for _profile,_rows in PROFILES.items():
+    if any(a=='emit_reset' for a,_ in _rows):
+        _rows.append(('detect_gap',('capture',)))
+        _rows[:]=[(a,tuple(deps)+(('detect_gap',) if a=='emit_reset' else ())) for a,deps in _rows]
+    if _profile=='reset-restart-future-output':
+        _rows.extend([('detect_gap:again',('broker_restart',)),('fresh_credit',('emit_reset:again',)),('event:after_install',('fresh_credit','install'))])
+        _rows[:]=[(a,tuple(deps)+(('detect_gap:again',) if a=='emit_reset:again' else ())) for a,deps in _rows]
 def scheduled(s,profile):
     rows=PROFILES[profile];ids={a:i for i,(a,_) in enumerate(rows)}
     return [(a,1<<i) for i,(a,deps) in enumerate(rows)
