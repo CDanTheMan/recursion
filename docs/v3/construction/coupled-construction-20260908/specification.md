@@ -79,3 +79,13 @@ Thirteen frozen predecessors and unchanged25 regression commands remain required
 Commit executed sources before admission; retain failed/superseded attempts. Two
 full gates and two independent reviews of one exact clean final candidate precede
 normal draft publication; final attestations are external under Git common.
+
+Prospective construction detail:22 named profiles cross both cursor units and both
+remote outcomes, for88 environments. Three profiles include unordered cores with
+8/10/10 one-shot calls; all other calls follow explicit sequences from free10.
+Twenty-seven distinct guard mutations are exercised in both cursor units (54 cases).
+Receipt outcome has a separately retained actual request binding; foreign request
+receipts are rejected before classification/reconciliation. Catalogue slots are
+append-ordered generated notification records; they are not a complete authority
+journal. Lost-ACK and emission-before-install/fresh-credit each have dedicated
+profiles. Existing source/schema/oracle contracts remain immutable.
