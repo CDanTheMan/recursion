@@ -449,3 +449,8 @@ WIR-002 checks that an old zero-reservation presentation snapshot cannot release
 
 EPC-001 binds consultation to typed goal, lease, issuer, requester incarnation, delivery generation, context/payload and existing operation grant. Received stale advice and valid historical adoption remain evidence; adoption and continuation each recheck current authority. Actual request payload conflicts remain distinct from matching duplicates. Owner-only GoalSpec amendment is unchanged; literal M1A stale-authority checks remain separate from this proposed application relation.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
+
+## SC-COUPLED-01 — 2026-09-08
+
+CPL-002 separates transported advice, current adoption/wake and bound terminal effect reconciliation. Old snapshots, ACKs, requester restart, quota reset and Stop cannot release uncertainty. Success consumes six permanently; only proven nonexecution plus reconciliation permits the competing six-unit request. Atomic durable commits, truthful authenticated receipts and same-run catalogue availability remain premises.
+[Evidence and limits](construction/coupled-construction-20260908/handoff.md).

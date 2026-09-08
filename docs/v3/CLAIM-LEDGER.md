@@ -410,3 +410,9 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | EPC-001 | Typed consultation bindings separate retained advice and historical adoption from current continuation authority. | modeled | [SC-EPOCH-03](construction/typed-consultation-20260908/evidence.json) |
 | EPC-002 | A visible executor wait cycle and explicit release coexist with operation-scoped Stop that preserves unrelated work and unknown effects. | modeled | [SC-EPOCH-03](construction/typed-consultation-20260908/evidence.json) |
 | EPC-003 | SC-EPOCH-03 supplies finite typed consultation comparison while coupled composition and full original formal comparison remain incomplete. | modeled | [SC-EPOCH-03](construction/typed-consultation-20260908/evidence.json) |
+
+## Coupled reservation, wire and consultation — 2026-09-08
+
+| CPL-001 | The declared coupled central reservation, transport and consultation product preserves six-plus-six admission against ten under an independent complete relation. | modeled | [SC-COUPLED-01](construction/coupled-construction-20260908/evidence.json) |
+| CPL-002 | Transported advice, current adoption and continuation authority remain distinct from verified effect reconciliation and cumulative allowance. | modeled | [SC-COUPLED-01](construction/coupled-construction-20260908/evidence.json) |
+| CPL-003 | The bounded four-event flow retains explicit source, receiver and application ownership through snapshot recovery and scoped Stop without granting effect authority. | modeled | [SC-COUPLED-01](construction/coupled-construction-20260908/evidence.json) |

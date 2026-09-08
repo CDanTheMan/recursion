@@ -606,3 +606,8 @@ WIR-003 adds scoped literal recovery correspondence with independent split/inclu
 
 EPC-003 checks16 typed-consultation environments, including an unordered12-action core, in independent split/inclusive representations with a third complete relation. Independent review found and repaired a shared alias-generation flaw that graph equality had missed. Preserve structural namespace checks versus actual workflow and literal M1A evidence. The coupled reservation/wire/epoch product, full original comparison and common-writer migration remain incomplete.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
+
+## SC-COUPLED-01 — 2026-09-08
+
+CPL-001 closes the declared central reservation/transport/typed-consultation product across100 finite environments,74,332 states and279,976 edges per representation, with a third complete relation. The original two six-unit requests against ten remain actual admission. This scoped result does not close the original full Cartesian comparison, general rights coupling or common-writer migration.
+[Evidence and limits](construction/coupled-construction-20260908/handoff.md).

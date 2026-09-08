@@ -499,3 +499,8 @@ WIR-001 distinguishes source future entries, receiver pending entries, immutable
 
 EPC-002 models the Head/consultation/executor wait cycle, exposes a dependency blocker and releases the sole eligible executor on suspension. Stop of borrowedA retires its alias and continuation while unrelatedB progresses on its separately admitted capacity. Alias retirement is independent of numeric generation: assigning an already-current serial cannot keep delivery live. Cancellation delivery leaves remote outcome unknown and the inherited six-unit reservation held.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
+
+## SC-COUPLED-01 — 2026-09-08
+
+CPL-003 retains four-event costs1,2,1,2 and the full declared stage, in-flight, receiver and frame bounds. Literal M1B acceptance is checked separately from application installation, catalogue binding, ingestion and effect authority. The no-gap witness emits all four events; gap witnesses retain explicit delivered/covered distinctions. Synthetic framing and intact requester restart do not prove physical receiver recovery.
+[Evidence and limits](construction/coupled-construction-20260908/handoff.md).
