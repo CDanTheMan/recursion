@@ -97,6 +97,7 @@ def raw_check(directory,result):
     for row in result['negative']:
         stored=cases[row['name']];require(stored['observed_failure']==row and stored['expected_failure_stage']==row['stage'],'raw negative record')
         try:ee_join.join(stored['bundle'],keys)
+        except ee_common.schema.StrictJSONError as e:actual={'stage':'wire','detail':str(e)}
         except ee_common.schema.jsonschema.ValidationError as e:actual={'stage':'schema','detail':e.message}
         except (ValueError,KeyError,TypeError,ee_common.m1a.M1AError) as e:actual={'stage':'join','detail':str(e)}
         else:raise ValueError('raw negative accepted')
@@ -109,11 +110,12 @@ def claims(e):
 def evidence(e,expected):
     require(e['start_commit']==BASE and e['formal_freeze'] is False and e['new_owner_questions']==[] and e['semantic_sha256']==sha(canonical(expected).encode()),'evidence scope')
     superseded=e['superseded_candidate_validations']
-    require(len(superseded)==2 and {v['candidate'] for v in superseded}=={'0a46def3c9fd9e2df37d03d34e9ac8ae2689b1ef','a01def82039373cebd037bf9cf4b5f9887c51b0f'},'superseded validation closure')
+    superseded_expected={'0a46def3c9fd9e2df37d03d34e9ac8ae2689b1ef':('aborted-gate.json','superseded-gate-aborted-not-pass'),'a01def82039373cebd037bf9cf4b5f9887c51b0f':('aborted-gate.json','superseded-gate-aborted-not-pass'),'e2df39f31ebe7bcc14a2a74b1974bbb3e0b39524':('review-rejection.json','review-rejected-before-full-gate')}
+    require(len(superseded)==len(superseded_expected) and {v['candidate'] for v in superseded}==set(superseded_expected),'superseded validation closure')
     for record in superseded:
-        require(record['disposition']=='aborted-after-exact-review-not-a-pass','superseded validation disposition')
+        require(record['disposition']=='superseded-not-a-pass','superseded validation disposition')
         old=bound(cache(),record['candidate']);require({p.relative_to(old).as_posix():sha(p.read_bytes()) for p in old.rglob('*') if p.is_file()}==record['files'],'superseded validation retention')
-        require(load(old/'aborted-gate.json')['status']=='superseded-gate-aborted-not-pass','aborted gate status')
+        filename,status=superseded_expected[record['candidate']];require(load(old/filename)['status']==status,'superseded validation status')
     rows=e['retained_runs'];all_dirs={d.name for d in (cache()/'discovery').iterdir() if d.is_dir() and (d/'admission.json').exists()}
     require(len(rows)==len(all_dirs) and {r['id'] for r in rows}==all_dirs,'all attempts retained');count=0
     for row in rows:

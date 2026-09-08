@@ -70,7 +70,7 @@ clear canonical quarantine or release an unrelated attempt's resource reservatio
 
 ## Evidence and validation
 
-Accepted run05 executes60 bounded checks:11 positive evidence cuts,41 rejected
+Accepted run06 executes66 bounded checks:11 positive evidence cuts,47 rejected
 joins,3 adapter mutants and5 literal control groups. Results are **locally observed
 synthetic fixture behavior**. They do not measure real provider support, workflow
 performance, distributed durability, operational authentication or end-user quality.
@@ -81,7 +81,7 @@ common author remains a possible shared-error source despite independent review.
 Retain every admitted attempt: run01 failed on the test's nonexistent `error_code`
 field; run02 passed the earlier narrow tests but is superseded by context/type and
 unsettled-start corrections; run03 is also superseded after exact review found bool/int aliases across separately
-signed dispatch records; run04 is superseded by cut-ID type controls; run05 is accepted. A read-only setup inspection also
+signed dispatch records; run04 is superseded by cut-ID type controls; run05 is superseded by strict wire decoding; run06 is accepted. A read-only setup inspection also
 initially used `state_digest` instead of `content_digest`; it produced no campaign
 result and was corrected before the admitted tests. Raw sources, synthetic input
 bundles, test-only keys, stdout/stderr, execution outcomes and hashes remain under
@@ -101,7 +101,15 @@ the other exact reviewer reproduced collector cut_id=true joining dispatcher and
 evidence cut_id=1. Its owned gate tree was stopped and all reported PIDs were
 confirmed absent. Partial evidence and review dispositions remain hash-bound. The
 new string cut-ID profile and five targeted controls were committed before run05.
-Both superseded candidates have no complete gate pass; neither approval transfers.
+Both interrupted candidates have no complete gate pass; neither approval transfers.
+
+Candidate `e2df39f31ebe7bcc14a2a74b1974bbb3e0b39524` passed its working gate but
+was rejected before a full gate after a256-mutation signed numeric sweep exposed
+six integral floats admitted by schema validation alone. Strict wire decoding and
+six wire-stage negatives were committed before run06. The third rejected review
+is likewise retained and hash-bound. Original bundle byte parsing remains outside
+the adapter: the frozen decoder checks the reconstructed canonical M1C trace, so
+this is not a claim to preserve duplicate keys from an already parsed bundle.
 
 Prospective admissions freeze committed source bytes, original fixtures, schema,
 oracle, Python/OS identity and installed jsonschema version. One process performs

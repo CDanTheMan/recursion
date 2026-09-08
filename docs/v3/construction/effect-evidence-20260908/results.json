@@ -1,28 +1,28 @@
 {
   "status": "literal-effect-evidence-pass",
   "classification": "locally observed",
-  "case_count": 60,
+  "case_count": 66,
   "positive": {
     "success": {
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "e8359f1bf3e97d062fa51418cf1fa82eccea00fadf7e82e44f22a4304d314477",
@@ -37,22 +37,22 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "failed",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "failed",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "failed",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "failed",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "513fbb93c356bc816729fc1be4ae61fe2fdddb8c891eb7c77891f5885073257f",
@@ -67,28 +67,28 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "dc5d6b24171fd98367687b726f7cec5967354a32fed24af2cb31bfb8188db658",
@@ -105,25 +105,25 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "dc5d6b24171fd98367687b726f7cec5967354a32fed24af2cb31bfb8188db658",
@@ -138,25 +138,25 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "reconciled-succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "reconciled-succeeded",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "dc5d6b24171fd98367687b726f7cec5967354a32fed24af2cb31bfb8188db658",
@@ -171,30 +171,30 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "observation-unverified",
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "observation-unverified",
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "dc5d6b24171fd98367687b726f7cec5967354a32fed24af2cb31bfb8188db658",
@@ -211,25 +211,25 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "observation-conflict",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "e8359f1bf3e97d062fa51418cf1fa82eccea00fadf7e82e44f22a4304d314477",
@@ -244,29 +244,29 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 2,
         "reasons": [
           "blind-retry-blocked",
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 2,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "dc5d6b24171fd98367687b726f7cec5967354a32fed24af2cb31bfb8188db658",
@@ -283,25 +283,25 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "ambiguous",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 2,
         "reasons": [
           "receipt-missing",
           "reconciliation-required"
         ],
-        "final_attempt_number": 2,
         "requires_reconciliation": true,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "ambiguous",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "e8359f1bf3e97d062fa51418cf1fa82eccea00fadf7e82e44f22a4304d314477",
@@ -318,22 +318,22 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 2,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 2,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "running",
       "observation_digest": "e8359f1bf3e97d062fa51418cf1fa82eccea00fadf7e82e44f22a4304d314477",
@@ -350,25 +350,25 @@
       "type": "RestrictedEffectJoinResult@1",
       "status": "joined-as-of-trusted-cut",
       "historical": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
-        "reasons": [],
-        "final_attempt_number": 1,
-        "requires_reconciliation": false,
         "effect_count": 0,
-        "external_call_count": 0
+        "external_call_count": 0,
+        "final_attempt_number": 1,
+        "reasons": [],
+        "requires_reconciliation": false,
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current": {
-        "type": "EffectDecision@1",
-        "status": "succeeded",
+        "effect_count": 0,
+        "external_call_count": 0,
+        "final_attempt_number": 1,
         "reasons": [
           "stale-admission",
           "stale-fence"
         ],
-        "final_attempt_number": 1,
         "requires_reconciliation": false,
-        "effect_count": 0,
-        "external_call_count": 0
+        "status": "succeeded",
+        "type": "EffectDecision@1"
       },
       "current_pause_state": "paused",
       "observation_digest": "e8359f1bf3e97d062fa51418cf1fa82eccea00fadf7e82e44f22a4304d314477",
@@ -580,6 +580,36 @@
       "name": "cut-bool-alias",
       "stage": "join",
       "detail": "cut-identity-profile"
+    },
+    {
+      "name": "float-trace_header-current_admission_epoch",
+      "stage": "wire",
+      "detail": "float not permitted: 1.0"
+    },
+    {
+      "name": "float-trace_header-current_fence_epoch",
+      "stage": "wire",
+      "detail": "float not permitted: 1.0"
+    },
+    {
+      "name": "float-trace_header-effect_count",
+      "stage": "wire",
+      "detail": "float not permitted: 0.0"
+    },
+    {
+      "name": "float-trace_header-external_call_count",
+      "stage": "wire",
+      "detail": "float not permitted: 0.0"
+    },
+    {
+      "name": "float-assessment-current_admission_epoch",
+      "stage": "wire",
+      "detail": "float not permitted: 1.0"
+    },
+    {
+      "name": "float-assessment-current_fence_epoch",
+      "stage": "wire",
+      "detail": "float not permitted: 1.0"
     },
     {
       "name": "inventory-omission-control",
