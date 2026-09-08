@@ -1,0 +1,95 @@
+{
+  "status": "pinned-source-inspection-not-runtime-evidence",
+  "sources": [
+    {
+      "file": "python-PC-msvcrtmodule.c",
+      "repository": "python/cpython",
+      "commit": "0cc81280367df838c4b199f8f0378837165071c2",
+      "path": "PC/msvcrtmodule.c",
+      "url": "https://raw.githubusercontent.com/python/cpython/0cc81280367df838c4b199f8f0378837165071c2/PC/msvcrtmodule.c",
+      "sha256": "ddb51b93b71f420f53ec1a4c824c356257d07776bd9bef78d1115002a03009b8",
+      "retrieved_at": "2026-09-08T05:19:16.628709+00:00"
+    },
+    {
+      "file": "python-Doc-library-msvcrt.rst",
+      "repository": "python/cpython",
+      "commit": "0cc81280367df838c4b199f8f0378837165071c2",
+      "path": "Doc/library/msvcrt.rst",
+      "url": "https://raw.githubusercontent.com/python/cpython/0cc81280367df838c4b199f8f0378837165071c2/Doc/library/msvcrt.rst",
+      "sha256": "b9821aceb296646c65385c687fe262bd613055054d77ce4409c51dc39eecd22c",
+      "retrieved_at": "2026-09-08T05:19:16.777992+00:00"
+    },
+    {
+      "file": "python-LICENSE",
+      "repository": "python/cpython",
+      "commit": "0cc81280367df838c4b199f8f0378837165071c2",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/python/cpython/0cc81280367df838c4b199f8f0378837165071c2/LICENSE",
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "retrieved_at": "2026-09-08T05:19:16.954313+00:00"
+    },
+    {
+      "file": "crt-docs-c-runtime-library-reference-locking.md",
+      "repository": "MicrosoftDocs/cpp-docs",
+      "commit": "63ae0763874ee0504e5f58ebdc32f99a67c5b560",
+      "path": "docs/c-runtime-library/reference/locking.md",
+      "url": "https://raw.githubusercontent.com/MicrosoftDocs/cpp-docs/63ae0763874ee0504e5f58ebdc32f99a67c5b560/docs/c-runtime-library/reference/locking.md",
+      "sha256": "c78e2491d71ff546cf9d1b725b83777afc6f9b2aa9e0a711b443c3e9964310eb",
+      "retrieved_at": "2026-09-08T05:19:17.106135+00:00"
+    },
+    {
+      "file": "crt-LICENSE",
+      "repository": "MicrosoftDocs/cpp-docs",
+      "commit": "63ae0763874ee0504e5f58ebdc32f99a67c5b560",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/MicrosoftDocs/cpp-docs/63ae0763874ee0504e5f58ebdc32f99a67c5b560/LICENSE",
+      "sha256": "9bbc1ea9fe5c96df01b311a2ac864d5b18fc87b9948bfd14770e4b44db755ee9",
+      "retrieved_at": "2026-09-08T05:19:17.307429+00:00"
+    },
+    {
+      "file": "windows-sdk-api-src-content-fileapi-nf-fileapi-lockfileex.md",
+      "repository": "MicrosoftDocs/sdk-api",
+      "commit": "f38eb1cccc6080c44fac242e8f6995abf983644d",
+      "path": "sdk-api-src/content/fileapi/nf-fileapi-lockfileex.md",
+      "url": "https://raw.githubusercontent.com/MicrosoftDocs/sdk-api/f38eb1cccc6080c44fac242e8f6995abf983644d/sdk-api-src/content/fileapi/nf-fileapi-lockfileex.md",
+      "sha256": "f81856deecc1ee19b05ebb71d69424c45c14e8c354e5c7f1e3d7754933a786bd",
+      "retrieved_at": "2026-09-08T05:19:17.467465+00:00"
+    },
+    {
+      "file": "windows-sdk-api-src-content-fileapi-nf-fileapi-createfilew.md",
+      "repository": "MicrosoftDocs/sdk-api",
+      "commit": "f38eb1cccc6080c44fac242e8f6995abf983644d",
+      "path": "sdk-api-src/content/fileapi/nf-fileapi-createfilew.md",
+      "url": "https://raw.githubusercontent.com/MicrosoftDocs/sdk-api/f38eb1cccc6080c44fac242e8f6995abf983644d/sdk-api-src/content/fileapi/nf-fileapi-createfilew.md",
+      "sha256": "acc5fa80b621e4444a2364399d731b4812a630866d1c714f916a7f2b0be04782",
+      "retrieved_at": "2026-09-08T05:19:17.634069+00:00"
+    },
+    {
+      "file": "windows-LICENSE",
+      "repository": "MicrosoftDocs/sdk-api",
+      "commit": "f38eb1cccc6080c44fac242e8f6995abf983644d",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/MicrosoftDocs/sdk-api/f38eb1cccc6080c44fac242e8f6995abf983644d/LICENSE",
+      "sha256": "7183ef9749eb9b75e710a81a4c812a9405cc184f087500581a973e5929ac3f5e",
+      "retrieved_at": "2026-09-08T05:19:17.783637+00:00"
+    },
+    {
+      "file": "linux-Documentation-RCU-whatisRCU.rst",
+      "repository": "torvalds/linux",
+      "commit": "adc218676eef25575469234709c2d87185ca223a",
+      "path": "Documentation/RCU/whatisRCU.rst",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/adc218676eef25575469234709c2d87185ca223a/Documentation/RCU/whatisRCU.rst",
+      "sha256": "7318e8f8b83a6191875412543b718e86b042ba81fd73a89237b17528722082d3",
+      "retrieved_at": "2026-09-08T05:19:17.979719+00:00"
+    },
+    {
+      "file": "linux-COPYING",
+      "repository": "torvalds/linux",
+      "commit": "adc218676eef25575469234709c2d87185ca223a",
+      "path": "COPYING",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/adc218676eef25575469234709c2d87185ca223a/COPYING",
+      "sha256": "fb5a425bd3b3cd6071a3a9aff9909a859e7c1158d54d32e07658398cd67eb6a0",
+      "retrieved_at": "2026-09-08T05:19:18.140970+00:00"
+    }
+  ]
+}

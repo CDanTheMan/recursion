@@ -1,5 +1,5 @@
 {
-  "status": "construction-plan-not-observed",
+  "status": "preregistered-before-first-execution",
   "start_commit": "04b664c58bddb72674d297f4bcf4bef5435bda0f",
   "policies": [
     "drain-before-publish",
@@ -32,5 +32,29 @@
     "artifact_bytes": 67108864,
     "maximum_children_alive": 5
   },
-  "next": "Freeze exact case schedules and source after read-only challenge, then execute prospective admissions."
+  "next": "Execute source-frozen schedules, retain every failed attempt, synthesize observed limits and pass exact final gates/reviews.",
+  "cases": [
+    "overlap_pin",
+    "overlap_manifest",
+    "two_pins",
+    "stale_writer_cancel",
+    "restart_live_pin",
+    "pin_staged_loss",
+    "pin_reply_loss",
+    "publish_staged_loss",
+    "publish_reply_loss",
+    "retire_intent_loss",
+    "retire_partial_loss",
+    "reader_death",
+    "publisher_death",
+    "lock_exclusion",
+    "acquisition_race",
+    "negative_tokens"
+  ],
+  "expected_case_count": 128,
+  "drain_policy": "Persist drain intent on busy publication; deny fresh pins while draining, retain status/release processing. Clear intent when publisher is revoked or authority restarts. No global liveness theorem.",
+  "publisher_staging": "One unique directory per boot/permit serial; stale staged candidates cannot overwrite the selected directory by naming the same generation. Cooperating staged workers stop writing before proposing publication; no OS-ACL or malicious-writer guarantee.",
+  "recovery": "Restart advances writer term and preserves durable pins. Commit-before-reply is authoritative, not the reply. Interrupted retiring state resumes deletion of the explicit g1 file list; lock file is stable and separate.",
+  "lock": "Precreated one-byte stable file; offset0 LK_NBLCK exclusion with at most0.5 seconds bounded EACCES retry, not arbitrary OSError retry. Offset1 lock-only helper is an explicitly ineffective exclusion control; no lock file replacement/deletion.",
+  "source_scope": "Existing CPython3.12.10/Windows/NTFS, no installations/providers/config changes. Runtime and source bytes are prospectively admitted."
 }
