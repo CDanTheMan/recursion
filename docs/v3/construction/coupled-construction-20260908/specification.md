@@ -94,8 +94,8 @@ Prospective revision2 after run01 and independent challenge: retain run01 as a
 passing but superseded88-environment attempt. Add transported-goal-change to exercise
 actual goal version2; add four-literal-events with no gap and exact payload lengths
 1,2,1,2; add consultation-duplicates with retained actual incoming packet and changed
-payload rejection. Gap traces deliver three events plus one explicitly covered
-record, not four EVENTs. There are now25 named profiles/100 environments and29 guards
+payload rejection. The four-notification reconciliation gap witness delivers three EVENTs plus one
+explicitly covered record; other gap profiles intentionally stop earlier. There are now25 named profiles/100 environments and29 guards
 in both cursor units/58 mutant cases. Correct the inherited evidence-directory name
 in GoalSpec. No new product authority or broader formal closure follows.
 

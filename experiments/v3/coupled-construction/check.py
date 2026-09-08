@@ -28,6 +28,7 @@ def goal_check(g):
     require(type(g['new_metered_spend']) is int and g['new_metered_spend']==0 and g['usage_resets_allowed'] is False,'spend/reset')
     require(g['started_at']=='2026-09-08T21:07:46Z' and g['request_envelope_started_at']=='2026-09-08T21:03:25Z' and g['deadline_utc']=='2026-09-09T01:03:25Z' and g['discovery_cutoff_utc']=='2026-09-08T23:33:25Z' and g['synthesis_review_reserve_minutes']==90,'time envelope')
     require(set(g['allowed_paths'])==CANONICAL|{PREFIX+'**',CODE+'**'} and g['max_active_agents_owner']==10 and g['max_concurrent_read_only_workers']==4 and g['worker_packet_minutes']==20,'scope/concurrency')
+    require(any('research-attestations/coupled-construction' in x for x in g['allowed_effects']) and not any('research-attestations/typed-consultation' in x for x in g['allowed_effects']),'campaign evidence directory admission')
     require(g['capacity']['no_new_workers_at_remaining_percent']==6 and g['capacity']['checkpoint_at_remaining_percent']==3,'capacity reserve')
 
 def predecessor():
@@ -136,6 +137,9 @@ def evidence(e,expected):
         a,x=load(directory/'admission.json'),load(directory/'execution.json');accepted=row['id']==e['accepted_run'];admission(a,x,directory,accepted)
         require(row['source_commit']==a['source_commit'] and row['exit_code']==x['exit_code'] and row['disposition'],'attempt provenance/disposition')
         if accepted:accepted_count+=1;require(e['accepted_source_commit']==a['source_commit'],'accepted commit');result_check(load(directory/'result.json')['result'],expected)
+    for row in e['preflight_attempts']:
+        directory=bound(cache(),row['directory']);require({p.relative_to(directory).as_posix():sha(p.read_bytes()) for p in directory.rglob('*') if p.is_file()}==row['files'],'retained preflight attempt inventory')
+        require(row['disposition'],'truthful preflight disposition')
     require(accepted_count==1,'one accepted attempt');result_check(read('results.json'),expected)
     ledger=(ROOT/'docs/v3/CLAIM-LEDGER.md').read_text(encoding='utf-8');FM['HIST']['OLD']['registry_shape'](load(ROOT/'docs/v3/CLAIM-REGISTRY.json'),ledger)
     require({r['id'] for r in e['claims']}=={'CPL-001','CPL-002','CPL-003'} and len(e['claims'])==3,'claim inventory')
