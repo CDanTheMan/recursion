@@ -6,6 +6,34 @@ last-updated: 2026-09-07
 
 # Recursion v3 research and construction roadmap hypothesis
 
+## RESET mapping continuation — 2026-09-07
+
+The [mapping packet](construction/reset-mapping-20260907/handoff.md) establishes a narrow
+deferred-delivery route and a conditional genuine-gap route. The next construction step is to
+integrate the deferred-candidate state and explicit current recovery state into both complete
+broker-boundary models, preserving the old counterexample and all six obligations/27 corpus rows.
+Prove the replay-store floor/snapshot provenance separately; the wire oracle cannot supply it.
+Then extend typed epochs, process birth, receiver records, shared writer/pool conservation,
+GoalSpec/consultation and M1A/M1C joins through the full preserved profiles. Physical control,
+loss/recovery, configuration/plugin and remote probes continue alongside that work.
+Formal freeze, language comparison and storage comparison remain gated as previously recorded.
+
+## Formal construction continuation — 2026-09-07
+
+The [first formal packet](construction/formal-comparison-20260907/handoff.md) provides an exhaustive
+small flow/control graph, refinement and fairness checks, and preserved full-profile domains.
+Its preventive/audit RESET counterexample defines the next bounded adapter request. Resolve that
+mapping before extending the slice into the immutable wire contract; retain the existing source
+and runtime observations as separately scoped evidence.
+
+Then add typed epoch/recipient fencing, process birth/registration, receiver-record uncertainty,
+writer/pool conservation, GoalSpec/consultation and literal M1A/M1C joins with all required corpus
+witnesses. Execute the full core and cross-area configurations, and revisit abstract state or
+proof technique when the coupling relation fails. An isomorphism failure alone does not establish
+a semantic boundary fault. Physical control reserves and actual loss detection need interface
+probes alongside this work. Language comparison and then complete storage comparison remain
+behind the full formal gate; all integration, configuration and whole-workflow requirements remain.
+
 ## Interface campaign progression — 2026-09-07
 
 The [bounded campaign](construction/interface-probes-20260907/campaign.md) has run installed
@@ -363,3 +391,24 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    release (OR-022). Expansion beyond that required loop remains an optional spike until it wins
    a preregistered metric; it cannot replace Recursion's ratified canonical authority boundary
    without an Owner amendment.
+
+## After the integrated flow/recovery packet
+
+The integrated finite model resolves a narrow composition question: deferred candidates and
+future queued IDs can survive a modeled replay gap without unnecessary RESET or ownership loss.
+It leaves consequential physical and full-domain obligations open. Next bounded requests are:
+
+1. A local replay-store evidence probe: authenticate retention floor and snapshot identity,
+   distinguish notification loss from source loss, crash between snapshot publication and RESET,
+   and replay both a real gap and a recoverable queued notification. Synthetic Boolean flags
+   cannot admit this result; preserve zero provider calls and explicit cleanup.
+2. Complementary finite queue profiles: byte capacity4 with event capacity2, distinct event-limit
+   mutation, and a fault-recovery product for actually emitted exhaustion. Keep the byte-capacity2
+   profile and its witness; do not replace evidence to make a broader claim.
+3. Physical control delivery, fencing, Stop escalation and reconnect mapping, then remaining
+   obligations and traces in the original complete formal comparison gate.
+
+Formal model completion precedes language comparison, then storage comparison. A temporary
+file-backed probe fixture chooses no product language/store. Whole-system performance and all
+eight experiment families continue alongside this dependency chain. No new Owner decision is
+needed to prepare these already authorized bounded requests.

@@ -6,6 +6,35 @@ last-updated: 2026-09-07
 
 # Recursion v3 acceptance hypothesis
 
+## RESET mapping packet acceptance — 2026-09-07
+
+The finite mapper checks 16 configurations spanning event/UTF-8-byte cursor units, one/two-byte
+payloads, one/two-event queue bounds and one/two-payload byte bounds. It checks all 2,576 reachable
+schedule prefixes and 544 complete schedules, with two candidate offers and two CREDIT offers.
+Separate split/inclusive transitions agree and every emitted prefix passes the unchanged M1B
+schema/oracle. Twelve literal controls plus five store-fact rejection cases preserve negative
+evidence. These finite environments are not a cutoff theorem or fairness proof.
+
+Full formal freeze remains false. The c87 full models are unchanged; the new mapper has no
+process/recipient/writer/pool/GoalSpec state and does not complete the prior partial corpus rows.
+Publication requires two [exact candidate gates](../../experiments/v3/reset-mapping/check.py),
+including unchanged25 regressions and frozen historical checks, plus two independent reviews.
+
+## Formal packet acceptance is scoped — 2026-09-07
+
+The first [formal construction results](construction/formal-comparison-20260907/results.json)
+advance foundation readiness to a checked finite preventive subsystem and calibrated checking
+methods. Full contract readiness remains conditional. Traces 01, 02 and 26 have partial modeled
+coverage only; the complete six obligations, 27-row corpus and full core/cross-area profiles remain
+required. Rights-extension trace 22 remains not-selected/unrun. Full formal freeze is false.
+
+The [packet gate](../../experiments/v3/formal-comparison/check.py) must reproduce the current model
+result, bind retained execution bytes, validate the unchanged contract coverage and reject
+weakened claims/fixtures. It also runs all 25 unchanged regressions on the candidate and preserves
+historical checks against their named frozen worktrees. Two complete passes and two independent
+reviews of the identical clean commit precede review-branch publication; external receipts are
+under `research-attestations/formal-comparison/<candidate>/` in the Git common directory.
+
 ## Interface campaign acceptance boundary — 2026-09-07
 
 Foundation readiness has advanced to observed installed-harness/OS mechanisms and finite
@@ -388,3 +417,19 @@ One public v3 release is built incrementally and cut atomically only when:
 - for the initial private deployment, Lucas accepts the review branch and performs the protected
   merge/deployment seams unless a later explicit Full Access grant and operative constitutional
   amendment authorize a different reviewed profile.
+
+## Flow and recovery finite evidence gate
+
+The [flow/recovery packet](construction/flow-recovery-integration-20260907/handoff.md) adds two
+closed 97,500-state products, 22 constructive witnesses plus two combined sequences, nine
+nonvacuous semantic mutants, 45,240 audit calibrations and retained long/special oracle controls.
+Claims FRI-001 through FRI-003 are modeled evidence. Local execution establishes those checks
+ran; it does not promote synthetic retention/snapshot facts into observed integration support.
+
+Require two complete identical-candidate gates and two independent approvals. The new gate
+reproduces semantic results in a separate process, retains timing/memory as nonsemantic telemetry,
+binds prospective source snapshots, preserves the unchanged25 regression commands and historical
+validators, and runs four original working gates in frozen predecessor worktrees. Its final
+receipts stay under Git common research-attestations/flow-recovery-integration/<candidate>/.
+Full formal acceptance remains false; the six obligations, 27 rows and all prior probe/scenario
+coverage remain required, including the unresolved event-queue and physical-recovery cases.

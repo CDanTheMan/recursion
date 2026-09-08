@@ -7,6 +7,30 @@ baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 
 # Recursion v3 ratified architecture target
 
+## First formal construction slice — 2026-09-07
+
+The [formal construction packet](construction/formal-comparison-20260907/handoff.md) implements
+separate abstract, split-composition and inclusive transition definitions for a small preventive
+broker flow/control model. It is refinement to that declared subsystem specification, not to the
+complete M1B wire-audit reducer or the full Recursion model.
+
+FMC-002: finite hidden-choice controls exhibit equal visible prefix languages while neither naive
+single initial-state map works. Named weak-fairness controls reject infinite requeue starvation of
+continuously enabled Stop, while coarse broker fairness and intermittently disabled Stop permit
+it. These calibrations distinguish method/assumption limitations from a product counterexample.
+
+FMC-003: exhaustive exploration reached 444,834 states and 2,644,215 transitions in each concrete
+model, with empty frontiers and maximum discovered depth 35. Every concrete step matched the
+separate abstract specification or preserved its visible state; the separately implemented
+inclusive relation matched the split's reachable labeled graph. Twenty-two guard mutants were
+rejected. All three implementations were authored by the same integrator; independent review and
+immutable oracle controls caught shared initial mistakes. Agreement alone is insufficient.
+
+The result is conditional on one declared small environment, a direct logical Owner-control path
+and immediately signaled ingress loss. External-effect uncertainty is a preserved constant here.
+Full core/cross-area profiles, receiver/process/pool/GoalSpec obligations and the remaining trace
+corpus are explicitly unimplemented. The smaller slice is not a cutoff theorem or formal freeze.
+
 ## Interface evidence and formal construction boundary — 2026-09-07
 
 The [interface campaign](construction/interface-probes-20260907/campaign.md) advances the
@@ -481,3 +505,23 @@ policy or configuration change. See [DECISION-REGISTER.md](DECISION-REGISTER.md)
 The first construction candidate is now the narrower planning-only
 [M1A](M1A-AUTONOMOUS-PLANNING.md). It excludes SQLite, providers, terminals, plugins, Git,
 publication and effects; the broader object table above remains a later architecture projection.
+
+## Conditional flow and recovery composition
+
+FRI-001 extends the earlier finite subsystem without replacing its retained counterexample.
+The queue-independent specification, component split (kernel/source/broker), and flat inclusive
+model now contain four candidate identities, mixed payload costs 1/2/1/2 bytes, four grants,
+three single-slot pipeline stages, two total pipeline slots, and one modeled retention loss.
+Both event and cumulative UTF-8-byte cursor profiles close at 97,500 split/audit states and
+603,827 transitions each. Every reachable transition satisfies the independent specification
+and exact local labeled correspondence to the separately defined inclusive model. This method
+requires unique transition labels and complete visible/physical signatures; it is stronger than
+the trace inclusion needed here and may cease to apply to future hidden nondeterminism.
+
+Retain the small aggregate plus independently checked bounded broker as the leading candidate.
+The inclusive model remains a required competing boundary, not an implementation cost measurement.
+Shared domain and wire encoding, finite identity/grant bounds, atomic admission/emission, direct
+logical Stop and modeled store facts limit this evidence. The original six obligations and
+27-row comparison contract remain authoritative; full freeze is false. Next discriminators are
+independent source evidence, physical control transport, and broader fault-recovery products.
+See [packet evidence](construction/flow-recovery-integration-20260907/evidence.json).

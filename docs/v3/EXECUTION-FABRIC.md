@@ -6,6 +6,41 @@ last-updated: 2026-09-07
 
 # Recursion v3 execution fabric hypothesis
 
+## Deferred candidates and recovery commands — 2026-09-07
+
+RSM-001: the [RESET mapping packet](construction/reset-mapping-20260907/handoff.md) replaces
+forced recovery after a locally suppressed candidate with deferred admission in its new narrow
+model. Keep the candidate identity and payload until both cumulative credit and pending-queue
+capacity permit emission. ACK releases queue capacity; CREDIT replenishes the separate allowance.
+A candidate that never reached the wire does not itself create wire exhaustion or justify RESET.
+The immutable oracle accepts both ACK-then-CREDIT and CREDIT-then-ACK continuation in the controls.
+
+The prior c87 model and FMC-004 counterexample remain valid historical evidence of the rejected
+mapping. The new finite mapper does not retroactively repair those models or prove full transport
+refinement. Actual emitted exhaustion still requires RESET, and its rejected EVENT remains in
+audit evidence. Candidate, admission, emission and audit facts remain separate.
+
+RSM-003: unchanged M1B replay_broker returns requires_reset from historical recovery_needed_seen.
+Consequently accepted-reset may still carry requires_reset=true. Do not turn that flag alone into
+another RESET command: the recovered trace would refuse an unexpected RESET. A runtime adapter
+needs separately established current recovery state; changing M1B is outside this packet.
+
+## Preventive admission versus retained wire evidence — 2026-09-07
+
+FMC-004: the [paired immutable-oracle controls](construction/formal-comparison-20260907/results.json)
+expose an unresolved adapter seam. A preventive model can withhold an exhausted second EVENT,
+retain admitted cursor 1, and request RESET. If the actual wire omits that EVENT, the M1B audit has
+no observed recovery cause and refuses RESET as unexpected. If the rejected EVENT is included,
+the audit cursor advances to 2. Deleting the candidate therefore does not establish a correct
+mapping between admitted state and retained wire evidence.
+
+Disposition: maintain distinct candidate/admission, emitted-message and audit facts. Before a
+runtime adapter is admitted, specify how its supported resynchronization sequence creates a
+valid recovery cause and snapshot cursor while preserving every rejected/unknown observation.
+Check that sequence against unchanged M1B rules and both models. Do not invent a wire field,
+forge a gap, erase a rejected event, or weaken the immutable validator. M1A/M1C joining, PAUSE
+classification and OR-015's common-writer migration remain separately unresolved.
+
 ## Observed accounting boundaries — 2026-09-07
 
 IPR-003: the installed Codex fixture emitted cumulative totals of 15, 30, 45, 60 and 75,
@@ -317,3 +352,26 @@ From strongest to weakest:
 5. unsupported model assertion.
 
 Lower levels may guide investigation but cannot overrule contradictory higher-level evidence.
+
+## Integrated candidate ownership and recovery evidence
+
+FRI-002 checks a combined deferred-delivery, loss, snapshot, recovery and continuation sequence
+in both model boundaries. Candidate ownership includes retained source items and every pipeline
+copy; delivered IDs and an explicitly lost ID account for all offered identities. Receiver ACK
+entries reference delivered identities rather than becoming a second ownership bucket.
+
+A lost notification does not establish retention loss. The finite eviction action explicitly
+models source retention loss and removal of its sole live candidate; snapshot availability is
+a separate action. Negotiation waits until earlier candidates have been installed. WELCOME
+advances the literal audit cursor while the application's installed position still precedes
+the loss. RESET installs only the matching snapshot disposition, clears receiver credit/ACK
+state, and preserves every future candidate. Historical requires_reset stays true after accepted
+recovery and cannot drive a new RESET. Source/store evidence must authenticate these assumptions.
+
+The 32-action witnesses finish at event cursor4 or byte cursor6, with logical Stop interleaved
+between WELCOME and RESET. The compact audit agrees with the unchanged M1B oracle on 45,240
+nonempty finite controls, all prefixes of 12 historical controls, four special controls, and
+each retained model witness. Actual emitted-exhaustion recovery remains in literal controls;
+the normal-source product admits only funded emissions. No general adapter equivalence, storage
+implementation or common-writer migration clearance follows.
+See [executed results](construction/flow-recovery-integration-20260907/results.json).

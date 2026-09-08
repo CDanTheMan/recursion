@@ -6,6 +6,29 @@ last-updated: 2026-09-07
 
 # Recursion v3 construction runbook
 
+## RESET mapping handoff — 2026-09-07
+
+Continue from [the bounded mapping packet](construction/reset-mapping-20260907/handoff.md).
+Its branch is codex/v3-reset-mapping-20260907, based on exact c87f492 from PR95. Frozen predecessor
+worktrees and external raw evidence remain required by its gate. Locate actual final receipts
+under the Git common directory research-attestations/reset-mapping/<candidate>/; missing receipts
+require revalidation. Owner's short work cutoff is 2026-09-08T01:00:00Z, not reusable authorization
+for a later launch. A checkpoint without both gates/reviews must remain explicitly incomplete.
+
+## First formal packet — 2026-09-07
+
+Continue from [the formal handoff](construction/formal-comparison-20260907/handoff.md) on its
+separate review branch. Its frozen start is the reviewed interface candidate `a497bae`; PR #94
+is its publication dependency. Preserve that worktree for historical gate replay. The current
+packet's source snapshots, raw model results, two final gates and two independent reviews are
+retained outside the candidate under `research-attestations/formal-comparison/`.
+
+This packet checks a smaller preventive flow/control specification and exposes the incomplete
+wire-audit adapter mapping. It does not complete the full formal comparison. The [coverage ledger](construction/formal-comparison-20260907/coverage.json)
+keeps all obligations and trace rows, with partial/unimplemented/not-selected states. Follow-on
+construction needs a fresh bounded GoalSpec and exact inputs under the continuing Owner
+authorization; it does not need renewed approval of already accepted routine direction.
+
 ## Owner-authorized testing continuation — 2026-09-07
 
 The Owner's subsequent authorization permits isolated testing/setup and review-branch commits
@@ -230,3 +253,18 @@ Lucas rather than encoding a policy choice.
 M1A has no runtime cutover. If separately authorized construction fails, its unreferenced local
 candidate can be abandoned without changing v1/v2 behavior. Never rewrite history, push, publish,
 merge or deploy from this runbook.
+
+## Continue the flow/recovery packet
+
+Read [goal and handoff](construction/flow-recovery-integration-20260907/handoff.md) and frozen
+manifest before acting. The isolated branch is codex/v3-flow-recovery-integration-20260907;
+its start is f86f169c61ca6db4a3d7870353f270e35ef954d6. No historical worktree may be changed.
+The final gate is python -X utf8 -B experiments/v3/flow-recovery-integration/check.py --candidate
+FULL_HASH; --working is explicitly not final. Run the complete gate twice on the same clean
+candidate, obtain two exact-candidate independent reviews, then normal-push the review branch.
+If repairs alter a hash, restart both final gates and reviews. Final receipts belong outside Git
+tracked content. Check the completion receipt before treating this packet as published.
+
+An automatic account reset, exploration limit, the 3% capacity reserve or outer deadline ends
+new construction and produces a truthful checkpoint; no manual reset, billing fallback or
+operational configuration change is permitted. The live account feed determines observed reset.

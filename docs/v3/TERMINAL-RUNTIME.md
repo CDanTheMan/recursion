@@ -6,6 +6,35 @@ last-updated: 2026-09-07
 
 # Recursion v3 interactive terminal and persistent session runtime
 
+## Conditional replay-store mapping — 2026-09-07
+
+RSM-002: a genuine gap can use HELLO(requested cursor), WELCOME(retention floor, snapshot cursor),
+RESET(snapshot cursor), fresh CREDIT and the next EVENT. The narrow controls require requested
+cursor < retention floor <= snapshot cursor, recorded modeled retention loss and an available
+snapshot. After WELCOME detects the gap, any non-RESET continuation remains refused.
+
+M1B validates the wire relationships; it cannot authenticate a claimed replay floor or prove that
+a snapshot exists. The [mapping controls](construction/reset-mapping-20260907/results.json) retain
+a wire-only forged-fact control that passes the oracle while separate fact guards reject missing
+loss/snapshot inputs. Those guards operate on modeled inputs, not authenticated store evidence.
+No gap may be invented to recover an event that was merely deferred locally. Physical retention,
+snapshot integrity, SDK loss detection and reconnect provenance remain unimplemented.
+
+## Replay and flow recovery distinction — 2026-09-07
+
+FMC-001: the immutable [M1B wire profile](M1B-WIRE-PROFILE.md) requires RESET before any further
+same-stream message after detecting a replay gap. ACK, CREDIT, INPUT, RESIZE, HELLO, WELCOME and
+SNAPSHOT cannot bypass that rule; an intervening message permanently refuses the trace even when
+RESET follows. Ordinary credit exhaustion is distinct: it remains unrecovered until RESET but
+does not itself impose the replay-gap-continuation refusal. Missing CREDIT also preserves its
+own permanent refusal. Event cursors advance by exactly one; ACK cursors cannot move backward.
+
+Owner Stop is outside the closed M1B broker-message union. The formal slice assumes a separately
+typed direct control path and checks its progress while global admission, a downstream stage or
+a partial-frame buffer is full. This does not demonstrate a physical reserve through ingress,
+framing, scheduling, canonical writing and view delivery. Signaled loss handling also does not
+establish real SDK loss detection. These remain explicit implementation and mapping assumptions.
+
 ## Observed Windows launch gap — 2026-09-07
 
 IPR-001: the bounded Windows probe reproduced the create-suspended-before-association gap.
@@ -389,3 +418,19 @@ POSIX.1-2024 Issue 8 [terminal](https://pubs.opengroup.org/onlinepubs/9799919799
 [`kill`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/kill.html) specifications,
 and [SSH connection protocol](https://www.rfc-editor.org/rfc/rfc4254.html). Their applicability
 is limited by the declared platform version and actual isolation available to the broker.
+
+## Logical Stop in the integrated finite recovery domain
+
+FRI-003 preserves Stop admission and application across full finite pipelines, blocked pumps,
+bounded partial frames and pending RESET. Each cursor profile has 32,500 pending-Stop cyclic
+components, all excluded by named weak fairness of stop_apply; without that fairness they remain
+counterexamples to eventual logical Stop. No data-delivery fairness is assumed or proved.
+
+This variable is a logical control receipt, not execution fencing: offers, pumping and emission
+can still occur after control=2. A framing fault quarantines new source offers only; represented
+candidates and received protocol messages may continue. No actual oversize parser rejection or
+physical termination is implemented by these models. Queue bytes are independently stressed,
+but the two-event limit is not independently saturated with the current mixed costs and byte
+capacity2. Preserve the physical at-birth containment result as separate evidence, and retain
+all ten terminal controls, three Stop modes, forks, persistent assistants and remote recovery.
+See [scope and evidence](construction/flow-recovery-integration-20260907/evidence.json).
