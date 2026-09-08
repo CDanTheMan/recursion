@@ -1,5 +1,5 @@
 """Prospective frozen source/host admission with complete failed-attempt retention."""
-import argparse,datetime,hashlib,json,pathlib,platform,subprocess,sys,time,runpy
+import argparse,datetime,hashlib,json,pathlib,platform,subprocess,sys,time,runpy,importlib.metadata
 ROOT=pathlib.Path(__file__).resolve().parents[3]
 PREFIX='docs/v3/construction/shared-composition-20260908/'
 CODE='experiments/v3/shared-composition/'
@@ -20,6 +20,7 @@ def execute(directory):
     command=[sys.executable,'-X','utf8','-B',CODE+'sc_experiment.py','--output',str(directory/'result.json')]
     plan=json.loads((ROOT/PREFIX/'plan.json').read_text());now=datetime.datetime.now(datetime.timezone.utc)
     admission={'status':'admitted-before-execution','source_commit':head,'sources':files,'started_at':now.isoformat(),'command':command,'host':{'system':platform.system(),'release':platform.release(),'version':platform.version(),'machine':platform.machine(),'python':sys.version,'executable':sys.executable},'limits':plan['limits'],'new_metered_spend':0,'network_operations_in_model':False,'os_sandbox_claimed':False}
+    admission['dependencies']={'jsonschema':importlib.metadata.version('jsonschema')}
     write(directory/'admission.json',admission);started=time.perf_counter()
     with (directory/'stdout.log').open('wb') as out,(directory/'stderr.log').open('wb') as err:
         try:
