@@ -14,10 +14,10 @@ def msg(t,**kw):return dict(type=t,protocol_version='m1b-broker/1',stream_id='st
 def hello(n,u):return msg('HELLO',client_id='client-a',last_cursor=cursor(n,u),cursor_unit=u,columns=80,rows=24,capabilities=['attach'])
 def initial(u):
  return dict(free=10,reserved=(0,0),consumed=(0,0),bindings=((),()),intent=False,sent=0,remote=0,receipt=0,receipt_binding=(),classification=0,conflict=False,revision=0,reads=(10,10),
- tokens={k:token(k) for k in ('goal','lease','process','delivery')},request=(),reply=(),evidence=(),adopted=(),adoptions=0,wakes=0,started=False,executor='head',executor_binding=(token('lease'),token('process')),wait=(),alias_active=True,stopped=False,control=0,cancelled=False,missing=False,unrelated='active-local',
+ tokens={k:token(k) for k in ('goal','lease','process','delivery')},request=(),input_request=(),reply=(),evidence=(),adopted=(),adoptions=0,wakes=0,started=False,executor='head',executor_binding=(token('lease'),token('process')),wait=(),alias_active=True,stopped=False,control=0,cancelled=False,missing=False,unrelated='active-local',
  worker_exited=False,lifetime=(1,0),quota_epoch=0,quota_used=1,generation=1,pin=False,copied=False,snapshot=(),installed=(),installed_cursor=0,replay_cursor=0,
  catalog=(('boot',(),(),0,0),),offered=0,retained=(),channels=((),(),()),wire_sent=0,pending=(),delivery=(),received=(),delivered=(),loss=0,covered=0,phase=0,byte_credit=0,event_credit=0,grants=0,acknowledged=0,frame=0,quarantine=False,wire=(canonical(hello(0,u)),),done=0,decision='initial')
-AUTH=('free','reserved','consumed','bindings','intent','sent','remote','receipt','receipt_binding','classification','conflict','revision','reads','tokens','request','reply','evidence','adopted','adoptions','wakes','started','executor','executor_binding','wait','alias_active','stopped','control','cancelled','missing','unrelated','worker_exited','lifetime','quota_epoch','quota_used','generation','catalog')
+AUTH=('free','reserved','consumed','bindings','intent','sent','remote','receipt','receipt_binding','classification','conflict','revision','reads','tokens','request','input_request','reply','evidence','adopted','adoptions','wakes','started','executor','executor_binding','wait','alias_active','stopped','control','cancelled','missing','unrelated','worker_exited','lifetime','quota_epoch','quota_used','generation','catalog')
 FLOW=('offered','retained','channels','wire_sent','pending','delivery','received','delivered','loss','covered','phase','byte_credit','event_credit','grants','acknowledged','frame','quarantine','wire')
 VIEW=('pin','copied','snapshot','installed','installed_cursor','replay_cursor','done','decision')
 class Split(NamedTuple):authority:dict;flow:dict;view:dict
@@ -64,6 +64,11 @@ PROFILES.update({
  'installation-before-event':sequence(A+transfer()+['evict','credit:2','hello','welcome','reset']+transfer()+['credit:2','emit','install','emit','receive','ack','admitB']),
  'reset-needs-fresh-credit':sequence(A+transfer()+['evict','credit:2','hello','welcome','reset','install']+transfer()+['emit','credit:2','emit','receive','ack','admitB']),
  'lost-ack-pending':sequence(A+G+D2+transfer()+['credit:1','emit','lose-ack','receive','ingest','adopt','ack','wake','admitB']),
+})
+PROFILES.update({
+ 'transported-goal-change':sequence(A+G+D2+transfer()+['credit:1','emit','goal','receive','ack','ingest','adopt','wake','admitB']),
+ 'four-literal-events':sequence(A+transfer()+['credit:1']+deliver()+transfer()+['credit:2']+deliver()+transfer()+['credit:1']+deliver()+['ingest','adopt','wake','query','classify','reconcile']+transfer()+['credit:2']+deliver()+['admitB']),
+ 'consultation-duplicates':sequence(NORMAL+['consult-duplicate','consult-conflict','ingest','adopt','wake','admitB']),
 })
 UNITS=('event','utf8-byte')
 # Each environment fixes remote success/refusal; both are explored for every profile.

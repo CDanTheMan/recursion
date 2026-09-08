@@ -59,7 +59,13 @@ def step(s,a,p,u,outcome,mutant=None):
  elif k=='consult':
   if not s['bindings'][0] or s['stopped']:deny('unavailable')
   else:
-   t=s['tokens'];n['request']=('consultA',t['goal'],t['lease'],t['process'],t['delivery'],'contextA','adviceA','head','consultant','grantA',s['bindings'][0]);n['alias_active']=True
+   t=s['tokens'];n['request']=('consultA',t['goal'],t['lease'],t['process'],t['delivery'],'contextA','adviceA','head','consultant','grantA',s['bindings'][0]);n['alias_active']=True;n['input_request']=n['request']
+ elif k in ('consult-duplicate','consult-conflict'):
+  if not s['request']:deny('missing-request')
+  else:
+   b=list(s['request'])
+   if k=='consult-conflict':b[6]='different-advice-payload'
+   n['input_request']=tuple(b);deny('duplicate' if n['input_request']==s['request'] or mutant=='consult-payload' else 'payload-conflict')
  elif k=='wait-held':
   if s['request'] and s['executor']=='head':n['wait']=(('head','consultA'),('consultA','executor'),('executor','head'));deny('blocked-dependency')
   else:deny('unavailable')
@@ -90,7 +96,7 @@ def step(s,a,p,u,outcome,mutant=None):
    else:n['evidence']=b
  elif k=='adopt':
   if s['adopted']:deny('duplicate')
-  elif not current(s,s['evidence'],'lease' if mutant=='adopt-lease' else None):deny('stale-or-missing')
+  elif not current(s,s['evidence'],{'adopt-lease':'lease','adopt-goal':'goal'}.get(mutant)):deny('stale-or-missing')
   else:n['adopted']=s['evidence'];n['adoptions']+=1
  elif k=='wake':
   if s['wakes']:

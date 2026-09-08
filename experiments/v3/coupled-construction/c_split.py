@@ -55,7 +55,11 @@ def step(state,action,profile,unit,remote_result):
  elif k=='consult':
   if old['stopped'] or old['bindings'][0]==():result='unavailable'
   else:
-   au['alias_active']=True;au['request']=tuple(['consultA',*(old['tokens'][x] for x in ('goal','lease','process','delivery')),'contextA','adviceA','head','consultant','grantA',old['bindings'][0]])
+   au['alias_active']=True;au['request']=tuple(['consultA',*(old['tokens'][x] for x in ('goal','lease','process','delivery')),'contextA','adviceA','head','consultant','grantA',old['bindings'][0]]);au['input_request']=au['request']
+ elif k in ('consult-duplicate','consult-conflict'):
+  if old['request']==():result='missing-request'
+  else:
+   incoming=list(old['request']);incoming[6]='different-advice-payload' if k=='consult-conflict' else incoming[6];au['input_request']=tuple(incoming);result='duplicate' if au['input_request']==old['request'] else 'payload-conflict'
  elif k=='wait-held':
   if old['request'] and old['executor']=='head':au['wait']=(('head','consultA'),('consultA','executor'),('executor','head'));result='blocked-dependency'
   else:result='unavailable'

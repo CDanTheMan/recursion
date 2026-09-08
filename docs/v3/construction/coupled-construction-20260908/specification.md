@@ -89,3 +89,23 @@ receipts are rejected before classification/reconciliation. Catalogue slots are
 append-ordered generated notification records; they are not a complete authority
 journal. Lost-ACK and emission-before-install/fresh-credit each have dedicated
 profiles. Existing source/schema/oracle contracts remain immutable.
+
+Prospective revision2 after run01 and independent challenge: retain run01 as a
+passing but superseded88-environment attempt. Add transported-goal-change to exercise
+actual goal version2; add four-literal-events with no gap and exact payload lengths
+1,2,1,2; add consultation-duplicates with retained actual incoming packet and changed
+payload rejection. Gap traces deliver three events plus one explicitly covered
+record, not four EVENTs. There are now25 named profiles/100 environments and29 guards
+in both cursor units/58 mutant cases. Correct the inherited evidence-directory name
+in GoalSpec. No new product authority or broader formal closure follows.
+
+Durability/atomicity premises: serialized reserve+tombstone+authority revision+selected
+notification append is one abstract local commit. Reconciliation+consume/refund and
+its selected notification are another. Intent, send, remote effect, receipt query,
+classification, ingestion, adoption and wake remain separate preemption points.
+Requester restart retains authority, catalogue, physical modeled queues and prior
+application evidence; it changes incarnation/replay and Head executor ownership.
+It is not an actual receiver/process crash or physical persistence experiment.
+Correct terminal receipt truth and same-run immutable catalogue availability are
+explicit environmental premises; wrong identity is a tested rejection, not proof
+of cryptographic provenance or remote truth. M1B tokens authenticate neither.

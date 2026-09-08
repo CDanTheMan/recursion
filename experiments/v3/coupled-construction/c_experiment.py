@@ -3,7 +3,7 @@ import argparse,collections,copy,datetime,hashlib,json,pathlib,sys,time,ctypes
 import c_domain as d,c_inclusive as inc,c_split as split,c_audit as audit
 MAX_STATES=500000;MAX_SECONDS=600;MAX_MEMORY=2147483648
 MUTANTS={
- 'receipt-binding':'foreign-receipt','serialization':'pool-contention','identity':'owner-payload','foreign-release':'owner-payload','resend':'quota-restart-lifetime','classify-release':'refusal-reconciliation','success-refund':'success-consumption','settle-twice':'refusal-reconciliation','conflict':'classification-conflict',
+ 'adopt-goal':'transported-goal-change','consult-payload':'consultation-duplicates','receipt-binding':'foreign-receipt','serialization':'pool-contention','identity':'owner-payload','foreign-release':'owner-payload','resend':'quota-restart-lifetime','classify-release':'refusal-reconciliation','success-refund':'success-consumption','settle-twice':'refusal-reconciliation','conflict':'classification-conflict',
  'snapshot-ledger':'old-snapshot-uncertainty','restart-release':'quota-restart-lifetime','replay-release':'quota-restart-lifetime','quota-release':'quota-restart-lifetime','stop-release':'stop-saturated','adopt-lease':'transported-stale-advice','wake-lease':'historical-adoption','duplicate-wake':'ack-before-ingestion','catalog-binding':'wrong-record-binding','hidden-wait':'old-snapshot-uncertainty','hold-executor':'old-snapshot-uncertainty','shared-control':'stop-saturated','alias-retirement':'alias-reuse','cancel-all':'stop-saturated','reset-credit':'reset-needs-fresh-credit','erase-future':'reset-future-reply','install-guard':'installation-before-event','lost-ack-release':'lost-ack-pending'}
 START=time.perf_counter()
 def peak():
@@ -18,7 +18,7 @@ def witness(name,u,outcome,path):
 
 def positive(name,w,outcome):
  s=w['final'];events=w['events'];dec=lambda k:[e for e in events if e['action'].split('@')[0]==k]
- if name in ('transported-stale-advice','historical-adoption'):
+ if name in ('transported-stale-advice','transported-goal-change','historical-adoption'):
   d.require(s['reserved'][0]==6 and s['evidence'] and s['wakes']==0,'nonvacuous transported stale authority witness')
   d.require(s['adoptions']==(1 if name=='historical-adoption' else 0),'historical versus stale adoption')
  if name in ('refusal-reconciliation','success-consumption'):
@@ -31,7 +31,10 @@ def positive(name,w,outcome):
  if name=='ack-before-ingestion':d.require(s['wakes']==1 and s['adoptions']==1 and s['sent']==1,'ACK and duplicate ingestion idempotence')
  if name=='wrong-record-binding':d.require(not s['evidence'] and any(e['after']['decision']=='ingest:binding-conflict' for e in events),'actual record mismatch rejection')
  if name=='framing-stop':d.require(s['quarantine'] and s['control']==2 and s['reserved'][0]==6,'framing quarantine/control separation')
- if name=='refusal-reconciliation':d.require(s['offered']==4 and s['wire_sent']==4,'all four mixed-byte notifications actually delivered')
+ if name=='refusal-reconciliation':d.require(s['offered']==4 and s['wire_sent']==4,'four notifications delivered or explicitly snapshot-covered')
+ if name=='four-literal-events':
+  actual=[json.loads(m) for m in s['wire'] if json.loads(m)['type']=='EVENT'];d.require(s['delivered']==(1,2,3,4) and s['loss']==0 and [len(base64.b64decode(m['payload_base64'])) for m in actual]==[1,2,1,2],'literal full four-event positive')
+ if name=='consultation-duplicates':d.require(s['wakes']==1 and s['adoptions']==1 and s['request']!=s['input_request'] and any(e['after']['decision']=='consult-conflict:payload-conflict' for e in events),'actual consultation payload conflict')
  return True
 
 def explore(name,u,outcome,limit=MAX_STATES):
@@ -62,7 +65,8 @@ def hazard(m,s,k,n):
  if m=='alias-retirement':return k=='ingest' and s['stopped'] and bool(n['evidence'])
  if m=='hold-executor':return k=='start' and s['executor']=='head' and not n['started']
  if m=='reset-credit':return k=='emit' and n['wire_sent']>s['wire_sent'] and d.evaluate(n['wire'])['status']=='refused'
- if m=='adopt-lease':return n['adoptions']>s['adoptions'] and not audit.authoritative(s,s['evidence'])
+ if m=='consult-payload':return k=='consult-conflict' and n['decision'].endswith('duplicate') and n['request']!=n['input_request']
+ if m in ('adopt-lease','adopt-goal'):return n['adoptions']>s['adoptions'] and not audit.authoritative(s,s['evidence'])
  if m=='wake-lease':return n['wakes']>s['wakes'] and not audit.authoritative(s,s['adopted'])
  if m=='identity':return k in ('wrong-owner','wrong-payload') and n['decision'].endswith('duplicate')
  if m=='hidden-wait':return k=='wait-held' and n['decision'].endswith('blocked-dependency') and not n['wait']

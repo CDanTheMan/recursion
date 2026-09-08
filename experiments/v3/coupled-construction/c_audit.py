@@ -9,6 +9,7 @@ def enabled(s,p):
  finished={p['actions'][i] for i in range(len(p['actions'])) if (s['done']>>i)&1}
  return {a for a in p['actions'] if a not in finished and set(p['requires'][a])<=finished}
 def invariant(s):
+ d.require(d.REQUESTS==(('pool10','goalA','opA','attemptA','payloadA','ownerA',6),('pool10','goalB','opB','attemptB','payloadB','ownerB',6)),'original literal six-plus-six request domain')
  d.require(s['free']>=0 and s['free']+sum(s['reserved'])+sum(s['consumed'])==10 and sum(s['reserved'])+sum(s['consumed'])<=10,'aggregate cumulative pool conservation')
  d.require(all(x in (0,6) for x in s['reserved']+s['consumed']),'six-unit amounts')
  d.require(s['sent'] in (0,1),'no ambiguous duplicate dispatch')
@@ -34,7 +35,7 @@ def invariant(s):
 
 def initialization(s,u):
  t={k:fresh(k,1) for k in ('goal','lease','process','delivery')}
- expected=dict(free=10,reserved=(0,0),consumed=(0,0),bindings=((),()),intent=False,sent=0,remote=0,receipt=0,receipt_binding=(),classification=0,conflict=False,revision=0,reads=(10,10),tokens=t,request=(),reply=(),evidence=(),adopted=(),adoptions=0,wakes=0,started=False,executor='head',executor_binding=(t['lease'],t['process']),wait=(),alias_active=True,stopped=False,control=0,cancelled=False,missing=False,unrelated='active-local',worker_exited=False,lifetime=(1,0),quota_epoch=0,quota_used=1,generation=1,pin=False,copied=False,snapshot=(),installed=(),installed_cursor=0,replay_cursor=0,catalog=(('boot',(),(),0,0),),offered=0,retained=(),channels=((),(),()),wire_sent=0,pending=(),delivery=(),received=(),delivered=(),loss=0,covered=0,phase=0,byte_credit=0,event_credit=0,grants=0,acknowledged=0,frame=0,quarantine=False,done=0,decision='initial')
+ expected=dict(free=10,reserved=(0,0),consumed=(0,0),bindings=((),()),intent=False,sent=0,remote=0,receipt=0,receipt_binding=(),classification=0,conflict=False,revision=0,reads=(10,10),tokens=t,request=(),input_request=(),reply=(),evidence=(),adopted=(),adoptions=0,wakes=0,started=False,executor='head',executor_binding=(t['lease'],t['process']),wait=(),alias_active=True,stopped=False,control=0,cancelled=False,missing=False,unrelated='active-local',worker_exited=False,lifetime=(1,0),quota_epoch=0,quota_used=1,generation=1,pin=False,copied=False,snapshot=(),installed=(),installed_cursor=0,replay_cursor=0,catalog=(('boot',(),(),0,0),),offered=0,retained=(),channels=((),(),()),wire_sent=0,pending=(),delivery=(),received=(),delivered=(),loss=0,covered=0,phase=0,byte_credit=0,event_credit=0,grants=0,acknowledged=0,frame=0,quarantine=False,done=0,decision='initial')
  expected['wire']=(d.canonical({'type':'HELLO','protocol_version':'m1b-broker/1','stream_id':'stream-a','daemon_epoch':2,'client_id':'client-a','last_cursor':0,'cursor_unit':u,'columns':80,'rows':24,'capabilities':['attach']}),)
  d.require(s==expected,'complete independent initialization');invariant(s)
 
@@ -90,6 +91,11 @@ def check(s,a,n,p,u,remote):
  elif k=='consult':
   if s['bindings'][0] and not s['stopped']:change(alias_active=True,request=('consultA',s['tokens']['goal'],s['tokens']['lease'],s['tokens']['process'],s['tokens']['delivery'],'contextA','adviceA','head','consultant','grantA',s['bindings'][0]))
   else:reason='unavailable'
+  if 'request' in ch:ch['input_request']=ch['request']
+ elif k in ('consult-duplicate','consult-conflict'):
+  if not s['request']:reason='missing-request'
+  else:
+   incoming=s['request'] if k=='consult-duplicate' else s['request'][:6]+('different-advice-payload',)+s['request'][7:];change(input_request=incoming);reason='duplicate' if incoming==s['request'] else 'payload-conflict'
  elif k=='wait-held':
   if s['request'] and s['executor']=='head':change(wait=(('head','consultA'),('consultA','executor'),('executor','head')));reason='blocked-dependency'
   else:reason='unavailable'
@@ -213,3 +219,9 @@ def check(s,a,n,p,u,remote):
  if n['adoptions']>s['adoptions']:d.require(authoritative(s,s['evidence']),'independent fresh adoption')
  if n['wakes']>s['wakes']:d.require(authoritative(s,s['adopted']) and s['executor']=='free','independent fresh continuation')
  if not s['alias_active']:d.require(n['evidence']==s['evidence'],'inactive alias cannot create evidence')
+
+ # Independent crossing properties remain useful even if two reducers agree.
+ if k in ('offer','pump-source','pump-sdk','pump-broker','evict','hello','welcome','reset','install','receive','ack','lose-ack','fragment','framing-fault') or k.startswith('credit:') or k=='emit':
+  for field in ('free','reserved','consumed','bindings','intent','sent','remote','receipt','receipt_binding','classification','tokens','request','evidence','adopted','adoptions','wakes'):
+   d.require(n[field]==s[field],'transport cannot mutate authority '+field)
+ if n['evidence']!=s['evidence']:d.require(k=='ingest','only application ingestion creates advice evidence')
