@@ -418,3 +418,19 @@ POSIX.1-2024 Issue 8 [terminal](https://pubs.opengroup.org/onlinepubs/9799919799
 [`kill`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/kill.html) specifications,
 and [SSH connection protocol](https://www.rfc-editor.org/rfc/rfc4254.html). Their applicability
 is limited by the declared platform version and actual isolation available to the broker.
+
+## Logical Stop in the integrated finite recovery domain
+
+FRI-003 preserves Stop admission and application across full finite pipelines, blocked pumps,
+bounded partial frames and pending RESET. Each cursor profile has 32,500 pending-Stop cyclic
+components, all excluded by named weak fairness of stop_apply; without that fairness they remain
+counterexamples to eventual logical Stop. No data-delivery fairness is assumed or proved.
+
+This variable is a logical control receipt, not execution fencing: offers, pumping and emission
+can still occur after control=2. A framing fault quarantines new source offers only; represented
+candidates and received protocol messages may continue. No actual oversize parser rejection or
+physical termination is implemented by these models. Queue bytes are independently stressed,
+but the two-event limit is not independently saturated with the current mixed costs and byte
+capacity2. Preserve the physical at-birth containment result as separate evidence, and retain
+all ten terminal controls, three Stop modes, forks, persistent assistants and remote recovery.
+See [scope and evidence](construction/flow-recovery-integration-20260907/evidence.json).

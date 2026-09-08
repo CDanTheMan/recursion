@@ -417,3 +417,19 @@ One public v3 release is built incrementally and cut atomically only when:
 - for the initial private deployment, Lucas accepts the review branch and performs the protected
   merge/deployment seams unless a later explicit Full Access grant and operative constitutional
   amendment authorize a different reviewed profile.
+
+## Flow and recovery finite evidence gate
+
+The [flow/recovery packet](construction/flow-recovery-integration-20260907/handoff.md) adds two
+closed 97,500-state products, 22 constructive witnesses plus two combined sequences, nine
+nonvacuous semantic mutants, 45,240 audit calibrations and retained long/special oracle controls.
+Claims FRI-001 through FRI-003 are modeled evidence. Local execution establishes those checks
+ran; it does not promote synthetic retention/snapshot facts into observed integration support.
+
+Require two complete identical-candidate gates and two independent approvals. The new gate
+reproduces semantic results in a separate process, retains timing/memory as nonsemantic telemetry,
+binds prospective source snapshots, preserves the unchanged25 regression commands and historical
+validators, and runs four original working gates in frozen predecessor worktrees. Its final
+receipts stay under Git common research-attestations/flow-recovery-integration/<candidate>/.
+Full formal acceptance remains false; the six obligations, 27 rows and all prior probe/scenario
+coverage remain required, including the unresolved event-queue and physical-recovery cases.

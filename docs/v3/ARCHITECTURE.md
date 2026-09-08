@@ -505,3 +505,23 @@ policy or configuration change. See [DECISION-REGISTER.md](DECISION-REGISTER.md)
 The first construction candidate is now the narrower planning-only
 [M1A](M1A-AUTONOMOUS-PLANNING.md). It excludes SQLite, providers, terminals, plugins, Git,
 publication and effects; the broader object table above remains a later architecture projection.
+
+## Conditional flow and recovery composition
+
+FRI-001 extends the earlier finite subsystem without replacing its retained counterexample.
+The queue-independent specification, component split (kernel/source/broker), and flat inclusive
+model now contain four candidate identities, mixed payload costs 1/2/1/2 bytes, four grants,
+three single-slot pipeline stages, two total pipeline slots, and one modeled retention loss.
+Both event and cumulative UTF-8-byte cursor profiles close at 97,500 split/audit states and
+603,827 transitions each. Every reachable transition satisfies the independent specification
+and exact local labeled correspondence to the separately defined inclusive model. This method
+requires unique transition labels and complete visible/physical signatures; it is stronger than
+the trace inclusion needed here and may cease to apply to future hidden nondeterminism.
+
+Retain the small aggregate plus independently checked bounded broker as the leading candidate.
+The inclusive model remains a required competing boundary, not an implementation cost measurement.
+Shared domain and wire encoding, finite identity/grant bounds, atomic admission/emission, direct
+logical Stop and modeled store facts limit this evidence. The original six obligations and
+27-row comparison contract remain authoritative; full freeze is false. Next discriminators are
+independent source evidence, physical control transport, and broader fault-recovery products.
+See [packet evidence](construction/flow-recovery-integration-20260907/evidence.json).

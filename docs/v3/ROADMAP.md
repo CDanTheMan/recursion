@@ -391,3 +391,24 @@ The temporary tools used to build v3—an overnight Codex lead, Cursor implement
    release (OR-022). Expansion beyond that required loop remains an optional spike until it wins
    a preregistered metric; it cannot replace Recursion's ratified canonical authority boundary
    without an Owner amendment.
+
+## After the integrated flow/recovery packet
+
+The integrated finite model resolves a narrow composition question: deferred candidates and
+future queued IDs can survive a modeled replay gap without unnecessary RESET or ownership loss.
+It leaves consequential physical and full-domain obligations open. Next bounded requests are:
+
+1. A local replay-store evidence probe: authenticate retention floor and snapshot identity,
+   distinguish notification loss from source loss, crash between snapshot publication and RESET,
+   and replay both a real gap and a recoverable queued notification. Synthetic Boolean flags
+   cannot admit this result; preserve zero provider calls and explicit cleanup.
+2. Complementary finite queue profiles: byte capacity4 with event capacity2, distinct event-limit
+   mutation, and a fault-recovery product for actually emitted exhaustion. Keep the byte-capacity2
+   profile and its witness; do not replace evidence to make a broader claim.
+3. Physical control delivery, fencing, Stop escalation and reconnect mapping, then remaining
+   obligations and traces in the original complete formal comparison gate.
+
+Formal model completion precedes language comparison, then storage comparison. A temporary
+file-backed probe fixture chooses no product language/store. Whole-system performance and all
+eight experiment families continue alongside this dependency chain. No new Owner decision is
+needed to prepare these already authorized bounded requests.
