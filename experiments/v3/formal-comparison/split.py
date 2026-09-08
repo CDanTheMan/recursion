@@ -71,12 +71,12 @@ def successors(s,mutant=None):
     if b.phase==0 and b.cursor==0:yield ('gap',),Split(k,b._replace(phase=1))
     if b.sdk and not b.loss_used:
         change={'sdk':b.sdk[1:],'loss_used':True}
-        if mutant!='hidden_loss':change.update(ingress_unknown=True,phase=1 if b.phase==0 else b.phase)
+        if mutant!='hidden_loss':change.update(ingress_unknown=True,phase=b.phase if mutant=='loss_retains_flow' and b.phase==3 else 1 if b.phase!=2 else b.phase)
         yield ('loss',),Split(k,b._replace(**change))
     if b.phase!=2:
         if b.partial<FRAME or mutant=='unbounded_frame':
             yield ('fragment',),Split(k,b._replace(partial=b.partial+1))
         else:
-            yield ('framing_unknown','oversize'),Split(k,b._replace(partial=0,ingress_unknown=True,phase=1 if b.phase==0 else b.phase))
+            yield ('framing_unknown','oversize'),Split(k,b._replace(partial=0,ingress_unknown=True,phase=1 if b.phase!=2 else b.phase))
         if b.partial:
-            yield ('framing_unknown','eof'),Split(k,b._replace(partial=0,ingress_unknown=True,phase=1 if b.phase==0 else b.phase))
+            yield ('framing_unknown','eof'),Split(k,b._replace(partial=0,ingress_unknown=True,phase=1 if b.phase!=2 else b.phase))

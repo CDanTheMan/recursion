@@ -52,7 +52,7 @@ def step(s,label):
         return s._replace(stop_pending=False,stopped=True) if s.stop_pending else None
     if kind=='gap':return s._replace(phase=1) if s.phase==0 and s.cursor==0 else None
     if kind in ('loss','framing_unknown'):
-        return s._replace(phase=1 if s.phase==0 else s.phase,ingress_unknown=True)
+        return s._replace(phase=1 if s.phase!=2 else s.phase,ingress_unknown=True)
     if kind in ('offer','pump_sdk','pump_broker','fragment','idle','requeue'):
         return s
     raise ValueError('Unknown abstract label '+repr(label))

@@ -64,10 +64,10 @@ def successors(s,mutant=None):
     if s.stream==0 and not s.position:yield ('gap',),s._replace(stream=1)
     if s.channels[0] and not s.dropped:
         a,b,c=s.channels;next_state=s._replace(channels=(a[1:],b,c),dropped=True)
-        if mutant!='hidden_loss':next_state=next_state._replace(gap_evidence=True,stream=1 if s.stream==0 else s.stream)
+        if mutant!='hidden_loss':next_state=next_state._replace(gap_evidence=True,stream=s.stream if mutant=='loss_retains_flow' and s.stream==3 else 1 if s.stream!=2 else s.stream)
         yield ('loss',),next_state
     if s.stream!=2:
         length=s.fragment_length+1
         if length<=FRAME or mutant=='unbounded_frame':yield ('fragment',),s._replace(fragment_length=length)
-        else:yield ('framing_unknown','oversize'),s._replace(fragment_length=0,gap_evidence=True,stream=1 if s.stream==0 else s.stream)
-        if s.fragment_length:yield ('framing_unknown','eof'),s._replace(fragment_length=0,gap_evidence=True,stream=1 if s.stream==0 else s.stream)
+        else:yield ('framing_unknown','oversize'),s._replace(fragment_length=0,gap_evidence=True,stream=1 if s.stream!=2 else s.stream)
+        if s.fragment_length:yield ('framing_unknown','eof'),s._replace(fragment_length=0,gap_evidence=True,stream=1 if s.stream!=2 else s.stream)

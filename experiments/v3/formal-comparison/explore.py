@@ -96,6 +96,7 @@ def graph(initial,next_fn,*,mutant=None,reference=None):
             if label==('message','CREDIT','gap-continuation'):witnesses.setdefault('non_EVENT_gap_refusal',path(parents,head)+[label])
             if label==('message','RESET','refused'):witnesses.setdefault('refusal_survives_RESET',path(parents,head)+[label])
             if label[0] in ('loss','framing_unknown'):witnesses.setdefault('/'.join(label),path(parents,head)+[label])
+            if label==('loss',) and flat(state)[2]==3 and flat(target)[2]==1:witnesses.setdefault('loss_supersedes_flow_recovery',path(parents,head)+[label])
             if label==('stop_apply',):witnesses.setdefault('local_Stop_preserves_external_unknown',path(parents,head)+[label])
         edges.append(row);enabled.append(classes);head+=1
     if reference is not None and set(relation)!=set(reference['relation']):raise ValueError('boundary reachable-state coverage mismatch')
@@ -168,19 +169,19 @@ def run():
         fairness[name]=fair_bad_cycles(g,[n for n,state in enumerate(g['nodes']) if flat(state)[0]==1])
         if fairness[name]['fair_bad_components']:raise ValueError('fair local Stop starvation')
         if not fairness[name]['cyclic_components']:raise ValueError('fairness calibration vacuous: no pending-state cycles')
-    required={'legitimate_event','legitimate_reset','Stop_with_full_inflight','Stop_with_blocked_upstream_pump','Stop_with_full_partial_frame','non_EVENT_gap_refusal','refusal_survives_RESET','loss','framing_unknown/oversize','framing_unknown/eof','local_Stop_preserves_external_unknown'}
+    required={'legitimate_event','legitimate_reset','Stop_with_full_inflight','Stop_with_blocked_upstream_pump','Stop_with_full_partial_frame','non_EVENT_gap_refusal','refusal_survives_RESET','loss','framing_unknown/oversize','framing_unknown/eof','local_Stop_preserves_external_unknown','loss_supersedes_flow_recovery'}
     for g in [s,i]:
         if not required<=set(g['witnesses']):raise ValueError('missing reachable positive trigger')
     mutants=[]
     for name,init,successors in [('split',split.Split(),split.successors),('inclusive',inclusive.Inclusive(),inclusive.successors)]:
-        for mutant in ['shared_control','gap_event_only','reset_credit','refusal_reset','hidden_loss','unbounded_frame','queue_overflow','stage_overflow','false_settlement','deny_event']:
+        for mutant in ['shared_control','gap_event_only','reset_credit','refusal_reset','hidden_loss','loss_retains_flow','unbounded_frame','queue_overflow','stage_overflow','false_settlement','deny_event']:
             result=graph(init,successors,mutant=mutant)
             if 'violation' not in result:raise ValueError('vacuous mutant '+name+'/'+mutant)
             mutants.append({'boundary':name,'mutant':mutant,'counterexample':result})
     sd,id_=digest_graph(s),digest_graph(i)
     if sd!=id_:raise ValueError('isomorphic graph digest differs')
     return {'status':'conditional-subsystem-pass','abstract_graph':a_stats,'split':s['statistics'],'inclusive':i['statistics'],
-            'graph_sha256':sd,'mapping_checks':{'initialization':True,'every_reachable_step_or_visible_stutter':True,'concrete_and_abstract_invariants':True,'split_composition':True,'independently_generated_inclusive_bisimulation':True,'named_weak_fairness_Stop_progress':True},
+            'graph_sha256':sd,'mapping_checks':{'initialization':True,'every_reachable_step_or_visible_stutter':True,'concrete_and_abstract_invariants':True,'split_composition':True,'separate_inclusive_transition_relation_checked':True,'named_weak_fairness_Stop_progress':True},
             'fairness':fairness,'positive_witnesses':s['witnesses'],'mutant_counterexamples':mutants,'full_comparison_complete':False,'formal_freeze':False}
 
 if __name__=='__main__':

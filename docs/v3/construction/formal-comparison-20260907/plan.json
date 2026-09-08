@@ -20,20 +20,32 @@
         "Per-stage capacity equal to total in-flight capacity: reduced stage capacity to one before execution so blocked pumps are reachable"
       ],
       "invalidated": []
+    },
+    {
+      "revision": 3,
+      "at": "2026-09-08T00:18:06.693284+00:00",
+      "reason": "First complete exploration passed 444834 states per concrete boundary; strengthen signaled-loss handling during existing flow recovery and rerun with a targeted mutant",
+      "retained": [
+        "Initial run and all source snapshots at 443bd6a7f83a5590c41b1cb8829a4ac71a478dcf remain valid only for that earlier specification"
+      ],
+      "superseded": [
+        "Earlier spec allowed signaled loss during flow recovery to retain the weaker flow state"
+      ],
+      "invalidated": []
     }
   ],
   "steps": [
     {
       "id": "domain-resolution",
-      "status": "in_progress"
+      "status": "resolved_full_domains_with_unrun_profiles"
     },
     {
       "id": "independent-models",
-      "status": "pending"
+      "status": "first_slice_implemented"
     },
     {
       "id": "exhaustive-and-adversarial-checks",
-      "status": "pending"
+      "status": "first_exhaustive_run_in_progress"
     },
     {
       "id": "canonical-synthesis",

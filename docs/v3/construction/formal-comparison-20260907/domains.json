@@ -213,7 +213,7 @@
     ],
     "design_revision": "Before execution, lower per-stage slots to one while retaining two total in-flight messages, so a full downstream stage with waiting upstream work is reachable. The full profile still has two slots per stage and remains unimplemented.",
     "control_assumption": "A dedicated logical Owner-control request and processing transition bypass all data stages. Physical admission/framing/scheduler/writer/view reserve survival is not established.",
-    "loss_assumption": "One SDK drop is accompanied atomically by a trustworthy loss signal. The interval before detecting a silent drop is not represented; unsupported detection is an explicit mapping assumption.",
+    "loss_assumption": "One SDK drop is accompanied atomically by a trustworthy loss signal. The interval before detecting a silent drop is not represented; unsupported detection is an explicit mapping assumption. A newly signaled loss supersedes ordinary flow recovery with RESET-only replay-gap state; this is checked separately.",
     "semantic_boundary": "Preventive broker message-admission state, not the M1B posthoc wire-audit reducer. Rejected candidates do not advance admitted cursor; M1B retains rejected EVENT cursor/pending facts. Full wire-adapter mapping, including RESET after locally prevented exhaustion, is unimplemented."
   },
   "construction_corrections": [
