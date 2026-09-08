@@ -37,6 +37,8 @@ Original idempotency key and provider-operation references use declared raw UTF-
 SHA256; receipt digest uses the exact M1C canonical receipt bytes, including LF.
 These digest interpretations restrict this adapter; arbitrary historical digest
 provenance cannot be recovered and must be rejected or separately supplied.
+Check internal plan→goal/task, budget→goal/plan/task, lease→task and route→actor
+relationships too; valid signatures and outward references do not replace them.
 
 Supplemental original intent supplies target, payload, dispatch command identity,
 deadline and admission. Its effect, actor, GoalSpec/plan, lease, policy, privacy,
@@ -55,6 +57,12 @@ receipt/operation digest must bind a specific record in that prefix. A late rece
 cannot replace those bindings. Missing evidence blocks the join; the adapter never
 creates an observation to force the aggregate label to agree. Successful output is
 classification **as of the supplied trusted cut**, with no permit and no writes.
+
+Construction-stage preregistration refinement before run03: literal M1C can report
+an earlier success when a later start has no external observation yet. Preserve
+that literal result, but separately track ordered unsettled starts and require a
+runtime reconciliation hold. Test `later-start-only` explicitly. This diagnostic
+is a conservative experimental addition; it neither changes M1C nor clears M1A.
 
 ## Preregistered discriminating cases
 

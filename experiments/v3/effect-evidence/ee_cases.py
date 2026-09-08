@@ -9,10 +9,11 @@ EXPECTED={
     'ambiguous':('ambiguous','ambiguous',['receipt-missing','reconciliation-required']),
     'late-receipt':('ambiguous','succeeded',[]),
     'late-reconciliation':('ambiguous','reconciled-succeeded',[]),
-    'unverified':('ambiguous','ambiguous',['reconciliation-required']),
-    'conflict':('succeeded','ambiguous',['observation-conflict']),
-    'prior-unresolved':('ambiguous','ambiguous',['blind-retry-blocked','receipt-missing']),
-    'later-unresolved':('succeeded','ambiguous',['receipt-missing']),
+    'unverified':('ambiguous','ambiguous',['observation-unverified','receipt-missing','reconciliation-required']),
+    'conflict':('succeeded','ambiguous',['observation-conflict','reconciliation-required']),
+    'prior-unresolved':('ambiguous','ambiguous',['blind-retry-blocked','receipt-missing','reconciliation-required']),
+    'later-unresolved':('succeeded','ambiguous',['receipt-missing','reconciliation-required']),
+    'later-start-only':('succeeded','succeeded',[]),
     'stale-paused':('succeeded','succeeded',['stale-admission','stale-fence']),
 }
 
@@ -48,10 +49,11 @@ def unsigned(name):
             records.extend([second,last])
     elif name=='conflict':
         last=copy.deepcopy(receipt);last.update(receipt_id='receipt:conflict',observed_at='2026-09-04T12:03:00Z',result='failed');records.append(last)
-    elif name=='later-unresolved':
+    elif name in ('later-unresolved','later-start-only'):
         second=copy.deepcopy(start);second.update(attempt_id='attempt:2',attempt_number=2,observed_at='2026-09-04T12:03:00Z')
         unknown=copy.deepcopy(external);unknown.update(attempt_id='attempt:2',attempt_number=2,observed_at='2026-09-04T12:04:00Z',observation_id='observation:later',outcome='unknown')
         records.extend([second,unknown])
+        if name=='later-start-only':records.pop()
     observation=copy.deepcopy(fixture['commands'][-1]['payload'])
     observation['payload'].update(observation=label,quarantine=label=='ambiguous',idempotency_key_digest=rawhash(intent['idempotency_key'].encode()),
         receipt_digest=None if ri is None else rawhash(canonical(records[ri])),provider_operation_id_digest=None if oi is None else rawhash(records[oi]['remote_operation_ref'].encode()))
@@ -69,4 +71,25 @@ def package(original,keys):
 
 def refresh(original):
     original['cut']['ordered_inventory']=[dh(r) for r in original['records']]
+    return original
+
+def reseal_context(original,changed):
+    """Retain every other edge while constructing one contradictory internal edge."""
+    c=original['cut']['context'];c[changed]=m1a.seal(c[changed]);p=c['packet']['payload']
+    if changed in ('goal','plan','route','budget'):
+        field={'goal':'goal_ref','plan':'plan_ref','route':'route_assignment_ref','budget':'budget_reservation_ref'}[changed]
+        p[field]=ref(c[changed])
+        if changed in ('goal','plan'):
+            for record in ('lease','budget'):
+                c[record]['payload'][field]=ref(c[changed]);c[record]=m1a.seal(c[record])
+            if changed=='goal':c['plan']['payload']['goal_ref']=ref(c[changed]);c['plan']=m1a.seal(c['plan']);p['plan_ref']=ref(c['plan'])
+    p['budget_reservation_ref']=ref(c['budget'])
+    p['work_lease_ref']={'lease_id':c['lease']['id'],'lease_epoch':c['lease']['payload']['lease_epoch'],'content_digest':c['lease']['content_digest']}
+    c['packet']=m1a.seal(c['packet']);c['observation']['payload']['work_packet_ref']=ref(c['packet']);c['observation']=m1a.seal(c['observation'])
+    c['grant']=grant_for(c['packet']);c['mapping']=mapping_for(c['packet'])
+    intent=original['cut']['trace_header']['intent']
+    intent.update(goal_spec_digest=pref(c['goal']['content_digest']),plan_digest=pref(c['plan']['content_digest']),route_digest=pref(c['route']['content_digest']),budget_digest=pref(c['budget']['content_digest']),grant_digest=dh(c['grant']))
+    intent['intent_digest']=dh({k:v for k,v in intent.items() if k!='intent_digest'})
+    admission=original['cut']['trace_header']['admission']
+    for key in admission.keys() & intent.keys()-{'type'}:admission[key]=intent[key]
     return original

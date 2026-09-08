@@ -2,7 +2,7 @@
 import argparse,copy,ctypes,datetime,json,os,pathlib,time,tracemalloc
 from ee_common import *
 from ee_join import join,sign
-from ee_cases import EXPECTED,unsigned,package,refresh
+from ee_cases import EXPECTED,unsigned,package,refresh,reseal_context
 
 def audit(original,result,name):
     # Independent projection from original source records, not adapter output fields.
@@ -11,9 +11,14 @@ def audit(original,result,name):
     require(result['trace']==exact,'independent exact trace')
     old,new,reasons=EXPECTED[name]
     require(result['historical']['status']==old and result['current']['status']==new,'hand-stated outcomes '+name)
-    require(set(reasons)<=set(result['current']['reasons']),'hand-stated reasons '+name)
+    require(reasons==result['current']['reasons'],'hand-stated reasons '+name)
+    old_reasons=(['observation-unverified','receipt-missing','reconciliation-required'] if name=='unverified' else ['receipt-missing','reconciliation-required']) if old=='ambiguous' else []
+    require(result['historical']['reasons']==old_reasons,'exact historical reasons '+name)
     require(result['runtime_permission'] is False and result['canonical_write_count']==0,'classification is not permission')
     require(all(result['current'][k]==0 for k in ('effect_count','external_call_count')),'literal zero counters')
+    expected_pending={'ambiguous':['attempt:1'],'unverified':['attempt:1'],'prior-unresolved':['attempt:1'],'later-unresolved':['attempt:2'],'later-start-only':['attempt:2']}.get(name,[])
+    require(result['unsettled_attempt_ids']==expected_pending,'independent unresolved attempts '+name)
+    require(result['runtime_settlement_hold']==(bool(expected_pending) or new=='ambiguous'),'independent runtime hold '+name)
 
 def authorized(fixture,command,state,ordinal):
     """Synthetic candidate-bound fixture attestation, then actual kernel admission."""
@@ -70,7 +75,7 @@ def run(keys,directory,limits):
         raw[name]={'original':original,'bundle':bundle};write(directory/'cases.json',raw)
         result=join(bundle,keys);audit(original,result,name);require(canonical(bundle)==before,'immutable input')
         raw[name]={'original':original,'bundle':bundle,'result':result};outcomes[name]={k:v for k,v in result.items() if k not in ('trace','ordered_inventory')}
-    def rejection(name,bundle,stage):
+    def rejection(name,bundle,stage,expected_detail=None):
         raw[name]={'bundle':bundle,'expected_failure_stage':stage};write(directory/'cases.json',raw)
         try:join(bundle,keys)
         except schema.jsonschema.ValidationError as e:
@@ -79,6 +84,7 @@ def run(keys,directory,limits):
             actual='join';detail=str(e)
         else:raise ValueError('negative accepted '+name)
         require(actual==stage,'negative stage '+name+': '+actual)
+        if expected_detail is not None:require(detail==expected_detail,'discriminating binding '+name+': '+detail)
         negative.append({'name':name,'stage':actual,'detail':detail});raw[name]['observed_failure']=negative[-1]
     base=unsigned('success')
     for field in ('idempotency_key','target_ref','payload_digest'):
@@ -114,6 +120,19 @@ def run(keys,directory,limits):
         elif name=='omitted-record':bundle['evidence'].pop()
         elif name=='reordered':bundle['evidence'].reverse()
         rejection(name,bundle,'schema' if name in ('missing-start','duplicate-start','bad-time') else 'join')
+    for kind,field,expected in [('lease','task_ref','lease-task'),('budget','task_ref','budget-task_ref'),('budget','goal_ref','budget-goal_ref'),('budget','plan_ref','budget-plan_ref'),('plan','goal_ref','plan-goal')]:
+        bad=copy.deepcopy(base);bad['cut']['context'][kind]['payload'][field]['content_digest']='0'*64
+        reseal_context(bad,kind);rejection('cross-'+kind+'-'+field,package(bad,keys),'join',expected)
+    bad=copy.deepcopy(base);bad['cut']['context']['route']['payload']['logical_actor_id']='WORKER-OTHER';reseal_context(bad,'route')
+    rejection('cross-route-actor',package(bad,keys),'join','route-actor')
+    for name in ('bool-epoch','bool-ordinal','bool-grant'):
+        bad=copy.deepcopy(base)
+        if name=='bool-epoch':bad['cut']['context']['mapping']['fence']['target']=True
+        elif name=='bool-grant':bad['cut']['context']['grant']['operational_authority']=0
+        bundle=package(bad,keys)
+        if name=='bool-ordinal':
+            body=bundle['evidence'][0]['body'];body['ordinal']=False;bundle['evidence'][0]=sign(body,'dispatcher',keys)
+        rejection(name,bundle,'join')
     # Guard mutants each accept a counterexample rejected by the baseline.
     wrong=package(base,keys);wrong['dispatch']=sign(wrong['dispatch']['body'],'observer',keys)
     role=join(wrong,keys,'role');mutants.append({'guard':'role','counterexample':'wrong-role','accepted_status':role['current']['status']})

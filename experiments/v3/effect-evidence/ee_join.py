@@ -53,14 +53,21 @@ def check_context(c,intent,mutant):
         record=c[kind];m1a.validate_domain_record(record)
         require(record['content_digest']==m1a.digest(record,omit_content_digest=True),'m1a-digest')
     p=c['packet']['payload'];o=c['observation']['payload']
-    require(c['grant']==grant_for(c['packet']),'synthetic-grant')
-    require(c['mapping']==mapping_for(c['packet']),'typed-mapping')
+    require(canonical(c['grant'])==canonical(grant_for(c['packet'])),'synthetic-grant')
+    require(canonical(c['mapping'])==canonical(mapping_for(c['packet'])),'typed-mapping')
     if mutant!='context':
         require(o['work_packet_ref']==ref(c['packet']),'observation-packet')
         for name,field in [('goal','goal_ref'),('plan','plan_ref'),('route','route_assignment_ref'),('budget','budget_reservation_ref')]:
             require(p[field]==ref(c[name]),'packet-'+name)
         lease=c['lease'];require(p['work_lease_ref']=={'lease_id':lease['id'],'lease_epoch':lease['payload']['lease_epoch'],'content_digest':lease['content_digest']},'packet-lease')
         require(lease['payload']['subject_actor_id']==p['logical_worker_actor_id'] and lease['payload']['goal_ref']==p['goal_ref'] and lease['payload']['plan_ref']==p['plan_ref'],'lease-context')
+        require(lease['payload']['task_ref']==p['task_ref'],'lease-task')
+        require(c['plan']['payload']['goal_ref']==p['goal_ref'],'plan-goal')
+        require(p['task_ref'] in c['plan']['payload']['task_node_refs'],'plan-task')
+        for field in ('goal_ref','plan_ref','task_ref'):require(c['budget']['payload'][field]==p[field],'budget-'+field)
+        require(c['route']['payload']['logical_actor_id']==p['logical_worker_actor_id'],'route-actor')
+        require(p['expected_goal_fence_epoch']==c['goal']['payload']['fence_epoch'],'goal-fence')
+        require(o['effect_key'] in c['goal']['payload']['allowed_effect_keys'] and o['effect_key'] in c['plan']['payload']['effect_keys'],'goal-plan-effect')
         require(o['effect_key'] in p['effect_keys'],'effect-capability')
         for key,value in expected_intent_fields(c).items():require(intent[key]==value,'intent-context/'+key)
     require(rawhash(intent['idempotency_key'].encode('utf-8'))==o['idempotency_key_digest'],'original-key-digest')
@@ -78,7 +85,7 @@ def join(bundle,keys,mutant=None):
         # Expected signer is derived from the signed record type, then checked.
         raw=envelope['body'];role='dispatcher' if raw['record']['type']=='AttemptStarted@1' else 'observer'
         body=verify(envelope,role,keys,mutant)
-        require(set(body)=={'cut_id','ordinal','record'} and body['cut_id']==cut['cut_id'] and body['ordinal']==index,'ordered-envelope')
+        require(set(body)=={'cut_id','ordinal','record'} and body['cut_id']==cut['cut_id'] and type(body['ordinal'])is int and body['ordinal']==index,'ordered-envelope')
         records.append(body['record'])
     starts=[{'ordinal':i,'record':r} for i,r in enumerate(records) if r['type']=='AttemptStarted@1']
     require(dispatch['starts']==starts,'original-starts')
@@ -109,4 +116,18 @@ def join(bundle,keys,mutant=None):
         'historical':old,'current':current,'current_pause_state':a['current_pause_state'],
         'observation_digest':c['observation']['content_digest'],'cut_id':cut['cut_id'],
         'ordered_inventory':cut['ordered_inventory'],'trace':full,
+        'unsettled_attempt_ids':unsettled(records),
+        'runtime_settlement_hold':bool(unsettled(records)) or current['requires_reconciliation'],
         'runtime_permission':False,'canonical_write_count':0,'production_authentication':False}
+
+def unsettled(records):
+    """Conservative local diagnostic, separate from the unchanged literal oracle."""
+    pending=set()
+    for r in records:
+        key=r['attempt_id'];kind=r['type'];verified=r.get('authenticity')=='verified'
+        if kind=='AttemptStarted@1':pending.add(key)
+        elif kind=='ExternalObserved@1':
+            if verified and r['outcome']=='rejected':pending.discard(key)
+            elif r['outcome'] in ('accepted','unknown'):pending.add(key)
+        elif verified and ((kind=='ReceiptRecorded@1' and r['result'] in ('succeeded','failed')) or (kind=='ReconciliationObserved@1' and r['outcome'] in ('succeeded','failed'))):pending.discard(key)
+    return sorted(pending)
