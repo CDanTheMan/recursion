@@ -467,3 +467,8 @@ Formal freeze still precedes language then storage comparison. Native/upstream-o
 combined integrations, eight experiment families and six cross-area cases remain
 required. No new Owner direction or product framework selection follows.
 [Next bounded request](construction/shared-reservations-20260908/next-probes.md).
+
+## SC-WIRE-02 — 2026-09-08
+
+SC-WIRE-02 constructs the bounded literal correspondence packet. SC-EPOCH-03 is the next separately authorized typed consultation campaign. A coupled shared-reservation/wire/epoch construction must precede aggregate promotion; preserve the original six obligations,27 traces, eight experiment families, six cross-area cases and native/upstream-only/combined routes. Language and storage comparison remain after full formal comparison.
+[Evidence and limits](construction/wire-correspondence-20260908/evidence.json).

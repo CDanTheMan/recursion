@@ -398,3 +398,9 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | SWR-001 | The bounded serialized pool admits at most ten across the original two six-unit requests; independent split and inclusive representations preserve the complete declared transition relation, while the removed serialization guard admits twelve. | modeled | [Shared-reservation evidence](construction/shared-reservations-20260908/evidence.json) |
 | SWR-002 | Fixed-tuple uncertain-effect reservations survive the declared receipt-loss, restart, local-lifetime, quota-reset and replay schedules; only explicit verified reconciliation converts the hold to consumed or released allowance. | modeled | [Shared-reservation evidence](construction/shared-reservations-20260908/evidence.json) |
 | SWR-003 | The bounded two-holder one-transfer design conserves free, in-flight, reserved and consumed rights across duplicate install and lost-ACK restart; it differs from central admission in availability and does not prove arbitrary transfer durability. | modeled | [Shared-reservation evidence](construction/shared-reservations-20260908/evidence.json) |
+
+## Literal recovery correspondence — 2026-09-08
+
+| WIR-001 | Sixteen finite recovery configurations preserve literal M1B ordering and separate source, pending and installed snapshot ownership. | modeled | [SC-WIRE-02](construction/wire-correspondence-20260908/evidence.json) |
+| WIR-002 | Literal wire acceptance cannot establish application installation or uncertain reservation ownership; independent local guards are required. | modeled | [SC-WIRE-02](construction/wire-correspondence-20260908/evidence.json) |
+| WIR-003 | SC-WIRE-02 supplies scoped modeled correspondence while the coupled reservation product and original full comparison remain incomplete. | modeled | [SC-WIRE-02](construction/wire-correspondence-20260908/evidence.json) |

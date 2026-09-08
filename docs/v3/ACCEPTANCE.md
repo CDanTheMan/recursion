@@ -491,3 +491,8 @@ clean final candidate and two independent exact-candidate approvals before norma
 review publication. Final receipts stay outside the candidate. No finite slice
 pass completes full formal comparison, runtime integration or common-writer migration.
 [Scope and residuals](construction/shared-reservations-20260908/coverage.json).
+
+## SC-WIRE-02 — 2026-09-08
+
+SC-WIRE-02 requires two full exact-candidate gates, two independent exact reviews, unchanged25 regressions and eleven frozen predecessors including SC-WR-01. Require complete declared graph closure, literal schema/oracle controls and independent ownership/initialization counterexamples. External completion receipts establish readiness; no discovery pass or documentation promotes full comparison.
+[Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
