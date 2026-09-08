@@ -1,3 +1,11 @@
+# Current continuation
+
+The Owner resumed at 2026-09-08T03:40:23Z with Astra High Standard. Read resume.json for the
+current closing pass, which retains the 04:39:28Z outer deadline. The checkpoint below is an
+immutable historical account of the earlier stop, not the current Owner queue. The final
+external completion receipt determines validation/review/publication status. Recommend model
+settings before future materially different tasks; the Owner controls configuration.
+
 # Flow and recovery integration checkpoint
 
 Read CONTROL_PLANE.md first, applicable CLAUDE/AGENTS, then ANCHOR.md.
