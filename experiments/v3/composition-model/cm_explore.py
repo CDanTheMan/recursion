@@ -151,8 +151,6 @@ def ordered_controls():
         a=replay(cm_split,'capsule',labels);b=replay(cm_inclusive,'capsule',labels)
         if a!=b:raise ValueError('ordered boundary mismatch')
         out[name]=a
-    if label=='stale_permit_refused' and t.reserved and not t.refusal:out.append('remote_refusal_keeps_reservation')
-    if label=='refusal_receipt' and not t.reserved:out.append('received_refusal_releases_reservation')
     return out
 
 def calibrations(limits):
