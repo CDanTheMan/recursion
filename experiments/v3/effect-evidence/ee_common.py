@@ -25,8 +25,10 @@ def write(path,value): path.write_text(json.dumps(value,indent=2)+'\n',encoding=
 def require(condition,label):
     if not condition: raise ValueError(label)
 def classify(value):
+    value=schema.strict_loads(canonical(value))
     schema.validate(value,'EffectTraceInput')
     result=oracle.classify_effect_trace(value)
+    result=schema.strict_loads(canonical(result))
     schema.validate(result,'EffectDecision')
     return result
 def running():

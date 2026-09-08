@@ -118,3 +118,11 @@ Second exact-review refinement before run05: require collector cut IDs to match
 cover mistyped collector/dispatcher/evidence IDs, empty ID and coordinated signed
 bool/int aliases. Remaining supplementary scalars are either literal-schema
 validated, checked as true integers, fixed string enums or canonical-byte bound.
+
+Third exact-review refinement before run06: JSON Schema alone accepts integral
+floats, while M1C wire encoding forbids them. Reuse the frozen strict decoder on
+canonical trace bytes before schema validation and semantic classification (and
+on decision bytes afterward). Six targeted trace-header/assessment float controls
+report wire rejection separately from extended-schema or join rejection. This
+validates the serialized trace reconstructed from parsed dictionaries; original
+bundle byte decoding and duplicate-key capture remain outside this function.

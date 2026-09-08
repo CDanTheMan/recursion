@@ -78,6 +78,8 @@ def run(keys,directory,limits):
     def rejection(name,bundle,stage,expected_detail=None):
         raw[name]={'bundle':bundle,'expected_failure_stage':stage};write(directory/'cases.json',raw)
         try:join(bundle,keys)
+        except schema.StrictJSONError as e:
+            actual='wire';detail=str(e)
         except schema.jsonschema.ValidationError as e:
             actual='schema';detail=e.message
         except (ValueError,KeyError,TypeError,m1a.M1AError) as e:
@@ -150,6 +152,9 @@ def run(keys,directory,limits):
             for i,envelope in enumerate(bundle['evidence']):
                 body=envelope['body'];body['cut_id']=1 if name=='cut-bool-alias' else True;bundle['evidence'][i]=sign(body,envelope['role'],keys)
         rejection(name,bundle,'join','original-dispatch-binding' if name=='cut-dispatch-bool' else 'ordered-envelope' if name=='cut-evidence-bool' else 'cut-identity-profile')
+    for area,field in [('trace_header','current_admission_epoch'),('trace_header','current_fence_epoch'),('trace_header','effect_count'),('trace_header','external_call_count'),('assessment','current_admission_epoch'),('assessment','current_fence_epoch')]:
+        bad=copy.deepcopy(base);bad['cut'][area][field]=float(bad['cut'][area][field])
+        rejection('float-'+area+'-'+field,package(bad,keys),'wire','float not permitted: '+str(bad['cut'][area][field]))
     # Guard mutants each accept a counterexample rejected by the baseline.
     wrong=package(base,keys);wrong['dispatch']=sign(wrong['dispatch']['body'],'observer',keys)
     role=join(wrong,keys,'role');mutants.append({'guard':'role','counterexample':'wrong-role','accepted_status':role['current']['status']})
