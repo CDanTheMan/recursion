@@ -28,4 +28,10 @@ The first committed model run completed both graphs but its restart witness allo
 
 Status is independently checked: G3 capacity hold requires a recorded request, selection below G3, no candidate already being prepared, and both resident slots occupied. A missing hold label must fail even if both concrete reducers omit it.
 
-The remote operation has an explicit one-unit unresolved reservation from initial permit issuance until recipient refusal or a valid retained receipt. Keep it distinct from the two lifetime compute units and per-attempt completion bits. Local death, reclamation, transport ACK and provider reset cannot release it. This finite resource relation is not a multi-goal shared-pool implementation.
+The remote operation has an explicit one-unit unresolved reservation from initial permit issuance until an authenticated refusal receipt or a valid completion receipt. Keep it distinct from the two lifetime compute units and per-attempt completion bits. Local death, reclamation, transport ACK and provider reset cannot release it. This finite resource relation is not a multi-goal shared-pool implementation.
+
+## Refusal delivery refinement
+
+A recipient can reject the stale permit without its reply arriving. Keep remote refusal, retained authenticated refusal receipt and reservation release separate. Remote rejection alone enables neither local return nor attempt2 closure. Add the ordered rejected-but-unobserved trace and a premature-refusal-release mutant. Invalid O/P/auth acceptance after completion must be internally accounting-consistent so the independent refusal relation, rather than incidental reservation inconsistency, detects it. A separate early-reservation-release mutant removes the local-wait guard directly.
+
+The initial admitted task scope includes one bounded deterministic reconciliation attempt that survives task Stop. It can inspect/query already-admitted O and retain attributable outcome evidence; it cannot start a new model inference or repeat an external effect. Its second compute unit remains in lifetime consumption. This is an explicit abstraction assumption about scoped recovery authority, not a new runtime permission or a PAUSE bypass.

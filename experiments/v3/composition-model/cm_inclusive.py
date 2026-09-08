@@ -40,23 +40,27 @@ def successors(s,policy,mutant=None):
     if s.admission!=2:put('stop',admission=2)
     elif s.installed!=2:put('install_fence',installed=2)
     if s.permit==0:
-        if s.installed==2 and mutant!='recipient_fence':put('stale_permit_refused',permit=2,reserved=False)
+        if s.installed==2 and mutant!='recipient_fence':
+            if mutant=='refusal_release':put('stale_permit_refused',permit=2,reserved=False)
+            else:put('stale_permit_refused',permit=2)
         else:put('execute' if s.admission==1 else 'execute_exposed',permit=1,effect=1,executions=s.executions+1)
+    if s.permit==2 and not s.refusal:put('refusal_receipt',refusal=True,reserved=False)
     if s.effect==1:put('remote_complete',effect=2)
     if not s.receipt and s.effect==2:
         name='current_receipt' if s.incarnation==1 and s.admission==1 else 'late_receipt'
         if mutant=='receipt_attempt' and s.incarnation==2:put(name,receipt=True,reserved=False,closed=s.closed|2)
         else:put(name,receipt=True,reserved=False)
     for bad_input in ('wrong_operation','wrong_payload','unauthenticated'):
-        if mutant==bad_input and s.effect==2 and not s.receipt:put(bad_input+'_refused',receipt=True)
+        if mutant==bad_input and s.effect==2 and not s.receipt:put(bad_input+'_refused',receipt=True,reserved=False)
         else:put(bad_input+'_refused')
     if mutant=='receipt_identity' and s.effect!=2:put('invalid_receipt_refused',receipt=True)
     else:put('invalid_receipt_refused')
     if s.actor==0:
         put('kill_local',actor=2)
-        if s.permit==2 or s.effect==2:put('return_local',actor=1)
+        if s.refusal or s.effect==2:put('return_local',actor=1)
     elif s.actor==2:
         if s.effect==1 and mutant=='death_settlement':put('wait_local',actor=3,receipt=True)
+        elif mutant=='early_reservation_release' and s.effect==1:put('wait_local',actor=3,reserved=False)
         else:put('wait_local',actor=3)
     if s.actor==1 or s.actor==3:
         if s.pin:put('release_pin',pin=False)
@@ -66,7 +70,7 @@ def successors(s,policy,mutant=None):
         if not s.ack:
             if mutant=='old_ack':put('old_transport_ack',ack=True,closed=s.closed|2)
             else:put('old_transport_ack',ack=True)
-        if s.closed<2 and (s.receipt or s.permit==2):put('close_attempt2',closed=s.closed+2)
+        if s.closed<2 and (s.receipt or s.refusal):put('close_attempt2',closed=s.closed+2)
         if mutant=='blind_retry' and s.executions==1:put('query_same_operation',effect=1,executions=2)
         else:put('query_same_operation')
     if not s.reset:

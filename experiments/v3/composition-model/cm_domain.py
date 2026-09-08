@@ -20,6 +20,7 @@ class State(NamedTuple):
     permit:int=0  # in flight, executed, refused
     effect:int=0  # absent, unknown/in-progress, completed at recipient
     receipt:bool=False
+    refusal:bool=False
     incarnation:int=1
     closed:int=0  # per-incarnation completion bits
     ack:bool=False
@@ -55,6 +56,7 @@ class Broker(NamedTuple):
     permit:int=0
     effect:int=0
     receipt:bool=False
+    refusal:bool=False
     ack:bool=False
     reset:bool=False
     executions:int=0
@@ -64,8 +66,8 @@ class Split(NamedTuple):
     broker:Broker=Broker()
 
 POLICIES=('capsule','resident')
-MUTANTS=('capacity','live_pin','fork_loss','writer_fence','early_selection','recipient_fence','receipt_identity','old_ack','receipt_attempt','reset_budget','death_settlement','blind_retry','fork_authority','publish_unstaged','skip_first_delete','wrong_operation','wrong_payload','unauthenticated','hidden_hold')
-BOOLS={'staged','reply','requested','pin','capsule','receipt','ack','reset','fork','reserved'}
+MUTANTS=('capacity','live_pin','fork_loss','writer_fence','early_selection','recipient_fence','receipt_identity','old_ack','receipt_attempt','reset_budget','death_settlement','blind_retry','fork_authority','publish_unstaged','skip_first_delete','wrong_operation','wrong_payload','unauthenticated','hidden_hold','refusal_release','early_reservation_release')
+BOOLS={'staged','reply','requested','pin','capsule','receipt','ack','reset','fork','reserved','refusal'}
 def bit(g):return 1<<(g-1)
 def normalize(s):
     if isinstance(s,State):return s

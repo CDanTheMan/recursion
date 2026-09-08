@@ -34,7 +34,8 @@ def invariant(s):
     if s.admission not in (1,2) or s.installed not in (1,2) or s.installed>s.admission:return 'recipient namespace'
     if s.actor not in range(4) or s.permit not in range(3) or s.effect not in range(3):return 'environment type'
     if s.receipt and s.effect!=2:return 'effect evidence identity'
-    if s.reserved!=(s.permit!=2 and not s.receipt):return 'unresolved effect reservation'
+    if s.refusal and s.permit!=2:return 'refusal evidence identity'
+    if s.reserved!=(not s.refusal and not s.receipt):return 'unresolved effect reservation'
     if s.executions not in (0,1) or (s.permit==1)!=(s.executions==1) or bool(s.effect)!=(s.executions==1):return 'no blind duplicate effect'
     if s.incarnation not in (1,2) or s.spent!=s.incarnation:return 'lifetime accounting'
     if s.closed not in range(4) or (s.closed&2 and s.incarnation!=2) or (s.closed&1 and s.actor not in (1,3)):return 'attempt accounting'
@@ -89,6 +90,8 @@ def witnesses(s,label,t,policy):
     if label=='query_same_operation' and s.receipt and t.executions==1:out.append('settled_query_no_reexecution')
     if t.selected==3 and t.effect==1 and not t.receipt and t.capsule and t.fork and not t.resident&1 and t.spent==2 and t.reserved:out.append('g3_with_unknown_effect')
     if label=='late_receipt' and s.selected==3 and not s.resident&1 and s.incarnation==2 and not t.closed&2:out.append('late_receipt_after_reclaim')
+    if label=='stale_permit_refused' and t.reserved and not t.refusal:out.append('remote_refusal_keeps_reservation')
+    if label=='refusal_receipt' and not t.reserved:out.append('received_refusal_releases_reservation')
     return out
 
 def explore(module,policy,limits,mutant=None,reference=None):
@@ -138,6 +141,7 @@ def replay(module,policy,labels):
 
 def ordered_controls():
     traces={
+        'remote_rejection_reply_delayed':['stop','install_fence','stale_permit_refused','status','kill_local','wait_local','close_attempt1','new_query_incarnation','old_transport_ack','refusal_receipt','close_attempt2'],
         'committed_reply_lost_after_restart':['prepare','stage','publish','restart_authority','publication_reply_lost'],
         'partial_reclamation_restart':['prepare','stage','publish','publication_ack','commit_capsule','kill_local','wait_local','release_pin','retire_1','delete_first_1','restart_authority','reclaim_1'],
         'composed_retention_revocation_late_receipt':['execute','prepare','stage','publish','publication_ack','request_g3','status_hold','stop','install_fence','commit_capsule','status_hold','kill_local','wait_local','release_pin','close_attempt1','new_query_incarnation','pool_reset','old_transport_ack','retire_1','delete_first_1','reclaim_1','prepare','stage','publish','inspect_fork','query_same_operation','remote_complete','late_receipt','close_attempt2'],
@@ -147,6 +151,8 @@ def ordered_controls():
         a=replay(cm_split,'capsule',labels);b=replay(cm_inclusive,'capsule',labels)
         if a!=b:raise ValueError('ordered boundary mismatch')
         out[name]=a
+    if label=='stale_permit_refused' and t.reserved and not t.refusal:out.append('remote_refusal_keeps_reservation')
+    if label=='refusal_receipt' and not t.reserved:out.append('received_refusal_releases_reservation')
     return out
 
 def calibrations(limits):
@@ -170,7 +176,7 @@ def calibrations(limits):
     else:raise ValueError('truncation accepted')
     return {'wrong_initial':'rejected','missing_edge':'rejected','truncated_graph':'incomplete','truncated_frontier':detail['frontier']}
 
-COMMON={'g2_with_live_g1','g3_hold_live_pin','local_death_keeps_effect_unknown','commit_survives_restart','stale_writer_refusal','fresh_writer_publication','preinstallation_exposure','postinstallation_refusal','valid_current_receipt','late_receipt_preserves_attempt2','old_ack_preserves_unknown_attempt','own_attempt2_completion','reset_conserves_two_segments','settled_query_no_reexecution'}
+COMMON={'remote_refusal_keeps_reservation','received_refusal_releases_reservation','g2_with_live_g1','g3_hold_live_pin','local_death_keeps_effect_unknown','commit_survives_restart','stale_writer_refusal','fresh_writer_publication','preinstallation_exposure','postinstallation_refusal','valid_current_receipt','late_receipt_preserves_attempt2','old_ack_preserves_unknown_attempt','own_attempt2_completion','reset_conserves_two_segments','settled_query_no_reexecution'}
 def run(limits):
     results={};controls=[]
     for policy in POLICIES:

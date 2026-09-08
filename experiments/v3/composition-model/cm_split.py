@@ -37,21 +37,22 @@ def successors(s,policy,mutant=None):
     if a.admission==2 and b.installed==1:yield edge('install_fence',ba={'installed':2})
     if b.permit==0:
         if b.installed==1 or mutant=='recipient_fence':yield edge('execute_exposed' if a.admission==2 else 'execute',ba={'permit':1,'effect':1,'executions':b.executions+1})
-        else:yield edge('stale_permit_refused',{'reserved':False},ba={'permit':2})
+        else:yield edge('stale_permit_refused',{'reserved':False} if mutant=='refusal_release' else {},ba={'permit':2})
+    if b.permit==2 and not b.refusal:yield edge('refusal_receipt',{'reserved':False},{'refusal':True})
     if b.effect==1:yield edge('remote_complete',ba={'effect':2})
     if b.effect==2 and not b.receipt:yield edge('late_receipt' if a.incarnation==2 or a.admission==2 else 'current_receipt',{'reserved':False,**({'closed':a.closed|2} if mutant=='receipt_attempt' and a.incarnation==2 else {})},{'receipt':True})
     for invalid in ('wrong_operation','wrong_payload','unauthenticated'):
-        yield edge(invalid+'_refused',ba={'receipt':True} if mutant==invalid and b.effect==2 and not b.receipt else {})
+        yield edge(invalid+'_refused',{'reserved':False} if mutant==invalid and b.effect==2 and not b.receipt else {},{'receipt':True} if mutant==invalid and b.effect==2 and not b.receipt else {})
     yield edge('invalid_receipt_refused',ba={'receipt':True} if mutant=='receipt_identity' and b.effect!=2 else {})
     if b.actor==0:
         yield edge('kill_local',ba={'actor':2})
-        if b.effect==2 or b.permit==2:yield edge('return_local',ba={'actor':1})
-    if b.actor==2:yield edge('wait_local',ba={'actor':3,'receipt':True} if mutant=='death_settlement' and b.effect==1 else {'actor':3})
+        if b.effect==2 or b.refusal:yield edge('return_local',ba={'actor':1})
+    if b.actor==2:yield edge('wait_local',{'reserved':False} if mutant=='early_reservation_release' and b.effect==1 else {},ba={'actor':3,'receipt':True} if mutant=='death_settlement' and b.effect==1 else {'actor':3})
     if a.pin and b.actor in (1,3):yield edge('release_pin',{'pin':False})
     if not a.closed&1 and b.actor in (1,3):yield edge('close_attempt1',{'closed':a.closed|1})
     if a.incarnation==1 and b.actor in (1,3):yield edge('new_query_incarnation',{'incarnation':2,'spent':a.spent+1})
     if a.incarnation==2:
         if not b.ack:yield edge('old_transport_ack',{'closed':a.closed|2} if mutant=='old_ack' else {},{'ack':True})
-        if not a.closed&2 and (b.receipt or b.permit==2):yield edge('close_attempt2',{'closed':a.closed|2})
+        if not a.closed&2 and (b.receipt or b.refusal):yield edge('close_attempt2',{'closed':a.closed|2})
         yield edge('query_same_operation',ba={'effect':1,'executions':b.executions+1} if mutant=='blind_retry' and b.executions==1 else {})
     if not b.reset:yield edge('pool_reset',{'spent':0} if mutant=='reset_budget' else {},{'reset':True})

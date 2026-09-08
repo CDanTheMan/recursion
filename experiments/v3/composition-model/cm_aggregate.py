@@ -31,17 +31,18 @@ def step(v,event,policy):
     elif event=='install_fence' and v.admission==2 and v.installed==1:changes={'installed':2}
     elif event in ('execute','execute_exposed') and v.permit==0 and v.installed==1:
         if (event=='execute')==(v.admission==1):changes={'permit':1,'effect':1,'executions':v.executions+1}
-    elif event=='stale_permit_refused' and v.permit==0 and v.installed==2:changes={'permit':2,'reserved':False}
+    elif event=='stale_permit_refused' and v.permit==0 and v.installed==2:changes={'permit':2}
+    elif event=='refusal_receipt' and v.permit==2 and not v.refusal:changes={'refusal':True,'reserved':False}
     elif event=='remote_complete' and v.effect==1:changes={'effect':2}
     elif event in ('current_receipt','late_receipt') and v.effect==2 and not v.receipt:
         if (event=='current_receipt')==(v.incarnation==1 and v.admission==1):changes={'receipt':True,'reserved':False}
     elif event=='kill_local' and v.actor==0:changes={'actor':2}
-    elif event=='return_local' and v.actor==0 and (v.effect==2 or v.permit==2):changes={'actor':1}
+    elif event=='return_local' and v.actor==0 and (v.effect==2 or v.refusal):changes={'actor':1}
     elif event=='wait_local' and v.actor==2:changes={'actor':3}
     elif event=='release_pin' and v.pin and v.actor in (1,3):changes={'pin':False}
     elif event=='close_attempt1' and not v.closed&1 and v.actor in (1,3):changes={'closed':v.closed|1}
     elif event=='new_query_incarnation' and v.incarnation==1 and v.actor in (1,3):changes={'incarnation':2,'spent':v.spent+1}
     elif event=='old_transport_ack' and v.incarnation==2 and not v.ack:changes={'ack':True}
-    elif event=='close_attempt2' and v.incarnation==2 and not v.closed&2 and (v.receipt or v.permit==2):changes={'closed':v.closed|2}
+    elif event=='close_attempt2' and v.incarnation==2 and not v.closed&2 and (v.receipt or v.refusal):changes={'closed':v.closed|2}
     elif event=='pool_reset' and not v.reset:changes={'reset':True}
     return None if changes is None else v._replace(**changes)
