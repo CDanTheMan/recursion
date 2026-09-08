@@ -27,5 +27,18 @@
   },
   "acceptance_gate": "python -X utf8 -B experiments/v3/flow-recovery-integration/check.py --candidate FULL_HASH",
   "publication": "Recheck current remote state. Publish only the reviewed branch normally, open draft PR against the appropriate live base; no protected/default merge or history rewrite.",
-  "completion_record": "Git common research-attestations/flow-recovery-integration/<candidate>/completion.json; absence is incomplete."
+  "completion_record": "Git common research-attestations/flow-recovery-integration/<candidate>/completion.json; absence is incomplete.",
+  "allowed_paths": [
+    "docs/v3/construction/flow-recovery-integration-20260907/**",
+    "experiments/v3/flow-recovery-integration/**",
+    "docs/v3/ARCHITECTURE.md",
+    "docs/v3/EXECUTION-FABRIC.md",
+    "docs/v3/TERMINAL-RUNTIME.md",
+    "docs/v3/ACCEPTANCE.md",
+    "docs/v3/ROADMAP.md",
+    "docs/v3/CONSTRUCTION-RUNBOOK.md",
+    "docs/v3/CLAIM-LEDGER.md",
+    "docs/v3/CLAIM-REGISTRY.json"
+  ],
+  "new_research_allowed": false
 }
