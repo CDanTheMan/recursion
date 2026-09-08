@@ -178,7 +178,7 @@
     }
   ],
   "artifacts": {
-    "docs/v3/ACCEPTANCE.md": "83b94fdd6900cd04a7e593759d5fe740a81035e2468210940dbb980cc6e69276",
+    "docs/v3/ACCEPTANCE.md": "290c4cde0db7bc6d50e3cbb4600dad9b616b5432cb7ff493b45c476b8e603e50",
     "docs/v3/ARCHITECTURE.md": "5624b1466b7b160eb2dca323baaa35df2b5cdaad9e8ffd54fea2d40f2e19ffea",
     "docs/v3/CLAIM-LEDGER.md": "d801462bf43e2769035a8036104df0f1247aa7d7ce2d3cea9720d35d782ba63a",
     "docs/v3/CLAIM-REGISTRY.json": "54452722176f7a39f845ed30ed3dbce303bfc507feb57ce05ebdabf72c64b335",
@@ -187,19 +187,19 @@
     "docs/v3/ROADMAP.md": "60fbd5cbb708c654078b006c6045f71dea5176ff05380d231e7783aba24a5ccc",
     "docs/v3/TERMINAL-RUNTIME.md": "0c4b8d812dc6f2cd371621c7e4b0de9f103159e87a5dd5a730a6823dd26c20aa",
     "docs/v3/construction/effect-evidence-20260908/coverage.json": "7705d30d5cb3f168d9eecaa38a294cb8145fca482d7567f9eebfc5198cbbd467",
-    "docs/v3/construction/effect-evidence-20260908/evidence.json": "6a8bfa2262652df49520c6856e7f6e8d085f79aa5f0ff7f9684141f04882579e",
+    "docs/v3/construction/effect-evidence-20260908/evidence.json": "69e48a4d2e0a36966d86a05df042ce05e504f6f7c989210af67796ac514cf59e",
     "docs/v3/construction/effect-evidence-20260908/goal.json": "bf9b2f63c0cf0b9a0da17301ca7bc5fce32d557040349a0402f182569d8bf52f",
-    "docs/v3/construction/effect-evidence-20260908/handoff.md": "1d11e923c0c7bab3ba51d5f695d6f14253a9828ddbc425263d7abe57c98f4cbb",
+    "docs/v3/construction/effect-evidence-20260908/handoff.md": "ba7489f3f22d60138209a6e84be092aca2b165b90db389bfb124693460d73927",
     "docs/v3/construction/effect-evidence-20260908/manifest.json": "d091431641b26296ac352bed2d7c2f1a92f613544cec3b5cb7ea229cef30dc72",
-    "docs/v3/construction/effect-evidence-20260908/method-review.json": "84a43202beae9e1588e15dfcc2dd282f4a3ad7f5e19d8ffbbc44b154229e38a1",
+    "docs/v3/construction/effect-evidence-20260908/method-review.json": "c235ac421f76c1bf7b85bf11d72093de565e955514e53a46ac25bba733a57d7f",
     "docs/v3/construction/effect-evidence-20260908/plan.json": "66f6168939c4a499eec034114df3fbe2098b2e10815ee8d435554689aa7391b7",
-    "docs/v3/construction/effect-evidence-20260908/results.json": "2a0ab313ac6002304cab0cb21fe87d011016e24008e304836ef63a48543582e2",
-    "docs/v3/construction/effect-evidence-20260908/specification.md": "7b2f5016ea660a1c3957c1d5216db7ab9ba59981dd6c46482cef95967668c8f8",
-    "experiments/v3/effect-evidence/check.py": "9fa747dd9da5b43fd0ac406d1722bb13aabec7fd552f8a0012b1965c3c5614f1",
+    "docs/v3/construction/effect-evidence-20260908/results.json": "0437a75171477c4e5a73243752b65e66a20f1d6bc1b11ee064a2ae2eb2cc7fc1",
+    "docs/v3/construction/effect-evidence-20260908/specification.md": "05b96798244e80bb88b6ee78c9d39404f4717a657713a6aefa441f0c39255bdf",
+    "experiments/v3/effect-evidence/check.py": "a7adfed0c9c2c6a42a39beb9b5bbb767f2a251dc6b66af0bcc2efda5097a60f4",
     "experiments/v3/effect-evidence/ee_cases.py": "31713449daf39e01d36893975fd2d572da26e976393be0b988d990d20f1427e0",
     "experiments/v3/effect-evidence/ee_common.py": "c6e3232f38e406bb2c976b0fc0cb6f8932e0c7c3ba44d6a4e60dfaae49dc78b2",
-    "experiments/v3/effect-evidence/ee_experiment.py": "f48de318bd03391d057d62df8336bba0b5edd3882c73a15afa3b700455be2578",
-    "experiments/v3/effect-evidence/ee_join.py": "c3d11c64d99ea66e2b352b3596eeecdd4ef4a8bbbccffad55fa21e490fa05807",
+    "experiments/v3/effect-evidence/ee_experiment.py": "70ff2f68edfc25e70c2ae480b376a7dc192e9162cadcef03d31c846030bdd9aa",
+    "experiments/v3/effect-evidence/ee_join.py": "67e73ccd784e1c517384119e592f6a661a2e6324ffc794be5fa13b114101d867",
     "experiments/v3/effect-evidence/run_packet.py": "95dbe4ea6fd99a61f104adade4f7e36ac30e36ddf7047a68a24052dcf05f7ade"
   }
 }
