@@ -1,5 +1,5 @@
 """Restricted evidence-cut adapter. Successful classification never grants authority."""
-import copy, hmac
+import copy, hmac, re
 from ee_common import canonical,rawhash,dh,ref,pref,tid,m1a,classify,require
 
 DOMAIN='recursion-effect-evidence-fixture-v1'
@@ -76,6 +76,7 @@ def join(bundle,keys,mutant=None):
     require(set(bundle)=={'cut','dispatch','evidence'},'bundle-shape')
     cut=verify(bundle['cut'],'collector',keys,mutant)
     require(set(cut)=={'cut_id','context','prefix_length','trace_header','ordered_inventory','receipt_index','operation_index','assessment'},'cut-shape')
+    require(isinstance(cut['cut_id'],str) and re.fullmatch(r'cut:[A-Za-z0-9._~-]{1,128}',cut['cut_id']) is not None,'cut-identity-profile')
     header=cut['trace_header'];require(set(header)=={'type','intent','admission','dependency_states','current_admission_epoch','current_fence_epoch','effect_count','external_call_count'},'header-shape')
     dispatch=verify(bundle['dispatch'],'dispatcher',keys,mutant)
     require(set(dispatch)=={'cut_id','intent','admission','starts'},'dispatch-shape')

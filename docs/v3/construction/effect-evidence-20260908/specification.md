@@ -112,3 +112,9 @@ Exact-candidate review refinement before run04: separately signed original inten
 admission and starts require canonical-byte equality. Python structural equality
 accepts bool/int aliases. Three new targeted negative controls retain valid MACs
 and collector records while changing only one signed dispatch scalar.
+
+Second exact-review refinement before run05: require collector cut IDs to match
+`cut:[A-Za-z0-9._~-]{1,128}` before any cross-envelope comparison. Five controls
+cover mistyped collector/dispatcher/evidence IDs, empty ID and coordinated signed
+bool/int aliases. Remaining supplementary scalars are either literal-schema
+validated, checked as true integers, fixed string enums or canonical-byte bound.

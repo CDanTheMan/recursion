@@ -140,6 +140,16 @@ def run(keys,directory,limits):
         else:body['starts'][0]['record']['attempt_number']=True
         bundle['dispatch']=sign(body,'dispatcher',keys)
         rejection(name,bundle,'join','original-starts' if name=='dispatch-start-bool' else 'original-dispatch-binding')
+    for name in ('cut-collector-bool','cut-dispatch-bool','cut-evidence-bool','cut-empty','cut-bool-alias'):
+        bundle=package(base,keys)
+        if name in ('cut-collector-bool','cut-empty','cut-bool-alias'):
+            body=bundle['cut']['body'];body['cut_id']='' if name=='cut-empty' else True;bundle['cut']=sign(body,'collector',keys)
+        if name in ('cut-dispatch-bool','cut-bool-alias'):
+            body=bundle['dispatch']['body'];body['cut_id']=1 if name=='cut-bool-alias' else True;bundle['dispatch']=sign(body,'dispatcher',keys)
+        if name in ('cut-evidence-bool','cut-bool-alias'):
+            for i,envelope in enumerate(bundle['evidence']):
+                body=envelope['body'];body['cut_id']=1 if name=='cut-bool-alias' else True;bundle['evidence'][i]=sign(body,envelope['role'],keys)
+        rejection(name,bundle,'join','original-dispatch-binding' if name=='cut-dispatch-bool' else 'ordered-envelope' if name=='cut-evidence-bool' else 'cut-identity-profile')
     # Guard mutants each accept a counterexample rejected by the baseline.
     wrong=package(base,keys);wrong['dispatch']=sign(wrong['dispatch']['body'],'observer',keys)
     role=join(wrong,keys,'role');mutants.append({'guard':'role','counterexample':'wrong-role','accepted_status':role['current']['status']})
