@@ -1,7 +1,7 @@
 {
   "status": "literal-effect-evidence-pass",
   "classification": "locally observed",
-  "case_count": 52,
+  "case_count": 55,
   "positive": {
     "success": {
       "type": "RestrictedEffectJoinResult@1",
@@ -540,6 +540,21 @@
       "name": "bool-grant",
       "stage": "join",
       "detail": "synthetic-grant"
+    },
+    {
+      "name": "dispatch-intent-bool",
+      "stage": "join",
+      "detail": "original-dispatch-binding"
+    },
+    {
+      "name": "dispatch-admission-bool",
+      "stage": "join",
+      "detail": "original-dispatch-binding"
+    },
+    {
+      "name": "dispatch-start-bool",
+      "stage": "join",
+      "detail": "original-starts"
     },
     {
       "name": "inventory-omission-control",
