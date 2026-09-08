@@ -438,3 +438,20 @@ In parallel, prepare provider-free own-code adapter fixtures for configuration c
 The literal effect seam now has an own-code restricted adapter and discriminating local evidence. Its strongest new constraint is an explicit settlement hold for an uncompleted attempt even when the unchanged M1C oracle reports an earlier success. Integrate that relation, authenticated-cut assumptions, historical prefixes and canonical quarantine persistence into both formal boundaries before expanding completion claims. Combine it with the checked generation/recipient and ingress/RESET/replay subsystems under shared domains; separate passes remain insufficient.
 
 Next bounded construction should target deterministic evidence-cut ownership and settlement projection with corruption/omission/restart and duplicate receipts, plus the shared formal composition. Preserve M1 immutability: any necessary extension is a separately specified bridge, not a retrospective contract edit. Continue configuration/consultation/context adapter research where it answers a distinct missing trace. Full formal gate → language comparison → storage comparison remains the dependency chain. All required upstream/native/combined routes and whole-workflow experiment families remain intact. [Concrete next admissions](construction/effect-evidence-20260908/handoff.md).
+
+## Shared composition progress — 2026-09-08
+
+The campaign following literal effect evidence connects generation lifetime,
+evidence cuts and internal replay installation in two independently implemented
+finite boundaries. Its free shared core and targeted profiles advance the formal
+comparison stage; they do not finish it. See
+[results and limits](construction/shared-composition-20260908/findings.md).
+
+The next construction gaps are the original shared-pool/reservation schedule and
+literal M1B correspondence, followed by typed goal/lease/consultation composition.
+[SC-WR-01, SC-WIRE-02 and SC-EPOCH-03](construction/shared-composition-20260908/next-probes.md)
+name dependencies, admissions, failure counters and decisive gates. Review the
+first two independently, then couple them before promoting an aggregate obligation.
+Formal freeze still precedes language comparison, then storage comparison; whole
+system optimization continues alongside. Existing rich/lean capabilities, all
+integration routes and full-workflow experiment families remain required.

@@ -457,3 +457,24 @@ The generation/effect composition packet adds partial support for original trace
 The [new campaign gate](construction/effect-evidence-20260908/goal.json) requires fresh reproduction of 66 bounded checks:11 positive evidence cuts,47 rejected joins,3 adapter guard mutants and5 literal control groups. Independently reconstruct original fixtures, require exact trace projection and exact historical/current reasons, retain all admitted attempts and source/host/fixture bindings, and challenge the checker bindings. Distinguish strict-wire, literal extended-schema and adapter rejection. The PAUSE guard mutant changes only in-memory membership and restores it; all immutable M1 files remain unchanged.
 
 Run unchanged25 regressions and eight frozen historical gates twice on the identical clean candidate, then obtain two independent exact-candidate approvals before normal review-branch publication. Retain receipts outside the candidate. This adds partial literal support for traces13–15 and four obligations, preserving all six obligations and27 rows. It is not full formal freeze, real provider support, production authentication or a performance ranking. [Coverage and residuals](construction/effect-evidence-20260908/coverage.json).
+
+## Shared composition partial evidence gate — 2026-09-08
+
+The [shared-composition gate](../../experiments/v3/shared-composition/check.py)
+requires complete finite closure and exact state/edge correspondence for15 declared
+environments, an independent full transition relation, ordered interaction
+witnesses,25 reachable guard counterexamples, five checker calibrations and seven
+separate literal mappings with actual frozen M1A controls. Claims SCM-001 through
+SCM-003 are modeled subsystem evidence. Full formal comparison remains incomplete.
+
+Every final candidate requires two clean exact-candidate executions, the unchanged
+25-command regression inventory, nine frozen historical gates and two independent
+exact reviews. Receipts remain outside the candidate under Git common
+`research-attestations/shared-composition/<candidate>/`; completion is established
+by verified completion.json there. A discovery pass or this prospective acceptance
+section does not establish final validation/publication.
+
+All six original obligations and27 trace rows are retained in
+[coverage](construction/shared-composition-20260908/coverage.json). Uncertain effect
+reservations, shared-pool serialization, full epoch domains, complete M1B wire
+composition and original full core/cross bounds remain explicit residuals.

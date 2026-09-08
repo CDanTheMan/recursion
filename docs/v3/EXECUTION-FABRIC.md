@@ -399,3 +399,26 @@ GCM-002 separates immutable fork history, resident generation capacity and a liv
 EEJ-001 adds local fixture support for the M1A→M1C seam. Require original key, target, payload, dispatch command, intent/admission and ordered attempts; retain exact packet, GoalSpec, plan, lease, route and budget references and internal cross-record relationships. Keep collector, dispatcher and observer roles separate. M1A command acceptance records the supplied aggregate label; it does not authenticate an external result. Missing or contradictory supplemental evidence blocks the join rather than creating replacement observations.
 
 Bind the original observation to its historical evidence prefix and classify the full trusted cut separately. A valid late same-attempt receipt or reconciliation may settle M1C while the original ambiguous record stays byte-identical. Preserve original receipt and operation digests with explicit codecs; neither effect capability keys nor packet attempt numbers identify provider operations or effect attempts. Current epoch assessment does not rewrite historical admission. The adapter's separate unsettled-attempt diagnostic can retain a hold even when literal M1C reports an earlier success. This supplies no runtime write/retry authority and does not close the common-writer migration blocker. [Bounded evidence](construction/effect-evidence-20260908/evidence.json).
+
+## Evidence cuts and independent ownership — 2026-09-08
+
+SCM-002 adds a bounded shared-model obligation: presentation recovery installs a
+particular historical evidence cut without replacing the current inventory,
+clearing quarantine or releasing a newer unresolved attempt. Literal success can
+coexist with a later uncompleted start; a conflict can hold settlement even with
+no pending IDs. The separately rerun M1A/M1C controls preserve classification as
+evidence, never runtime permission. External-effect reservation ownership remains
+a distinct, as-yet uncomposed variable.
+
+An invocation pin and snapshot reader pin have different owners. Reclamation waits
+for both applicable pins and retained history. A single ordered model trace
+publishes G2 while a reader owns G1, refuses reclamation after invocation release,
+then copies/waits the reader, reclaims G1 and installs the independent copied
+snapshot. Neither receipt classification nor copy completion alone releases that
+reader. Publication survives writer restart before acknowledgment; literal lost
+reply/relocation recovery and the full goal/lease namespace remain unproved here.
+
+[Bounded shared composition](construction/shared-composition-20260908/findings.md)
+retains local Stop versus recipient-installed fencing and lifetime-spend versus
+quota-reset distinctions. It does not complete original trace03/21/27, grant new
+operational authority or resolve common-writer migration.

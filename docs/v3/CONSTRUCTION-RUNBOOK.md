@@ -290,3 +290,20 @@ The Owner approved the described research, construction and testing pipeline on 
 Use the dedicated `recursion-v3-effect-evidence-20260908` worktree on `codex/v3-effect-evidence-20260908`; locate it with `git worktree list`. Frozen start is `ace2d4272047dccde05e1863e126aa39b2306c9c`, whose PR100 merge tree was verified equal. [Campaign handoff](construction/effect-evidence-20260908/handoff.md) contains sources, failed attempts, mapping limits and next bounded requests. Do not reset prior worktrees or rerun a historical admission under an expired envelope.
 
 The gate is `python -X utf8 -B experiments/v3/effect-evidence/check.py --candidate FULL_HASH`. Working mode verifies retained evidence and adversarial bindings; final mode additionally admits a fresh literal experiment and runs unchanged25 plus eight frozen gates. Final receipts, two independent approvals and publication completion belong under Git common `research-attestations/effect-evidence/<candidate>/`. Verify those external records rather than reading this prospective instruction as approval. No new Owner question or operational PAUSE/auth/config change is required for the scoped local continuation.
+
+## Shared composition continuation — 2026-09-08
+
+[The shared-composition handoff](construction/shared-composition-20260908/handoff.md)
+binds the frozen PR101 predecessor, scoped sources, superseded runs and exact gate.
+Read its external completion receipt before treating this packet as published.
+Keep the common-writer blocker and formal-freeze gate open.
+
+The next bounded requests are shared authoritative pool/reservation, literal
+wire-to-internal recovery mapping and typed consultation epochs, in the order and
+with the independent/coupled gates stated in
+[next probes](construction/shared-composition-20260908/next-probes.md). Re-admit the
+actual host, source commit, included capacity and time bounds for each new packet.
+Use local provider-free construction first; preserve failed attempts and commit
+reviewable slices. Astra High Standard remains the Owner-selected integrator
+configuration. No service, auth, operational PAUSE, model route, paid trial or
+reset-credit change is part of these requests.

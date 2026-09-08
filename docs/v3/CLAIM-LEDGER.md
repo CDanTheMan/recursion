@@ -382,3 +382,11 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | EEJ-001 | The restricted local adapter joins signed synthetic evidence cuts to literal M1C inputs and rejects the tested missing, contradictory, mistyped and unauthorized joins without manufacturing external evidence. | locally observed | [Bounded literal evidence](construction/effect-evidence-20260908/evidence.json) |
 | EEJ-002 | The literal M1A fixture accepts a fresh observation while running and refuses the same otherwise-valid payload under PAUSE; duplicates retain their original receipt and later success retains prior quarantine. | locally observed | [Bounded literal evidence](construction/effect-evidence-20260908/evidence.json) |
 | EEJ-003 | The frozen M1C oracle can report an earlier success with a later uncompleted start; the restricted adapter preserves that literal result and independently holds the unsettled attempt. | locally observed | [Bounded literal evidence](construction/effect-evidence-20260908/evidence.json) |
+
+## Shared generation, evidence and recovery composition, 2026-09-08
+
+| Claim | Statement | State | Evidence |
+| --- | --- | --- | --- |
+| SCM-001 | Independent split and inclusive shared generation/evidence/recovery models close identical graphs for fifteen declared environments under a complete third transition relation; unrestricted composition and formal freeze remain incomplete. | modeled | [Shared composition evidence](construction/shared-composition-20260908/evidence.json) |
+| SCM-002 | In the declared finite profiles, installing an older evidence snapshot preserves newer unsettled work and quarantine, while generation reclamation waits for both invocation and independent reader ownership. | modeled | [Shared composition evidence](construction/shared-composition-20260908/evidence.json) |
+| SCM-003 | The finite recovery profiles distinguish emitted from installed content, require a gap and fresh post-RESET credit, retain a queued newer entry through installation and deliver it without granting authority or settling its effect. | modeled | [Shared composition evidence](construction/shared-composition-20260908/evidence.json) |

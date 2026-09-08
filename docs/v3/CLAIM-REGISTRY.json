@@ -151,6 +151,12 @@
       "start": 1,
       "end": 3,
       "reserved": []
+    },
+    {
+      "prefix": "SCM",
+      "start": 1,
+      "end": 3,
+      "reserved": []
     }
   ],
   "foreignRegistries": [

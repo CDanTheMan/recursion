@@ -555,3 +555,25 @@ Recursion owns the common authority, continuity and accounting semantics and the
 EEJ-003 adds a necessary distinction between historical effect classification and outstanding execution. In a literal M1C fixture, start1 → accepted1 → receipt1 → start2 reports `succeeded` even though attempt2 has no settlement. The new restricted adapter preserves that result and independently reports attempt2 with a settlement hold. Keep original classification, per-attempt settlement and permission to act as separate contract fields. An aggregate success label must not release another attempt's hold or authorize retry.
 
 Prefer an evidence-cut adapter over direct label translation. A separately authenticated original dispatch, ordered inventory and historical prefix permit literal classification without synthesizing receipts. Individual record authentication cannot establish inventory completeness. Recursion owns this adapter contract; the experimental HMAC mechanism is replaceable and selects no product cryptography, language or store. Authoritative cut ownership and canonical quarantine resolution remain construction gaps. [Method, results and continuation](construction/effect-evidence-20260908/handoff.md).
+
+## Shared generation, evidence and recovery boundary — 2026-09-08
+
+SCM-001 retains the authority aggregate plus explicit broker refinement as the
+modular candidate, with the inclusive record as a coverage reference and fallback.
+The new finite model pairs the complete authority/broker state with the inclusive
+record and checks independent postconditions on authority and broker-only edges.
+Both representations close the same15 declared environments, including a free
+shared core. This does not establish a smaller state space, runtime speed advantage
+or unrestricted composition theorem. No language, store or framework is selected.
+
+Authority owns publication, writer term/serial, admission, evidence inventory and
+lifetime accounting. Broker ownership covers undelivered source entries, reader
+pins, copied snapshots, gap/credit and installed presentation. Cross-component
+reclamation predicates are required contracts. A term-only ticket is inadequate
+for same-term replacement; the complete prior runtime issuer/owner/nonce bindings
+remain required beyond the modeled term/serial tuple.
+
+[Shared evidence and limitations](construction/shared-composition-20260908/evidence.json)
+and [construction requests](construction/shared-composition-20260908/next-probes.md)
+advance formal comparison. Full original profiles, authoritative shared pool and
+wire mapping remain open; the common-writer migration blocker is unchanged.
