@@ -307,3 +307,16 @@ Use local provider-free construction first; preserve failed attempts and commit
 reviewable slices. Astra High Standard remains the Owner-selected integrator
 configuration. No service, auth, operational PAUSE, model route, paid trial or
 reset-credit change is part of these requests.
+
+## SC-WR-01 continuation — 2026-09-08
+
+The [handoff](construction/shared-reservations-20260908/handoff.md) binds merged
+PR102/default baseline2ab8594, the dedicated codex/v3-shared-reservations-20260908
+worktree, finite designs, all attempts and exact gate. Preserve later Git changes.
+Read external completion.json under Git common research-attestations/
+shared-reservations/<candidate>/ and verify its receipts before treating the
+campaign as published. Working gates revalidate history; new campaigns need fresh
+source/host/capacity/time admission. Two full exact-candidate passes and independent
+reviews precede Owner-authorized normal review publication. No settings, PAUSE,
+auth, deployment or merge changes are included. SC-WIRE-02 and SC-EPOCH-03 remain
+the bounded successors; Astra remains the sole integrator/writer.

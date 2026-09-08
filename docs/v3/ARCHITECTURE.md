@@ -577,3 +577,22 @@ remain required beyond the modeled term/serial tuple.
 and [construction requests](construction/shared-composition-20260908/next-probes.md)
 advance formal comparison. Full original profiles, authoritative shared pool and
 wire mapping remain open; the common-writer migration blocker is unchanged.
+
+## Shared-pool admission construction — 2026-09-08
+
+SWR-001 preserves the original two goals requesting six each from ten. The central
+construction serializes current-balance check and durable reservation across goals;
+removing that guard admits twelve. Both split and inclusive representations close
+the same declared graphs under a third complete relation. This is scoped finite
+evidence, not closure of the original full core/cross configurations.
+
+SWR-003 constructs a two-holder comparator with one durable one-unit transfer:
+source debit precedes destination credit with a retained applied marker. Duplicate
+credit, lost-ACK restart, timeout and stale snapshot restoration cannot manufacture
+rights in the guarded relation. Free+in-flight+reserved+consumed stays ten. Initial
+rights(5,5) deny six while central admission serves it; safety correspondence does
+not imply equal availability. Keep central admission as mandatory baseline and
+rights as optional under explicit persistent-memory/serialized-holder premises.
+
+No product store/language/framework, physical durability, arbitrary transfer, full
+formal freeze or common-writer migration is established. [Evidence and limits](construction/shared-reservations-20260908/findings.md).

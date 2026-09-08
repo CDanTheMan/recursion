@@ -455,3 +455,15 @@ first two independently, then couple them before promoting an aggregate obligati
 Formal freeze still precedes language comparison, then storage comparison; whole
 system optimization continues alongside. Existing rich/lean capabilities, all
 integration routes and full-workflow experiment families remain required.
+
+## After shared-reservation construction — 2026-09-08
+
+SC-WR-01 supplies scoped central admission and one-transfer rights evidence while
+preserving the original6+6-from10 schedule and uncertain-effect reservation. Next
+construct SC-WIRE-02 literal M1B correspondence independently, then couple it to
+these reservation and replay boundaries. SC-EPOCH-03 keeps the typed consultation
+work. Do not replace full core/cross coverage with accumulated independent slices.
+Formal freeze still precedes language then storage comparison. Native/upstream-only/
+combined integrations, eight experiment families and six cross-area cases remain
+required. No new Owner direction or product framework selection follows.
+[Next bounded request](construction/shared-reservations-20260908/next-probes.md).

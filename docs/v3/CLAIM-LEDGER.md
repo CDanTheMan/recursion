@@ -390,3 +390,11 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | SCM-001 | Independent split and inclusive shared generation/evidence/recovery models close identical graphs for fifteen declared environments under a complete third transition relation; unrestricted composition and formal freeze remain incomplete. | modeled | [Shared composition evidence](construction/shared-composition-20260908/evidence.json) |
 | SCM-002 | In the declared finite profiles, installing an older evidence snapshot preserves newer unsettled work and quarantine, while generation reclamation waits for both invocation and independent reader ownership. | modeled | [Shared composition evidence](construction/shared-composition-20260908/evidence.json) |
 | SCM-003 | The finite recovery profiles distinguish emitted from installed content, require a gap and fresh post-RESET credit, retain a queued newer entry through installation and deliver it without granting authority or settling its effect. | modeled | [Shared composition evidence](construction/shared-composition-20260908/evidence.json) |
+
+## Shared-pool and reservation construction, 2026-09-08
+
+| Claim | Statement | State | Evidence |
+| --- | --- | --- | --- |
+| SWR-001 | The bounded serialized pool admits at most ten across the original two six-unit requests; independent split and inclusive representations preserve the complete declared transition relation, while the removed serialization guard admits twelve. | modeled | [Shared-reservation evidence](construction/shared-reservations-20260908/evidence.json) |
+| SWR-002 | Fixed-tuple uncertain-effect reservations survive the declared receipt-loss, restart, local-lifetime, quota-reset and replay schedules; only explicit verified reconciliation converts the hold to consumed or released allowance. | modeled | [Shared-reservation evidence](construction/shared-reservations-20260908/evidence.json) |
+| SWR-003 | The bounded two-holder one-transfer design conserves free, in-flight, reserved and consumed rights across duplicate install and lost-ACK restart; it differs from central admission in availability and does not prove arbitrary transfer durability. | modeled | [Shared-reservation evidence](construction/shared-reservations-20260908/evidence.json) |
