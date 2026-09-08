@@ -6,6 +6,20 @@
       "revision": 1,
       "at": "2026-09-07T23:59:08.787613+00:00",
       "reason": "Start first formal construction packet after accepted interface campaign; preserve full comparison while building a checkable slice"
+    },
+    {
+      "revision": 2,
+      "at": "2026-09-08T00:14:52.465290+00:00",
+      "reason": "Pre-exploration independent model review found common cursor/ACK/exhaustion mistakes and state-key alias; repaired with immutable oracle controls, raw-state TypeOK and distinct recovery states",
+      "retained": [
+        "Full original comparison remains unimplemented outside the explicitly partial slice",
+        "Independent logical control and immediately signaled loss remain assumptions",
+        "Preventive-admission to full M1B wire-audit RESET mapping remains unimplemented"
+      ],
+      "superseded": [
+        "Per-stage capacity equal to total in-flight capacity: reduced stage capacity to one before execution so blocked pumps are reachable"
+      ],
+      "invalidated": []
     }
   ],
   "steps": [
