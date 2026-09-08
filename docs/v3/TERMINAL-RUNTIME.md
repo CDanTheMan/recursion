@@ -504,3 +504,8 @@ EPC-002 models the Head/consultation/executor wait cycle, exposes a dependency b
 
 CPL-003 retains four-event costs1,2,1,2 and the full declared stage, in-flight, receiver and frame bounds. Literal M1B acceptance is checked separately from application installation, catalogue binding, ingestion and effect authority. The no-gap witness emits all four events; gap witnesses retain explicit delivered/covered distinctions. Synthetic framing and intact requester restart do not prove physical receiver recovery.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
+
+## Coupled evidence cut and PAUSE — 2026-09-08
+
+Supplemental retained-cut delivery stays separate from the full four-event stream. ACK/restart/snapshot installation cannot give a stale, foreign or uncertain cut reservation-settlement authority.
+See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.

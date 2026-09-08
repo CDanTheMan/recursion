@@ -506,3 +506,8 @@ SC-EPOCH-03 requires two clean exact-candidate full gates, two independent exact
 
 SC-COUPLED-01 requires two exact clean full gates,13 frozen predecessors, unchanged25 regressions and two independent exact-candidate reviews. One hundred finite environments and58 cases across29 guard removals add scoped support to four obligations; all6 obligations/27 traces and prior integration requirements remain. No formal freeze, runtime integration or migration promotion follows.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
+
+## Coupled evidence cut and PAUSE — 2026-09-08
+
+CCP-003 requires complete176-environment exploration,82 guard counterexamples,44 joined observation controls and11 actual PAUSE guard mutations. Fourteen unchanged predecessor gates and25regressions run twice on the exact reviewed candidate.
+See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.

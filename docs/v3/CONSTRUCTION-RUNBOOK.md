@@ -335,3 +335,8 @@ For SC-EPOCH-03 verify external completion/receipt hashes and current PR state b
 
 For SC-COUPLED-01 verify external completion and all receipt/source/log hashes, plus actual PR/default state. Preserve passing-but-superseded runs and preflight failures. Sources precede admission, final gates run twice on an identical clean commit, and two independent exact reviews are required. All13 frozen gates and25 unchanged regressions remain; Owner merges.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
+
+## Coupled evidence cut and PAUSE — 2026-09-08
+
+The new cut/PAUSE gate retains all14 frozen gates and unchanged25commands. Admit600seconds per historical command for the larger immediate predecessor, preserving exact scripts. Retain failed runs and require two exact clean gates/two independent reviews before normal draft publication.
+See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.

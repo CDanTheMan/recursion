@@ -195,10 +195,14 @@ def run_command(command,root,out,name):
     import time
     require(read('plan.json')['historical_command_timeout_seconds']==600,'frozen command admission')
     begin=time.perf_counter()
-    result=subprocess.run(command,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600)
-    raw=result.stdout;(out/(name+'.log')).write_bytes(raw)
-    row={'command':command,'exit_code':result.returncode,'seconds':time.perf_counter()-begin,'output_sha256':sha(raw)}
-    print(json.dumps(row),flush=True);require(result.returncode==0,'unchanged historical command failed '+name);return row
+    try:
+        result=subprocess.run(command,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600);raw=result.stdout;code=result.returncode;status='finished'
+    except subprocess.TimeoutExpired as e:
+        raw=e.stdout or b'';code=None;status='timeout-owned-command-killed-and-waited'
+    (out/(name+'.log')).write_bytes(raw)
+    row={'command':command,'exit_code':code,'seconds':time.perf_counter()-begin,'output_sha256':sha(raw),'status':status}
+    (out/(name+'-execution.json')).write_text(json.dumps(row,indent=2)+'\n',encoding='utf-8')
+    print(json.dumps(row),flush=True);require(code==0,'unchanged historical command failed '+name);return row
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--preflight',action='store_true');parser.add_argument('--working',action='store_true');parser.add_argument('--candidate');a=parser.parse_args();preflight()

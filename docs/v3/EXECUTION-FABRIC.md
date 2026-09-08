@@ -454,3 +454,8 @@ EPC-001 binds consultation to typed goal, lease, issuer, requester incarnation, 
 
 CPL-002 separates transported advice, current adoption/wake and bound terminal effect reconciliation. Old snapshots, ACKs, requester restart, quota reset and Stop cannot release uncertainty. Success consumes six permanently; only proven nonexecution plus reconciliation permits the competing six-unit request. Atomic durable commits, truthful authenticated receipts and same-run catalogue availability remain premises.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
+
+## Coupled evidence cut and PAUSE — 2026-09-08
+
+CCP-002 checks the actual joined observation through literal M1A: fresh PAUSE refusal, exact duplicate receipt and awareness-journal growth remain distinct from runtime events and pure classification.
+See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
