@@ -129,7 +129,8 @@ def manifest_check():
     require({i['path'] for i in m['inputs']}==expected and len(m['inputs'])==len(expected),'complete frozen manifest')
     for i in m['inputs']:require(sha(git('show',BASE+':'+i['path'],raw=True))==i['git_blob_sha256'],'frozen input bytes')
     for name in ['goal.json','plan.json','checkpoint.json']:
-        require((AREA/name).read_bytes()==git('show',CHECKPOINT+':'+PREFIX+name,raw=True),'historical checkpoint/domain declaration changed')
+        # Git may normalize CRLF in documentation; compare all other bytes exactly.
+        require((AREA/name).read_bytes().replace(b'\r\n',b'\n')==git('show',CHECKPOINT+':'+PREFIX+name,raw=True).replace(b'\r\n',b'\n'),'historical checkpoint/domain declaration changed')
 
 def reject(fn,value):
     try:fn(value)

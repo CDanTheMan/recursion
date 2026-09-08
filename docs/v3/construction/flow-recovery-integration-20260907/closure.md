@@ -15,6 +15,12 @@ command, resource limits and ordered timezone-aware timestamps. It adds targeted
 for these cases and binds continuation scope/capacity. Model reproduction now uses the declared
 900-second outer timeout. The seven semantic modules and their retained results are unchanged.
 
+The first complete-gate attempt on f3caed0 stopped before model execution because the new
+historical-document byte check treated Windows CRLF checkout normalization as a content change.
+The repair normalizes CRLF only for those three documentation comparisons and compares every
+remaining byte. Raw admitted-source hashes remain exact. The failed invocation is retained
+externally under that candidate; it is not a successful gate or a model counterexample.
+
 Acceptance still requires two complete runs on the same clean final commit and two independent
 exact-commit approvals. This document records the repair, not advance approval. External final
 receipts and completion.json are authoritative for observed gates, reviews and publication.
