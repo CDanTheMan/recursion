@@ -42,6 +42,14 @@
       "witness_id": 23
     },
     {
+      "family": "recipient-fence-installation",
+      "fixtures": 3,
+      "guarded_positive_outcomes": 2,
+      "guarded_violations": 0,
+      "shortcut_counterexamples": 1,
+      "witness_id": 72
+    },
+    {
       "family": "rejected-command-provenance",
       "fixtures": 1,
       "guarded_positive_outcomes": 1,
@@ -62,11 +70,11 @@
       "fixtures": 2,
       "guarded_positive_outcomes": 2,
       "guarded_violations": 0,
-      "shortcut_counterexamples": 2,
+      "shortcut_counterexamples": 1,
       "witness_id": 11
     }
   ],
-  "fixture_count": 72,
+  "fixture_count": 75,
   "full_formal_freeze": false,
   "performance_measured": false,
   "rows": [
@@ -649,6 +657,8 @@
           {
             "event": "ack_old",
             "observation": {
+              "ack_attempt": 1,
+              "current_attempt": 2,
               "current_attempt_settlement_from_old_ack": false,
               "transport_ack_accepted": true
             }
@@ -672,6 +682,8 @@
           {
             "event": "ack_old",
             "observation": {
+              "ack_attempt": 1,
+              "current_attempt": 2,
               "current_attempt_settlement_from_old_ack": true,
               "transport_ack_accepted": true
             }
@@ -707,6 +719,8 @@
           {
             "event": "ack_old",
             "observation": {
+              "ack_attempt": 1,
+              "current_attempt": 2,
               "current_attempt_settlement_from_old_ack": false,
               "transport_ack_accepted": true
             }
@@ -730,15 +744,15 @@
           {
             "event": "ack_old",
             "observation": {
-              "current_attempt_settlement_from_old_ack": true,
+              "ack_attempt": 1,
+              "current_attempt": 2,
+              "current_attempt_settlement_from_old_ack": false,
               "transport_ack_accepted": true
             }
           }
         ],
         "positive_outcomes": 1,
-        "violations": [
-          "old attempt ACK used as current attempt settlement"
-        ]
+        "violations": []
       },
       "trace": [
         "redeliver",
@@ -1595,13 +1609,13 @@
       },
       "id": 23,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -1652,13 +1666,13 @@
       },
       "id": 24,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -1709,13 +1723,13 @@
       },
       "id": 25,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -1766,13 +1780,13 @@
       },
       "id": 26,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -1823,13 +1837,13 @@
       },
       "id": 27,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -1880,13 +1894,13 @@
       },
       "id": 28,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -1937,13 +1951,13 @@
       },
       "id": 29,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -1994,13 +2008,13 @@
       },
       "id": 30,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2051,13 +2065,13 @@
       },
       "id": 31,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2108,13 +2122,13 @@
       },
       "id": 32,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2165,13 +2179,13 @@
       },
       "id": 33,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2222,13 +2236,13 @@
       },
       "id": 34,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2279,13 +2293,13 @@
       },
       "id": 35,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2336,13 +2350,13 @@
       },
       "id": 36,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2391,13 +2405,13 @@
       },
       "id": 37,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2448,13 +2462,13 @@
       },
       "id": 38,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2505,13 +2519,13 @@
       },
       "id": 39,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2562,13 +2576,13 @@
       },
       "id": 40,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2619,13 +2633,13 @@
       },
       "id": 41,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2676,13 +2690,13 @@
       },
       "id": 42,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2733,13 +2747,13 @@
       },
       "id": 43,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2790,13 +2804,13 @@
       },
       "id": 44,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2845,13 +2859,13 @@
       },
       "id": 45,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           0
@@ -2902,13 +2916,13 @@
       },
       "id": 46,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 0,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 0,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           0
@@ -2959,13 +2973,13 @@
       },
       "id": 47,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3016,13 +3030,13 @@
       },
       "id": 48,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3073,13 +3087,13 @@
       },
       "id": 49,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3130,13 +3144,13 @@
       },
       "id": 50,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3187,13 +3201,13 @@
       },
       "id": 51,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3244,13 +3258,13 @@
       },
       "id": 52,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3301,13 +3315,13 @@
       },
       "id": 53,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3358,13 +3372,13 @@
       },
       "id": 54,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3415,13 +3429,13 @@
       },
       "id": 55,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3472,13 +3486,13 @@
       },
       "id": 56,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3529,13 +3543,13 @@
       },
       "id": 57,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3586,13 +3600,13 @@
       },
       "id": 58,
       "parameters": {
-        "auth_epoch": 1,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 1,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3643,13 +3657,13 @@
       },
       "id": 59,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3700,13 +3714,13 @@
       },
       "id": 60,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3757,13 +3771,13 @@
       },
       "id": 61,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3814,13 +3828,13 @@
       },
       "id": 62,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           0
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3871,13 +3885,13 @@
       },
       "id": 63,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -3928,13 +3942,13 @@
       },
       "id": 64,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -3985,13 +3999,13 @@
       },
       "id": 65,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -4042,13 +4056,13 @@
       },
       "id": 66,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           0,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -4099,13 +4113,13 @@
       },
       "id": 67,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -4156,13 +4170,13 @@
       },
       "id": 68,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -4213,13 +4227,13 @@
       },
       "id": 69,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": false,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": false,
         "required_cut": [
           1,
           1
@@ -4270,13 +4284,13 @@
       },
       "id": 70,
       "parameters": {
-        "auth_epoch": 2,
-        "branch_revision": 1,
-        "evidence_allowed": true,
-        "frontier": [
+        "applied_dependency_vector": [
           1,
           1
         ],
+        "auth_epoch": 2,
+        "branch_revision": 1,
+        "evidence_allowed": true,
         "required_cut": [
           1,
           1
@@ -4352,13 +4366,210 @@
         ],
         "positive_outcomes": 0,
         "violations": [
-          "lost rejection reply has no queryable attributable receipt"
+          "lost rejection reply lacks exact attributable terminal receipt"
         ]
       },
       "trace": [
         "receive",
         "reject",
         "query_after_lost_reply"
+      ]
+    },
+    {
+      "family": "recipient-fence-installation",
+      "guarded": {
+        "observations": [
+          {
+            "event": "admit",
+            "observation": {}
+          },
+          {
+            "event": "revoke",
+            "observation": {}
+          },
+          {
+            "event": "install",
+            "observation": {}
+          },
+          {
+            "event": "deliver",
+            "observation": {
+              "exposed_before_install": false,
+              "launched": false,
+              "local_epoch": 2,
+              "recipient_epoch": 2
+            }
+          }
+        ],
+        "positive_outcomes": 0,
+        "violations": []
+      },
+      "id": 72,
+      "parameters": {},
+      "shortcut": {
+        "observations": [
+          {
+            "event": "admit",
+            "observation": {}
+          },
+          {
+            "event": "revoke",
+            "observation": {}
+          },
+          {
+            "event": "install",
+            "observation": {}
+          },
+          {
+            "event": "deliver",
+            "observation": {
+              "exposed_before_install": true,
+              "launched": true,
+              "local_epoch": 2,
+              "recipient_epoch": 2
+            }
+          }
+        ],
+        "positive_outcomes": 0,
+        "violations": [
+          "delayed permit launched after recipient fence installation"
+        ]
+      },
+      "trace": [
+        "admit",
+        "revoke",
+        "install",
+        "deliver"
+      ]
+    },
+    {
+      "family": "recipient-fence-installation",
+      "guarded": {
+        "observations": [
+          {
+            "event": "admit",
+            "observation": {}
+          },
+          {
+            "event": "revoke",
+            "observation": {}
+          },
+          {
+            "event": "deliver",
+            "observation": {
+              "exposed_before_install": true,
+              "launched": true,
+              "local_epoch": 2,
+              "recipient_epoch": 1
+            }
+          },
+          {
+            "event": "install",
+            "observation": {}
+          }
+        ],
+        "positive_outcomes": 1,
+        "violations": []
+      },
+      "id": 73,
+      "parameters": {},
+      "shortcut": {
+        "observations": [
+          {
+            "event": "admit",
+            "observation": {}
+          },
+          {
+            "event": "revoke",
+            "observation": {}
+          },
+          {
+            "event": "deliver",
+            "observation": {
+              "exposed_before_install": true,
+              "launched": true,
+              "local_epoch": 2,
+              "recipient_epoch": 1
+            }
+          },
+          {
+            "event": "install",
+            "observation": {}
+          }
+        ],
+        "positive_outcomes": 1,
+        "violations": []
+      },
+      "trace": [
+        "admit",
+        "revoke",
+        "deliver",
+        "install"
+      ]
+    },
+    {
+      "family": "recipient-fence-installation",
+      "guarded": {
+        "observations": [
+          {
+            "event": "admit",
+            "observation": {}
+          },
+          {
+            "event": "deliver",
+            "observation": {
+              "exposed_before_install": false,
+              "launched": true,
+              "local_epoch": 1,
+              "recipient_epoch": 1
+            }
+          },
+          {
+            "event": "revoke",
+            "observation": {}
+          },
+          {
+            "event": "install",
+            "observation": {}
+          }
+        ],
+        "positive_outcomes": 1,
+        "violations": []
+      },
+      "id": 74,
+      "parameters": {},
+      "shortcut": {
+        "observations": [
+          {
+            "event": "admit",
+            "observation": {}
+          },
+          {
+            "event": "deliver",
+            "observation": {
+              "exposed_before_install": false,
+              "launched": true,
+              "local_epoch": 1,
+              "recipient_epoch": 1
+            }
+          },
+          {
+            "event": "revoke",
+            "observation": {}
+          },
+          {
+            "event": "install",
+            "observation": {}
+          }
+        ],
+        "positive_outcomes": 1,
+        "violations": []
+      },
+      "trace": [
+        "admit",
+        "deliver",
+        "revoke",
+        "install"
       ]
     }
   ],

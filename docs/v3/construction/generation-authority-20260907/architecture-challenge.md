@@ -55,7 +55,7 @@ vLLM is Apache-2.0; its GPU guide specifies Linux/no native Windows support and 
 
 ## Bounded theoretical findings
 
-The root committed [theory-plan.json](theory-plan.json) and the abstract checker before execution. [theory-evidence.json](theory-evidence.json) identifies that exact source and retained output. The initial 72-fixture run is retained as superseded after review corrected stale-ACK counting and exact rejection attribution. Corrected execution is pending in this slice; [theory-results.json](theory-results.json) still records the initial result. The revised preregistration adds a delayed-recipient-fence trace.
+The root committed [theory-plan.json](theory-plan.json) and the abstract checker before execution. [theory-evidence.json](theory-evidence.json) identifies that exact source and retained output. The initial 72-fixture run is retained as superseded after review corrected stale-ACK counting and exact rejection attribution. The corrected execution contains **75 closed abstract fixtures across nine discriminator groups**, including delayed recipient fencing. Each group rejects a selected shortcut, has no guarded violation in the declared abstraction and permits a selected positive outcome. Full rows and witness IDs are in [theory-results.json](theory-results.json). These are executable requirement examples and bounded shortcut counterexamples, not independent implementation proofs or runtime rankings.
 
 | Discriminator | Shortcut counterexample | Guarded candidate obligation |
 | --- | --- | --- |
@@ -66,6 +66,7 @@ The root committed [theory-plan.json](theory-plan.json) and the abstract checker
 | Incarnation accounting | Friendly-ID replacement overwrites an earlier cumulative segment. | Retain totals by incarnation; repeated reports replace only their own segment. |
 | Branch adoption | Parallel proposal writes canonical decision directly. | Preserve proposals; adopt against the current base revision. |
 | Memory freshness | Equal content hash bypasses branch, applied dependency counts, evidence eligibility or epoch check. | Historical cut and present disclosure authority are independently required. |
+| Recipient fence installation | Delayed old permit launches after the recipient installs revocation. | Recheck installed recipient epoch; separately report admitted in-flight exposure before installation. |
 | Rejected-command provenance | Lost rejection reply leaves no queryable history record. | Durable attributable ingress/disposition, under privacy bounds. |
 
 These are constructed counterexamples to abstraction shortcuts, not observations of upstream runtimes. The applied dependency vector is not a Timely/Differential frontier mapping. The guards directly encode necessary conditions in this small domain; they do not establish feasibility, performance, malicious-caller resistance, distributed enforcement or composition. They are not a new implementation of the accepted full formal model and do not advance any of its 27 coverage rows. Callback internals, host-call cancellation, index compaction/fork retention and protocol hook races still require their specified probes.

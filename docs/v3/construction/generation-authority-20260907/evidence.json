@@ -4670,6 +4670,12 @@
       "statement": "Named local reclamation cuts resume from durable retirement intent, retain pinned bytes and permit old-generation deletion while a current-generation reader remains active.",
       "state": "locally observed",
       "canonical": "docs/v3/TERMINAL-RUNTIME.md"
+    },
+    {
+      "id": "GRA-004",
+      "statement": "Seventy-five finite abstract fixtures expose selected cross-arm shortcuts while permitting guarded examples; they establish neither upstream runtime behavior nor implementation correctness.",
+      "state": "modeled",
+      "canonical": "docs/v3/ARCHITECTURE.md"
     }
   ]
 }

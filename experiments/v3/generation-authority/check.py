@@ -89,8 +89,8 @@ def result_check(value,expected):
 
 def claims(e):
     ledger=(ROOT/'docs/v3/CLAIM-LEDGER.md').read_text(encoding='utf8');FM['HIST']['OLD']['registry_shape'](load(ROOT/'docs/v3/CLAIM-REGISTRY.json'),ledger)
-    require(len(e['claims'])==3 and {c['id'] for c in e['claims']}=={'GRA-001','GRA-002','GRA-003'},'claim identities')
-    for c in e['claims']:require(c['state']=='locally observed' and '| '+c['id']+' | '+c['statement']+' | '+c['state']+' |' in ledger and c['canonical'] in CANONICAL and c['id'] in (ROOT/c['canonical']).read_text(encoding='utf8'),'claim binding')
+    require(len(e['claims'])==4 and {c['id'] for c in e['claims']}=={'GRA-001','GRA-002','GRA-003','GRA-004'},'claim identities')
+    for c in e['claims']:require(c['state']==('modeled' if c['id']=='GRA-004' else 'locally observed') and '| '+c['id']+' | '+c['statement']+' | '+c['state']+' |' in ledger and c['canonical'] in CANONICAL and c['id'] in (ROOT/c['canonical']).read_text(encoding='utf8'),'claim binding')
 def evidence(e,expected):
     require(e['start_commit']==BASE and all(e[k] is False for k in ('formal_freeze','production_authentication_established','power_loss_durability_established')) and e['new_owner_questions']==[],'evidence scope')
     result_check(read('results.json'),expected);require(e['semantic_results_sha256']==sha(canonical(expected).encode()),'semantic hash')
@@ -109,6 +109,35 @@ def reject(fn,value):
     try:fn(value)
     except (ValueError,KeyError,TypeError,AssertionError,OSError,subprocess.SubprocessError):return
     raise ValueError('adversarial mutation accepted')
+
+def theory_result(value,expected):
+    require(canonical(value)==canonical(expected),'theory result differs')
+    require(value['classification']=='modeled' and value['fixture_count']==75 and len(value['families'])==9 and value['upstream_runtime_executed'] is False and value['full_formal_freeze'] is False and value['performance_measured'] is False,'theory claim boundary')
+    require(all(r['guarded_violations']==0 and r['shortcut_counterexamples']>0 and r['guarded_positive_outcomes']>0 for r in value['families']),'theory nonvacuity')
+
+def research():
+    steering=read('owner-steering.json');require(steering['parent_goal']=='goal-recursion-v2-execution-fabric' and steering['campaign']=='recursion.v3.generation-authority.20260907' and steering['max_active_agents_owner']==10 and steering['max_concurrent_discovery_workers']==4 and steering['packet_minutes']==15 and steering['new_owner_questions']==[],'Owner research bounds')
+    rows=read('architecture-sources.json')['sources'];require(len(rows)==48 and len({r['file'] for r in rows})==48,'architecture source coverage')
+    for r in rows:
+        require(sha(bound(common()/'research-attestations/generation-authority/architecture-sources',r['file']).read_bytes())==r['sha256'],'architecture source bytes')
+        if r['kind']=='pinned-source':require(re.fullmatch('[0-9a-f]{40}',r['commit']) and r['url']=='https://raw.githubusercontent.com/'+r['repository']+'/'+r['commit']+'/'+r['path'],'architecture source pin')
+        else:require(r['kind']=='documentation-snapshot' and r['url'].startswith('https://docs.temporal.io/'),'reference snapshot identity')
+    refs=read('architecture-sources.json')['documentation_references'];require(len(refs)==7 and all(r['status']=='web-tool-inspected; no local raw snapshot' for r in refs),'reference-only distinction')
+    plan=read('theory-plan.json');require(plan['status']=='revised-preregistration-before-corrected-root-execution' and plan['limits']=={'seconds':30,'fixtures':256,'network':False,'third_party_imports':False,'subprocesses':False} and len(set(plan['families']))==9,'abstract preregistration')
+    model=runpy.run_path(str(AREA/'theory-check.py'));value=model['run']();theory_result(read('theory-results.json'),value);require({r['family'] for r in value['families']}==set(plan['families']),'theory family coverage')
+    e=read('theory-evidence.json');require(e['classification']=='modeled' and e['status']=='accepted-corrected-abstract-execution' and e['semantic_sha256']==sha(canonical(value).encode()),'theory evidence classification')
+    cache=common()/'research-attestations/generation-authority/theory';runs=e['retained_runs'];require(len(runs)==2 and {r['source_commit'] for r in runs}=={d.name for d in cache.iterdir() if d.is_dir()},'all theoretical attempts')
+    accepted=0
+    for r in runs:
+        d=bound(cache,r['source_commit']);require(r['files']=={p.name:sha(p.read_bytes()) for p in d.iterdir() if p.is_file()},'theory raw inventory');a,x=load(d/'admission.json'),load(d/'execution.json')
+        require(a['source_commit']==r['source_commit'] and a['status']=='admitted-before-execution' and x['exit_code']==0 and a['started_at']<=x['finished_at'],'theory admission')
+        git('merge-base','--is-ancestor',BASE,a['source_commit']);git('merge-base','--is-ancestor',a['source_commit'],'HEAD')
+        require(set(a['sources'])=={PREFIX+n for n in ('theory-check.py','theory-plan.json','architecture-sources.json')},'theory source closure')
+        for path,digest in a['sources'].items():require(sha(git('show',a['source_commit']+':'+path,raw=True))==digest,'theory frozen source')
+        if a['source_commit']==e['source_commit']:
+            accepted+=1;require(a['command']==[sys.executable,'-X','utf8','-B',PREFIX+'theory-check.py'] and a['python']==sys.version,'accepted theory runtime');theory_result(load(d/'stdout.json'),value)
+            for path in a['sources']:require(git('show',a['source_commit']+':'+path,raw=True).replace(b'\r\n',b'\n')==(ROOT/path).read_bytes().replace(b'\r\n',b'\n'),'accepted theoretical source identity')
+    require(accepted==1,'one accepted theoretical execution');return value
 
 def adversarial(a,x,directory,actual):
     labels=[]
@@ -164,9 +193,11 @@ def adversarial(a,x,directory,actual):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--preflight',action='store_true');p.add_argument('--working',action='store_true');p.add_argument('--candidate');args=p.parse_args();preflight();goal_check(read('goal.json'))
     if args.preflight:return
-    candidate=args.candidate or git('rev-parse','HEAD');FM['candidate_check'](candidate);changed=git('diff','--name-only',BASE,candidate).splitlines();preserve(changed);manifests()
+    candidate=args.candidate or git('rev-parse','HEAD');FM['candidate_check'](candidate);changed=git('diff','--name-only',BASE,candidate).splitlines();preserve(changed);manifests();theory=research()
     out=common()/'research-attestations/generation-authority'/(candidate if not args.working else 'working');out.mkdir(parents=True,exist_ok=True);runid=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%f');directory=out/runid
     a,x=ADMIT['execute'](directory);admission(a,x,directory);actual=load(directory/'cases/result.json');counts=raw_check(directory,actual);require(counts==EXPECTED_AUDIT,'independent raw counts');evidence(read('evidence.json'),actual);labels=adversarial(a,x,directory,actual)
+    for key,value in [('classification','measured'),('fixture_count',74),('upstream_runtime_executed',True),('full_formal_freeze',True),('rows',[])]:
+        bad=copy.deepcopy(theory);bad[key]=value;reject(lambda v:theory_result(v,theory),bad);labels.append('theory/'+key)
     if args.working:print('GENERATION_AUTHORITY_WORKING_PASS_NOT_FINAL '+json.dumps({'run_id':runid,'adversarial_checks':len(labels),'raw_audit':counts}));return
     inv=read('validation-inventory.json');prior=FM['HIST']['read']('validation-inventory.json');require(inv['start_commit']==BASE and inv['regression_commands']==prior['regression_commands']==FM['HIST']['OLD']['regression_commands']() and len(inv['regression_commands'])==25,'unchanged25')
     for item in prior['regression_entrypoints']:require(sha(git('show',candidate+':'+item['path'],raw=True))==item['sha256'] and git('show',candidate+':'+item['path'],raw=True)==git('show',BASE+':'+item['path'],raw=True),'historical validator identity')
@@ -178,7 +209,7 @@ def main():
     for commit,branch,script in configurations:
         d=FM['frozen_root'](commit,branch);frozen.append(FM['run_command']([sys.executable,'-X','utf8','-B',script,'--working'],d,out,runid+'-frozen-'+commit[:7]));require(git('rev-parse','HEAD',root=d)==commit and not git('status','--porcelain=v1','--untracked-files=all',root=d),'frozen worktree changed')
     regressions=[FM['run_command']([sys.executable,*cmd[1:]],ROOT,out,runid+'-regression-'+str(n)) for n,cmd in enumerate(inv['regression_commands'])];FM['candidate_check'](candidate)
-    receipt={'status':'GENERATION_AUTHORITY_GATE_PASS','candidate':candidate,'base':BASE,'run_id':runid,'adversarial_checks':labels,'raw_audit':counts,'semantic_results_sha256':sha(canonical(actual).encode()),'execution_directory':str(directory),'execution_files':{p.relative_to(directory).as_posix():sha(p.read_bytes()) for p in sorted(directory.rglob('*')) if p.is_file()},'frozen_validations':frozen,'regressions':regressions,'formal_freeze':False,'artifacts':{p:sha(git('show',candidate+':'+p,raw=True)) for p in changed}}
+    receipt={'status':'GENERATION_AUTHORITY_GATE_PASS','candidate':candidate,'base':BASE,'run_id':runid,'adversarial_checks':labels,'raw_audit':counts,'theory_fixture_count':theory['fixture_count'],'theory_semantic_sha256':sha(canonical(theory).encode()),'semantic_results_sha256':sha(canonical(actual).encode()),'execution_directory':str(directory),'execution_files':{p.relative_to(directory).as_posix():sha(p.read_bytes()) for p in sorted(directory.rglob('*')) if p.is_file()},'frozen_validations':frozen,'regressions':regressions,'formal_freeze':False,'artifacts':{p:sha(git('show',candidate+':'+p,raw=True)) for p in changed}}
     raw=(json.dumps(receipt,indent=2)+'\n').encode();(out/(runid+'.json')).write_bytes(raw);print('GENERATION_AUTHORITY_GATE_PASS '+json.dumps({'candidate':candidate,'run_id':runid,'receipt_sha256':sha(raw)}))
 if __name__=='__main__':
     try:main()
