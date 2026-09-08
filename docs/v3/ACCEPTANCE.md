@@ -478,3 +478,16 @@ All six original obligations and27 trace rows are retained in
 [coverage](construction/shared-composition-20260908/coverage.json). Uncertain effect
 reservations, shared-pool serialization, full epoch domains, complete M1B wire
 composition and original full core/cross bounds remain explicit residuals.
+
+## Shared-reservation gate — 2026-09-08
+
+The [SC-WR-01 gate](../../experiments/v3/shared-reservations/check.py) checks original
+6+6-from10 demand, complete declared graphs for central and one-transfer rights
+designs in both representations, independent obligations, ordered witnesses,
+guard-removal counterexamples, committed execution sources and retained attempts.
+It preserves unchanged25 regressions and ten frozen predecessors, including the
+shared-composition gate at68d50fc. Require two complete passes on the identical
+clean final candidate and two independent exact-candidate approvals before normal
+review publication. Final receipts stay outside the candidate. No finite slice
+pass completes full formal comparison, runtime integration or common-writer migration.
+[Scope and residuals](construction/shared-reservations-20260908/coverage.json).

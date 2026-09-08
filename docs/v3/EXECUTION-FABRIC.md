@@ -422,3 +422,20 @@ reply/relocation recovery and the full goal/lease namespace remain unproved here
 retains local Stop versus recipient-installed fencing and lifetime-spend versus
 quota-reset distinctions. It does not complete original trace03/21/27, grant new
 operational authority or resolve common-writer migration.
+
+## Uncertain-effect reservations — 2026-09-08
+
+SWR-002 stores a fixed pool/goal/operation/attempt/payload/owner/amount binding for
+each admitted reservation. A matching duplicate retains its terminal disposition;
+conflicting inputs do not gain another grant. Reservation commit, intent append,
+send, environmental outcome, retained receipt, classification and reconciliation
+are separate modeled transitions. Receipt loss/restart/replay preserves six held
+and blocks blind resend. A successful reconciliation converts hold to consumed
+allowance; exact terminal nonexecution releases unused allowance once.
+
+Worker lifetime, provider quota epoch, generation/reader pin, classification hold,
+canonical quarantine and presentation/replay cursors cannot release that effect
+reservation. This is the fixed-identity finite relation, not a literal M1C runtime
+bridge or proof of provider authentication. Existing dispatch envelopes, integration
+roles/routes, eight experiment families and full workflow requirements remain.
+[Scoped sources and results](construction/shared-reservations-20260908/evidence.json).

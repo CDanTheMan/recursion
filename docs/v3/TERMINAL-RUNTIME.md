@@ -478,3 +478,14 @@ persistent assistants remain required.
 See [shared-model evidence](construction/shared-composition-20260908/evidence.json)
 and the literal-wire follow-up in
 [next probes](construction/shared-composition-20260908/next-probes.md).
+
+## Presentation and reservation separation — 2026-09-08
+
+The SC-WR-01 finite construction installs an old copied view while a newer durable
+reservation remains held. Installed presentation cursor and envelope replay cursor
+are separate; replay observes the intact authoritative revision and grants no
+allowance. Reader-pin completion, local worker exit/wait and quota reset likewise
+preserve uncertain external effects. This does not implement the full M1B wire,
+queue/credit, framing or ACK correspondence. SC-WIRE-02 remains next, followed by
+a coupled model before aggregate promotion. All ten controls, three Stop modes,
+forks and persistent assistants remain required. [Evidence](construction/shared-reservations-20260908/findings.md).
