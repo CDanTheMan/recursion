@@ -366,3 +366,11 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | GRA-002 | The local stable-range lock excludes a second cooperating authority; restarted or revoked publisher permits refuse selection changes in the named schedules. | locally observed | [Bound evidence](construction/generation-authority-20260907/evidence.json) |
 | GRA-003 | Named local reclamation cuts resume from durable retirement intent, retain pinned bytes and permit old-generation deletion while a current-generation reader remains active. | locally observed | [Bound evidence](construction/generation-authority-20260907/evidence.json) |
 | GRA-004 | Seventy-five finite abstract fixtures expose selected cross-arm shortcuts while permitting guarded examples; they establish neither upstream runtime behavior nor implementation correctness. | modeled | [Abstract source and retained results](construction/generation-authority-20260907/theory-evidence.json) |
+
+## Generation and effect composition, 2026-09-08
+
+| Claim | Statement | State | Evidence |
+| --- | --- | --- | --- |
+| GCM-001 | Independent split and inclusive finite generation/effect models close identical graphs for both declared retention policies and satisfy the checked aggregate and hidden-broker relations; full formal coverage remains incomplete. | modeled | [Finite composition evidence](construction/composition-model-20260908/evidence.json) |
+| GCM-002 | In the bounded composition, a preserved history capsule plus ended local invocation permits G3 activation under two resident slots while remote effect uncertainty remains; a resident-only fork instead holds G3. | modeled | [Finite composition evidence](construction/composition-model-20260908/evidence.json) |
+| GCM-003 | The finite recipient model preserves pre-installation exposure, rejects an old permit after installation and accepts valid late operation evidence without closing another attempt or restoring fork authority. | modeled | [Finite composition evidence](construction/composition-model-20260908/evidence.json) |
