@@ -1,0 +1,229 @@
+{
+  "status": "source-inspection-not-integration",
+  "sources": [
+    {
+      "kind": "pinned-source",
+      "file": "temporalio-sdk-go-internal-internal_update.go",
+      "repository": "temporalio/sdk-go",
+      "commit": "82c8087ecd03722e2b8e7c6c892784095fa94e73",
+      "path": "internal/internal_update.go",
+      "url": "https://raw.githubusercontent.com/temporalio/sdk-go/82c8087ecd03722e2b8e7c6c892784095fa94e73/internal/internal_update.go",
+      "sha256": "1a3fafaf36f826a2b9a88ceb582a815f5a371222633769d31926c663ca4a802f",
+      "retained_at": "2026-09-08T05:52:34.663177+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "temporalio-sdk-go-LICENSE",
+      "repository": "temporalio/sdk-go",
+      "commit": "82c8087ecd03722e2b8e7c6c892784095fa94e73",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/temporalio/sdk-go/82c8087ecd03722e2b8e7c6c892784095fa94e73/LICENSE",
+      "sha256": "e54f1257fb65239260831733ba0cafc4a702faa38636453fdd616ab1289eb419",
+      "retained_at": "2026-09-08T05:52:34.807863+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "restatedev-sdk-typescript-packages-libs-restate-sdk-src-context_impl.ts",
+      "repository": "restatedev/sdk-typescript",
+      "commit": "6879b36b6774c580c8dad9812cc6088150909dae",
+      "path": "packages/libs/restate-sdk/src/context_impl.ts",
+      "url": "https://raw.githubusercontent.com/restatedev/sdk-typescript/6879b36b6774c580c8dad9812cc6088150909dae/packages/libs/restate-sdk/src/context_impl.ts",
+      "sha256": "72c464bfeceb772d0363bc1413c62dcf2c1308d4cba621d39df41c0ac033c4cf",
+      "retained_at": "2026-09-08T05:52:34.952327+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "restatedev-sdk-typescript-packages-libs-restate-sdk-package.json",
+      "repository": "restatedev/sdk-typescript",
+      "commit": "6879b36b6774c580c8dad9812cc6088150909dae",
+      "path": "packages/libs/restate-sdk/package.json",
+      "url": "https://raw.githubusercontent.com/restatedev/sdk-typescript/6879b36b6774c580c8dad9812cc6088150909dae/packages/libs/restate-sdk/package.json",
+      "sha256": "98fc285c2ab65264702e949e4c1f68dac9e562b989b2da589417d19897fc1c98",
+      "retained_at": "2026-09-08T05:52:35.122047+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "restatedev-sdk-typescript-LICENSE",
+      "repository": "restatedev/sdk-typescript",
+      "commit": "6879b36b6774c580c8dad9812cc6088150909dae",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/restatedev/sdk-typescript/6879b36b6774c580c8dad9812cc6088150909dae/LICENSE",
+      "sha256": "c02e2067f0f80e77bf0bcd512af4ebad68f503e4c20f9558d151a909b539687e",
+      "retained_at": "2026-09-08T05:52:35.270295+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "nats-io-nats-server-server-consumer.go",
+      "repository": "nats-io/nats-server",
+      "commit": "622457b6dfd5649fdc882cacb287528424762948",
+      "path": "server/consumer.go",
+      "url": "https://raw.githubusercontent.com/nats-io/nats-server/622457b6dfd5649fdc882cacb287528424762948/server/consumer.go",
+      "sha256": "4b9264d5a07b09eacc50701570fa5a1981dd75260bcb9d8fdd26b34a32b1cb43",
+      "retained_at": "2026-09-08T05:52:35.471920+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "nats-io-nats-server-server-stream.go",
+      "repository": "nats-io/nats-server",
+      "commit": "622457b6dfd5649fdc882cacb287528424762948",
+      "path": "server/stream.go",
+      "url": "https://raw.githubusercontent.com/nats-io/nats-server/622457b6dfd5649fdc882cacb287528424762948/server/stream.go",
+      "sha256": "bc03b7cc89092fba4a147027cc9896934f87a8a8eb401059ea7c3df988a86ab3",
+      "retained_at": "2026-09-08T05:52:35.897203+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "nats-io-nats-server-server-const.go",
+      "repository": "nats-io/nats-server",
+      "commit": "622457b6dfd5649fdc882cacb287528424762948",
+      "path": "server/const.go",
+      "url": "https://raw.githubusercontent.com/nats-io/nats-server/622457b6dfd5649fdc882cacb287528424762948/server/const.go",
+      "sha256": "1b3ed56898b36d55378ab00f0098e9441fa5e589d8bd77a91a09362beb020a2e",
+      "retained_at": "2026-09-08T05:52:36.120723+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "nats-io-nats-server-LICENSE",
+      "repository": "nats-io/nats-server",
+      "commit": "622457b6dfd5649fdc882cacb287528424762948",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/nats-io/nats-server/622457b6dfd5649fdc882cacb287528424762948/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "retained_at": "2026-09-08T05:52:36.386528+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "nats-io-nats.docs-nats-concepts-jetstream-consumers.md",
+      "repository": "nats-io/nats.docs",
+      "commit": "f115becf6563e3bbe16bb94cbf87bfceb84199c1",
+      "path": "nats-concepts/jetstream/consumers.md",
+      "url": "https://raw.githubusercontent.com/nats-io/nats.docs/f115becf6563e3bbe16bb94cbf87bfceb84199c1/nats-concepts/jetstream/consumers.md",
+      "sha256": "6dc4f2dc9a6f4c3ffffb6e45b6fb88314195404e7d10dde43e4e9142763e9543",
+      "retained_at": "2026-09-08T05:52:36.558875+00:00"
+    },
+    {
+      "kind": "documentation-snapshot",
+      "file": "temporal-messages",
+      "url": "https://docs.temporal.io/develop/go/workflows/message-passing.md",
+      "sha256": "859f9d9710bb987215404f2bd75ccf85cd1c217187bcbe87a55733acdeeb5879",
+      "retained_at": "2026-09-08T05:52:36.635463+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "envoyproxy-envoy-docs-root-api-docs-xds_protocol.rst",
+      "repository": "envoyproxy/envoy",
+      "commit": "db4310bdf8e7b6dff5e0a4f7d583ce76cdf54b38",
+      "path": "docs/root/api-docs/xds_protocol.rst",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/db4310bdf8e7b6dff5e0a4f7d583ce76cdf54b38/docs/root/api-docs/xds_protocol.rst",
+      "sha256": "d1136eb7909a253ff2f74f59afdd69e62bed5667b717109a9e477f7530a678f4",
+      "retained_at": "2026-09-08T05:55:21.848239+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "envoyproxy-envoy-source-common-config-ttl.cc",
+      "repository": "envoyproxy/envoy",
+      "commit": "db4310bdf8e7b6dff5e0a4f7d583ce76cdf54b38",
+      "path": "source/common/config/ttl.cc",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/db4310bdf8e7b6dff5e0a4f7d583ce76cdf54b38/source/common/config/ttl.cc",
+      "sha256": "91f199ca778c4ab015b8b7fde5fedc7b2d41d02aeab31a7b530f6807a263c029",
+      "retained_at": "2026-09-08T05:55:22.008507+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "envoyproxy-envoy-LICENSE",
+      "repository": "envoyproxy/envoy",
+      "commit": "db4310bdf8e7b6dff5e0a4f7d583ce76cdf54b38",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/db4310bdf8e7b6dff5e0a4f7d583ce76cdf54b38/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "retained_at": "2026-09-08T05:55:22.153630+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "apache-felix-dev-scr-src-main-java-org-apache-felix-scr-impl-manager-SingleComponentManager.java",
+      "repository": "apache/felix-dev",
+      "commit": "534c4ae56aa7bc8fba857d85c0deb272b6d6ddc3",
+      "path": "scr/src/main/java/org/apache/felix/scr/impl/manager/SingleComponentManager.java",
+      "url": "https://raw.githubusercontent.com/apache/felix-dev/534c4ae56aa7bc8fba857d85c0deb272b6d6ddc3/scr/src/main/java/org/apache/felix/scr/impl/manager/SingleComponentManager.java",
+      "sha256": "6e00cd83a7be96e6eb4c60c3c57cd236dce41b64fb6b542d5fed1f1cb219c470",
+      "retained_at": "2026-09-08T05:55:22.288236+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "apache-felix-dev-scr-pom.xml",
+      "repository": "apache/felix-dev",
+      "commit": "534c4ae56aa7bc8fba857d85c0deb272b6d6ddc3",
+      "path": "scr/pom.xml",
+      "url": "https://raw.githubusercontent.com/apache/felix-dev/534c4ae56aa7bc8fba857d85c0deb272b6d6ddc3/scr/pom.xml",
+      "sha256": "b433dbcdd225e6c9a5daccb50f0d88ef7251f2c50bbd17991807aff675f4321d",
+      "retained_at": "2026-09-08T05:55:22.436868+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "apache-felix-dev-LICENSE",
+      "repository": "apache/felix-dev",
+      "commit": "534c4ae56aa7bc8fba857d85c0deb272b6d6ddc3",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/apache/felix-dev/534c4ae56aa7bc8fba857d85c0deb272b6d6ddc3/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "retained_at": "2026-09-08T05:55:22.604697+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "bytecodealliance-wasmtime-crates-wasmtime-src-config.rs",
+      "repository": "bytecodealliance/wasmtime",
+      "commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+      "path": "crates/wasmtime/src/config.rs",
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/668016926adfd1b8a79dbce894f1e203d8892599/crates/wasmtime/src/config.rs",
+      "sha256": "2763a78934a53e38e586b5b8de281fab651c7400652c3b05588e1e9d2800d39a",
+      "retained_at": "2026-09-08T05:55:22.780553+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "bytecodealliance-wasmtime-crates-wasmtime-src-runtime-limits.rs",
+      "repository": "bytecodealliance/wasmtime",
+      "commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+      "path": "crates/wasmtime/src/runtime/limits.rs",
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/668016926adfd1b8a79dbce894f1e203d8892599/crates/wasmtime/src/runtime/limits.rs",
+      "sha256": "07d25368279a57e5767601f8e98c8401452bfe60534570f4d6d1035621ca49ac",
+      "retained_at": "2026-09-08T05:55:22.930474+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "bytecodealliance-wasmtime-Cargo.toml",
+      "repository": "bytecodealliance/wasmtime",
+      "commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+      "path": "Cargo.toml",
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/668016926adfd1b8a79dbce894f1e203d8892599/Cargo.toml",
+      "sha256": "703f4710dcff2020a8cfb166319c5c6159b11aa5ab74c358d818ac76b5bd57d0",
+      "retained_at": "2026-09-08T05:55:23.089377+00:00"
+    },
+    {
+      "kind": "pinned-source",
+      "file": "bytecodealliance-wasmtime-LICENSE",
+      "repository": "bytecodealliance/wasmtime",
+      "commit": "668016926adfd1b8a79dbce894f1e203d8892599",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/668016926adfd1b8a79dbce894f1e203d8892599/LICENSE",
+      "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+      "retained_at": "2026-09-08T05:55:23.221846+00:00"
+    }
+  ],
+  "documentation_references": [
+    {
+      "url": "https://docs.restate.dev/develop/ts/external-events",
+      "status": "web-tool-inspected; no local raw snapshot",
+      "limit": "Direct urllib external-events fetch returned403; documentation version compatibility remains unverified."
+    },
+    {
+      "url": "https://docs.restate.dev/services/invocation/managing-invocations",
+      "status": "web-tool-inspected; no local raw snapshot",
+      "limit": "Direct urllib external-events fetch returned403; documentation version compatibility remains unverified."
+    },
+    {
+      "url": "https://docs.restate.dev/foundations/services",
+      "status": "web-tool-inspected; no local raw snapshot",
+      "limit": "Direct urllib external-events fetch returned403; documentation version compatibility remains unverified."
+    }
+  ]
+}

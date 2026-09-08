@@ -101,7 +101,7 @@ def audit(directory,result,journal_overrides=None,blob_overrides=None,row_overri
         case=cases/row['case'];need((row_overrides or {}).get(row['case'],load(case/'result.json'))==row,'raw row binding')
         events=(journal_overrides or {}).get(row['case'],[strict(line) for line in (case/'journal.jsonl').read_bytes().splitlines()]);need(events and events[0]['label']=='initial' and events[-1]['label']=='final','trace endpoints')
         dates=[datetime.datetime.fromisoformat(e['at']) for e in events];need(all(t.tzinfo for t in dates) and dates==sorted(dates),'trace time order')
-        s=None;files={};children={};staged={};requests={};checks=[];lock=None;pending_phase=None
+        s=None;files={};children={};staged={};requests={};checks=[];lock=None;pending_phase=None;fault=None;fault_seen=False;restoring=False;first_publish=False
         for e in events:
             kind=e['kind']
             if pending_phase:need(kind=='snapshot' and e['label']==pending_phase,'phase snapshot adjacency');pending_phase=None
@@ -124,6 +124,17 @@ def audit(directory,result,journal_overrides=None,blob_overrides=None,row_overri
                 if removed:need(s['selected']==2 and s['generations']['1']['status'] in ('retiring','removed') and not any(p['generation']==1 for p in s['pins'].values()),'physical removal without retiring unpinned generation')
                 for pin in s['pins'].values():need(content_reason(nf,pin,s['unit']) is None,'live pin bytes changed')
                 if s['selected']==2:need(content_reason(nf,dict(generation=2,**{k:s['generations']['2'][k] for k in ('directory','manifest_sha256')}),s['unit']) is None,'selected generation bytes changed')
+                if fault is not None and label in ('stage-fault','stage-restored'):
+                    expected_files=dict(files)
+                    if label=='stage-fault':
+                        need(not fault_seen and not restoring,'duplicate fault snapshot')
+                        if fault['fault']=='missing':del expected_files[fault['path']]
+                        else:expected_files[fault['path']]=sha(b'{}')
+                        need(nf==expected_files,'actual staged fault differs');fault_seen=True
+                    else:
+                        need(fault_seen and restoring,'restore without fault');expected_files[fault['path']]=fault['original_sha256'];need(nf==expected_files,'restored bytes differ');fault=None;fault_seen=False;restoring=False
+                if '/reader:' in label:need(children[label.split('/')[0]]['role']=='reader','reader phase role')
+                if label.endswith('/writer:staged'):need(content_reason(nf,children[label.split('/')[0]]['ticket'],s['unit']) is None,'writer stage bytes')
                 files=nf
             elif kind=='spawn':
                 cid=e['child'];need(cid not in children and type(e['pid'])is int and e['pid']>0,'child identity');need(not any(c['pid']==e['pid'] and not c.get('wait') for c in children.values()),'live PID reuse');need(sum(not c.get('wait') for c in children.values())<5,'child capacity');c=dict(e);children[cid]=c;all_ids.append(cid);totals['helpers']+=1
@@ -134,6 +145,10 @@ def audit(directory,result,journal_overrides=None,blob_overrides=None,row_overri
                     else:need(t==dict(s['writer'],unit=s['unit']),'actor launch without publisher permit')
             elif kind=='send':
                 c=children[e['child']];need(not c.get('wait'),'send after wait');v=e['value']
+                if isinstance(v,dict):need(e['child'] not in requests or requests[e['child']].get('done'),'new command before prior reply')
+                if isinstance(v,dict) and v['op']=='publish' and not first_publish:
+                    first_publish=True
+                    if row['schedule']=='overlap_manifest':need(any(c['role']=='reader' and c.get('phase')=='reader:manifest' and not c.get('wait') for c in children.values()),'required manifest overlap')
                 if isinstance(v,dict) and v['op']!='exit':
                     need(c.get('lock')==0 and c['role']=='authority','request outside authority');requests[e['child']]=dict(request=v,state=copy.deepcopy(s),files=files.copy(),reason=reason(s,v,files))
             elif kind=='receive':
@@ -142,11 +157,16 @@ def audit(directory,result,journal_overrides=None,blob_overrides=None,row_overri
                 if v.get('lock_acquired'):
                     offset=v['offset'];need(not any(x.get('lock')==offset and not x.get('wait') for x in children.values()),'overlapping same-range authority');need(offset in (0,1) and (offset==0 or '--lock-only' in c['command']),'lock route');need(v['attempts']==len(v['errors'])+1 and all(err['errno']==13 for err in v['errors']),'lock retry classification');c['lock']=offset
                 if v.get('status')=='lock-refused':need(c['role']=='authority' and any(x.get('lock')==0 and not x.get('wait') for x in children.values()) and v['errors'] and all(x['errno']==13 for x in v['errors']),'lock contention evidence');c['refused']=True
-                if 'phase' in v:pending_phase=e['child']+'/'+v['phase'];c['phase']=v['phase']
+                if 'phase' in v:
+                    phase=v['phase']
+                    if c['role']=='authority':need(phase in {op+':'+stage for op in ('boot','claim','pin','drain','publish','release_pin','revoke_writer','retire','reclaim') for stage in ('staged','committed')}|{'reclaim:before_delete','reclaim:first_deleted','lock:held'},'authority phase grammar')
+                    else:
+                        phases=c.setdefault('phase_order',[]);wanted=['writer:staged'] if c['role']=='writer' else ['reader:pinned','reader:manifest','reader:read'];need(len(phases)<len(wanted) and phase==wanted[len(phases)],'actor phase grammar/order');phases.append(phase)
+                    pending_phase=e['child']+'/'+phase;c['phase']=phase
                 if v.get('ready'):need(v['state']==s and c.get('lock')==0,'ready state')
                 if 'ticket' in v:need(v['ticket']==c.get('ticket'),'actor ticket receipt')
                 if 'response' in v:
-                    q=requests[e['child']];r=q['request'];reply=v['response'];need(v['request_id']==r['request_id'],'request reply identity')
+                    q=requests[e['child']];need(not q.get('done'),'duplicate reply');q['done']=True;r=q['request'];reply=v['response'];need(v['request_id']==r['request_id'],'request reply identity')
                     if q['reason'] is not None:need(reply==dict(status='refused',reason=q['reason']) and s==q['state'],'refusal mutation/reason')
                     else:
                         op=r['op'];busy=op=='publish' and q['state']['policy']=='drain-before-publish' and bool(q['state']['pins']);need(reply['status']==('busy' if busy else 'ok'),'admitted reply status')
@@ -159,17 +179,20 @@ def audit(directory,result,journal_overrides=None,blob_overrides=None,row_overri
                     t=c['ticket'];o=v['observation'];need(c['role']=='reader' and s['pins'].get(t['pin'])==t,'read without durable rights');need(content_reason(files,t,s['unit']) is None,'read byte profile');g=t['generation'];sn=1 if g==1 else 2
                     expected_o=dict(generation=g,unit=s['unit'],directory=t['directory'],files={n:sha(b) for n,b in artifacts(g,s['unit']).items()},snapshot_event_cursor=sn,snapshot_byte_cursor=1 if g==1 else 3,snapshot_state_base64=base64.b64encode(b'A' if g==1 else b'A\xc3\xa9').decode(),retained_event_ids=[1,2,3] if g==1 else [3]);need(o==expected_o,'independent reader reconstruction');c['observation']=o;totals['completed_reads']+=1
             elif kind=='wait':
-                c=children[e['child']];need(not c.get('wait') and e['pid']==c['pid'],'unique owned wait');need(type(e['killed'])is bool and type(e['exit_code'])is int,'wait shape');need(e['exit_code']!=0 if e['killed'] else e['exit_code']==(3 if c.get('refused') else 0),'wait outcome');c['wait']=e;totals['killed_helpers']+=int(e['killed'])
+                c=children[e['child']];need(not c.get('wait') and e['pid']==c['pid'],'unique owned wait');need(type(e['killed'])is bool and type(e['exit_code'])is int,'wait shape');need(e['exit_code']!=0 if e['killed'] else e['exit_code']==(3 if c.get('refused') else 0),'wait outcome');need(e['killed'] or e['child'] not in requests or requests[e['child']].get('done'),'normal exit before reply');c['wait']=e;totals['killed_helpers']+=int(e['killed'])
                 if c['role']=='reader' and not e['killed']:need(c.get('observation'),'reader success without observation')
             elif kind=='assertion':need(e['actual']==e['expected'],'failed journal assertion');checks.append(dict(name=e['name'],value=e['actual']))
             elif kind=='lifetime-refusal':need(e['actor'] in children and not children[e['actor']].get('wait') and children[e['actor']]['ticket']==e['pin'],'lifetime refusal provenance')
             elif kind=='reader-admission-refusal':need(s['pins'].get(e['pin']['pin'])!=e['pin'],'reader refusal provenance')
-            else:need(kind in ('injected-stage-fault','restored-stage-fault'),'unknown trace event')
+            elif kind=='injected-stage-fault':
+                need(row['schedule']=='negative_tokens' and s['selected']==1 and s['writer'] is not None and fault is None,'fault outside staging domain');prefix='store/'+s['writer']['directory']+'/';need(e['path'] in (prefix+'snapshot.json',prefix+'event3.json') and e['original_sha256']==files[e['path']] and e['fault']==('corrupt' if e['path'].endswith('snapshot.json') else 'missing'),'fault declaration');fault=e
+            elif kind=='restored-stage-fault':need(fault is not None and fault_seen and e['path']==fault['path'] and e['sha256']==fault['original_sha256'],'restore declaration');restoring=True
+            else:raise ValueError('unknown trace event')
         cuts={'pin_staged_loss':'pin:staged','pin_reply_loss':'pin:committed','publish_staged_loss':'publish:staged','publish_reply_loss':'publish:committed','retire_intent_loss':'retire:committed','retire_partial_loss':'reclaim:first_deleted'}
         if row['schedule'] in cuts:
             phase=cuts[row['schedule']];hits=[i for i,e in enumerate(events) if e['kind']=='receive' and e['value'].get('phase')==phase]
             need(any(i+2<len(events) and events[i+1]['kind']=='snapshot' and events[i+2]['kind']=='wait' and events[i+2]['child']==events[i]['child'] and events[i+2]['killed'] is True for i in hits),'named cut termination ordering')
-        need(not pending_phase and all(c.get('wait') for c in children.values()),'unwaited helper or missing snapshot');need(checks==row['checks'] and s['selected']==row['final_selected'] and s['generations']['1']['status']==row['final_old_status'],'derived row')
+        need(fault is None and not pending_phase and all(c.get('wait') for c in children.values()),'unwaited helper or missing snapshot');need(checks==row['checks'] and s['selected']==row['final_selected'] and s['generations']['1']['status']==row['final_old_status'],'derived row')
         actual={p.relative_to(case/'fixture').as_posix():sha(p.read_bytes()) for p in (case/'fixture').rglob('*') if p.is_file() and p.name!='authority.lock'};need(actual==files,'final filesystem observation')
     need(sorted(int(c[5:]) for c in all_ids)==list(range(1,len(all_ids)+1)) and len(set(snapids))==len(snapids),'global receipt identity');need(totals['helpers']==result['helper_process_count'] and result['all_helpers_waited'] is True,'helper summary');need(totals['overlap_publications']>0 and totals['reclaimed_with_current_reader']==8,'required physical overlaps')
     return totals

@@ -137,10 +137,16 @@ def adversarial(a,x,directory,actual):
         else:bad['limits']['command_seconds']=999
         reject(lambda v:admission(v,x,directory),bad);labels.append('admission/'+kind)
     # Mutated journals/blobs bypass outer digest inventories to challenge semantics.
-    for kind in ['erase-wait','wrong-pid','transplant-ticket','uncommitted-reply','early-delete','changed-read','changed-staging','wrong-lock','erase-cut','fake-death']:
-        name='r0-pinned-generation-event-'+('reader_death' if kind=='fake-death' else 'publish_reply_loss' if kind=='erase-cut' else 'overlap_pin')
+    for kind in ['erase-wait','wrong-pid','transplant-ticket','uncommitted-reply','early-delete','changed-read','changed-staging','wrong-lock','erase-cut','fake-death','erase-refusal','invented-phase','invented-fault']:
+        name='r0-pinned-generation-event-'+('negative_tokens' if kind in ('erase-refusal','invented-fault') else 'overlap_manifest' if kind=='invented-phase' else 'reader_death' if kind=='fake-death' else 'publish_reply_loss' if kind=='erase-cut' else 'overlap_pin')
         journal=[AUDIT['strict'](line) for line in (directory/'cases'/name/'journal.jsonl').read_bytes().splitlines()];bad=copy.deepcopy(journal);blobs={}
-        if kind=='erase-wait':bad.remove(next(e for e in bad if e['kind']=='wait'))
+        if kind=='erase-refusal':bad=[e for e in bad if not(e['kind']=='receive' and e['value'].get('response',{}).get('status')=='refused')]
+        elif kind=='invented-phase':
+            for e in bad:
+                if e['kind']=='receive' and e['value'].get('phase')=='reader:manifest':e['value']['phase']='reader:invented'
+                if e['kind']=='snapshot' and e['label'].endswith('/reader:manifest'):e['label']=e['label'].replace('reader:manifest','reader:invented')
+        elif kind=='invented-fault':next(e for e in bad if e['kind']=='injected-stage-fault')['path']='store/g1/UNAUTHORIZED'
+        elif kind=='erase-wait':bad.remove(next(e for e in bad if e['kind']=='wait'))
         elif kind=='wrong-pid':next(e for e in bad if e['kind']=='wait')['pid']=-1
         elif kind=='transplant-ticket':next(e for e in bad if e['kind']=='receive' and 'ticket' in e['value'])['value']['ticket']['actor_nonce']='0'*32
         elif kind=='uncommitted-reply':next(e for e in bad if e['kind']=='receive' and 'response' in e['value'])['value']['response']['writer']['serial']=99
@@ -172,7 +178,7 @@ def main():
     for commit,branch,script in configurations:
         d=FM['frozen_root'](commit,branch);frozen.append(FM['run_command']([sys.executable,'-X','utf8','-B',script,'--working'],d,out,runid+'-frozen-'+commit[:7]));require(git('rev-parse','HEAD',root=d)==commit and not git('status','--porcelain=v1','--untracked-files=all',root=d),'frozen worktree changed')
     regressions=[FM['run_command']([sys.executable,*cmd[1:]],ROOT,out,runid+'-regression-'+str(n)) for n,cmd in enumerate(inv['regression_commands'])];FM['candidate_check'](candidate)
-    receipt={'status':'GENERATION_AUTHORITY_GATE_PASS','candidate':candidate,'base':BASE,'run_id':runid,'adversarial_checks':labels,'raw_audit':counts,'semantic_results_sha256':sha(canonical(actual).encode()),'execution_directory':str(directory),'frozen_validations':frozen,'regressions':regressions,'formal_freeze':False,'artifacts':{p:sha(git('show',candidate+':'+p,raw=True)) for p in changed}}
+    receipt={'status':'GENERATION_AUTHORITY_GATE_PASS','candidate':candidate,'base':BASE,'run_id':runid,'adversarial_checks':labels,'raw_audit':counts,'semantic_results_sha256':sha(canonical(actual).encode()),'execution_directory':str(directory),'execution_files':{p.relative_to(directory).as_posix():sha(p.read_bytes()) for p in sorted(directory.rglob('*')) if p.is_file()},'frozen_validations':frozen,'regressions':regressions,'formal_freeze':False,'artifacts':{p:sha(git('show',candidate+':'+p,raw=True)) for p in changed}}
     raw=(json.dumps(receipt,indent=2)+'\n').encode();(out/(runid+'.json')).write_bytes(raw);print('GENERATION_AUTHORITY_GATE_PASS '+json.dumps({'candidate':candidate,'run_id':runid,'receipt_sha256':sha(raw)}))
 if __name__=='__main__':
     try:main()
