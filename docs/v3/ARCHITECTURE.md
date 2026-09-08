@@ -601,3 +601,8 @@ formal freeze or common-writer migration is established. [Evidence and limits](c
 
 WIR-003 adds scoped literal recovery correspondence with independent split/inclusive reducers, a complete separate relation and all distinct wire histories in16 finite configurations. Preserve synthetic versus observed support. Full shared-reservation/wire composition, original core/cross comparison, authenticated snapshots and runtime integration remain unproved.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
+
+## SC-EPOCH-03 — 2026-09-08
+
+EPC-003 checks16 typed-consultation environments, including an unordered12-action core, in independent split/inclusive representations with a third complete relation. Independent review found and repaired a shared alias-generation flaw that graph equality had missed. Preserve structural namespace checks versus actual workflow and literal M1A evidence. The coupled reservation/wire/epoch product, full original comparison and common-writer migration remain incomplete.
+[Evidence and residuals](construction/typed-consultation-20260908/evidence.json).

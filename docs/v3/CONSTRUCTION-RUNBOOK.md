@@ -325,3 +325,8 @@ the bounded successors; Astra remains the sole integrator/writer.
 
 For SC-WIRE-02, verify the external completion and receipt hashes, then remote PR state before choosing the successor baseline. Sources precede admitted runs; failed/superseded attempts remain external. Preserve historical validators and gates. New campaigns require fresh scope/resource/time admission, isolated worktree, slice commits and exact final review/publication; Owner handles merges.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
+
+## SC-EPOCH-03 — 2026-09-08
+
+For SC-EPOCH-03 verify external completion/receipt hashes and current PR state before choosing another baseline. Preserve earlier passing-but-superseded common-mode attempts. Commit sources before admitted execution, retain independent exact reviews and run the full gate twice on one clean commit. Do not alter M1, historical gates, operational flags or protected paths. Owner merges; a new coupled campaign needs fresh bounded admission.
+[Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
