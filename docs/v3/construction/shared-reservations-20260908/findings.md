@@ -71,8 +71,10 @@ Independent preliminary review exposed concrete gaps in early attempts. Run01
 lacked the free core; run02 lacked concrete identity comparisons and explicit
 replay/terminal-duplicate/crash-cut/lost-ACK witnesses. Both remain retained as
 superseded passing experiments, not admitted final evidence. Run03 contains the
-repaired model, about51.8 seconds and227,835,904 observed peak bytes on the admitted
-Windows/Python host. This is resource admission evidence, not comparative runtime
+repaired model. An unchanged publication scan then rejected the tracked absolute
+user host path; exact paths moved to private external admission records. Run04
+reproduces identical semantics in about51.7 seconds on the admitted Windows/Python
+host. Exact timing/peak-memory readings remain in its retained result envelope. This is resource admission evidence, not comparative runtime
 performance. Source/command/host/raw hashes and dispositions are in evidence.json.
 
 Canonical dispositions: retain central serialized admission as the mandatory

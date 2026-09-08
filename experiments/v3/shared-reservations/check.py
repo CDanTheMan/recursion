@@ -133,6 +133,10 @@ def evidence(e,expected):
     ledger=(ROOT/'docs/v3/CLAIM-LEDGER.md').read_text(encoding='utf-8');FM['HIST']['OLD']['registry_shape'](load(ROOT/'docs/v3/CLAIM-REGISTRY.json'),ledger)
     require({r['id'] for r in e['claims']}=={'SWR-001','SWR-002','SWR-003'} and len(e['claims'])==3,'claim inventory')
     for r in e['claims']:require(r['state']=='modeled' and '| '+r['id']+' | '+r['statement']+' | modeled |' in ledger and r['canonical'] in CANONICAL and r['id'] in (ROOT/r['canonical']).read_text(encoding='utf-8'),'canonical claim binding')
+    for row in e['superseded_candidate_validations']:
+        directory=bound(cache(),row['candidate'])
+        require(row['candidate']!=git('rev-parse','HEAD') and row['disposition']=='superseded-not-a-pass','superseded candidate validation disposition')
+        require({p.relative_to(directory).as_posix():sha(p.read_bytes()) for p in directory.rglob('*') if p.is_file()}==row['files'],'retained superseded candidate validation files')
 
 def inventory(inv,changed,candidate):
     prior=SC['read']('validation-inventory.json')

@@ -1,7 +1,7 @@
 {
   "start_commit": "2ab85948957a86f911bbf502c45b57c06c892761",
-  "accepted_run": "run-03",
-  "accepted_source_commit": "9692d5d4fc693375dbcc449067b30fd20ee6dc85",
+  "accepted_run": "run-04",
+  "accepted_source_commit": "1b27bb7b67dd500d37944ed1039ab1450e0f0960",
   "semantic_sha256": "78aa9fba71d0a0fed4dd671e9f3805f00e71017cdc68e376a07252350274ec49",
   "retained_runs": [
     {
@@ -60,7 +60,7 @@
       "id": "run-03",
       "source_commit": "9692d5d4fc693375dbcc449067b30fd20ee6dc85",
       "exit_code": 0,
-      "disposition": "accepted scoped finite evidence; final exact-candidate validation and independent reviews remain separate",
+      "disposition": "superseded: identical semantics rerun after publication scan moved exact user host paths to external preflight record",
       "files": {
         "admission.json": "949a46c967ae87905a13cc06d81c35368f8d183e06c45374586ed5bdf963fc30",
         "execution.json": "c7f4c1f849a4b69b833c6b88e864ff43b530a9df05daf132de5dcd5108287269",
@@ -72,6 +72,32 @@
         "source/docs/v3/construction/shared-reservations-20260908/goal.json": "ffab86e09d8a35723a5ed8071c0b82a7eb03634885c59479677c946521732627",
         "source/docs/v3/construction/shared-reservations-20260908/plan.json": "99ec6951f346c0ef6a61c9b8d45639de970e59befb76bb485d9831b767a9919d",
         "source/docs/v3/construction/shared-reservations-20260908/preflight.json": "f3beb7492e6094ab84d2930b787fbe81d5f2c475856311bad6a6bb26af568718",
+        "source/docs/v3/construction/shared-reservations-20260908/specification.md": "79c5e9f7be65aae5ba81783e601fc432693abd319a28229b976dc3d738a297fd",
+        "source/experiments/v3/shared-reservations/run_packet.py": "993cd465b7852e651e4f92bbbf585393d71c9e1f6f37d62b9a2fbd85b65a3987",
+        "source/experiments/v3/shared-reservations/wr_audit.py": "e78ee1a2ccb40047b42ac3f5697bf81ceff447ef714d48f081e4e20a21cc9bf8",
+        "source/experiments/v3/shared-reservations/wr_domain.py": "23f704cee8a5eba8fbd072e35411fe99e06427a70a1234c3375d6d96722b5b75",
+        "source/experiments/v3/shared-reservations/wr_experiment.py": "52a4fea224f60153ab55ef5a5249455fc2c98f886cc3c4e49b5cf8b87bbfa4d8",
+        "source/experiments/v3/shared-reservations/wr_explore.py": "2b1f58ef49cfed0f456d516887f3934521d1170bf250f098a71c93e711093879",
+        "source/experiments/v3/shared-reservations/wr_inclusive.py": "d5f15cf6302fb1704dafcc53db8efe2e588627c0cf1706455c26fbb7de72f1f8",
+        "source/experiments/v3/shared-reservations/wr_split.py": "10baaa08bfc2aeabcd4d4228c3ca97da63fd4a0e56788709fce101b08a989f7c"
+      }
+    },
+    {
+      "id": "run-04",
+      "source_commit": "1b27bb7b67dd500d37944ed1039ab1450e0f0960",
+      "exit_code": 0,
+      "disposition": "accepted scoped finite evidence; final exact-candidate gates and independent reviews remain separate",
+      "files": {
+        "admission.json": "234e879b4c395dbf9a432005bb315aa0e8225233b31e2f8d08bcab7161675635",
+        "execution.json": "38b97f81e3c8bff563c57e26d9954bacd2e9ed122b32f9ed6cfc081418e7f614",
+        "mutants.json": "c8e5b62fc9b9ff25e05a91b4ca515bb37cd4404e3be7331aacd75a9ceb5d494c",
+        "progress.json": "4c970c8dd69133dc2ddff9aeeffb51b23c0d991fc347d243a929b835be3f3098",
+        "result.json": "a27ad7a43fc034730ae127949a31e52b32cffb39a6ff5b860191d4cedec312df",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "fa89885b5cf78b57f0ab00783c326dab2e9644ed9050905de595485a49ac75eb",
+        "source/docs/v3/construction/shared-reservations-20260908/goal.json": "ffab86e09d8a35723a5ed8071c0b82a7eb03634885c59479677c946521732627",
+        "source/docs/v3/construction/shared-reservations-20260908/plan.json": "99ec6951f346c0ef6a61c9b8d45639de970e59befb76bb485d9831b767a9919d",
+        "source/docs/v3/construction/shared-reservations-20260908/preflight.json": "3eeb51943b8d1ee3eb3bf9d4c2d6093f794b11566c434a9b633f1f2909ef4242",
         "source/docs/v3/construction/shared-reservations-20260908/specification.md": "79c5e9f7be65aae5ba81783e601fc432693abd319a28229b976dc3d738a297fd",
         "source/experiments/v3/shared-reservations/run_packet.py": "993cd465b7852e651e4f92bbbf585393d71c9e1f6f37d62b9a2fbd85b65a3987",
         "source/experiments/v3/shared-reservations/wr_audit.py": "e78ee1a2ccb40047b42ac3f5697bf81ceff447ef714d48f081e4e20a21cc9bf8",

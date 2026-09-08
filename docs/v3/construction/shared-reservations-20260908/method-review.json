@@ -33,6 +33,10 @@
     {
       "issue": "Independent gate challenge at9692d5d required clean/source/evidence/regression protections.",
       "resolution": "Reviewer inspected preflight, run03 admission and semantic checks and rejected ten in-memory corruptions; no concrete must-fix found. This is preliminary, not final approval."
+    },
+    {
+      "issue": "Unchanged publication scanner rejected an absolute Windows user path in tracked preflight.",
+      "resolution": "Exact path retained privately outside candidate; tracked preflight uses interpreter-path hash and external receipt locator; run04 reproduces unchanged semantics. Failed working check remains hash-bound and superseded."
     }
   ],
   "final_reviews": "Two independent exact-candidate reviews retained outside candidate; this is not final approval."
