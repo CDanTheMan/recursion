@@ -1,0 +1,36 @@
+{
+  "status": "construction-plan-not-observed",
+  "start_commit": "04b664c58bddb72674d297f4bcf4bef5435bda0f",
+  "policies": [
+    "drain-before-publish",
+    "pinned-generation"
+  ],
+  "domain": {
+    "generations": 2,
+    "payloads": [
+      "A",
+      "\u00e9",
+      "B"
+    ],
+    "cursor_profiles": [
+      "event",
+      "utf8-byte"
+    ],
+    "maximum_live_reader_pins": 2,
+    "maximum_publisher_permits": 1,
+    "repetitions": 2
+  },
+  "authority": "Single deterministic subprocess persists selected generation, publisher term/permit, durable reader pins and retiring/tombstone state in one envelope. Process-held exclusive byte lock admits one authority. Restart increments writer term and preserves reader pins.",
+  "reader_rights": "New pins bind current selected generation/revision; existing admitted pins may finish their immutable old generation after publication. Logical retirement blocks new admission, not existing pinned rights.",
+  "reclamation": "Reclaim only noncurrent generation with zero durable pins; persist retiring intent before deletion; restart resumes an explicitly enumerated idempotent cleanup. Never infer reader death from elapsed time.",
+  "trust_boundary": "Controller-owned IPC and observed child handle death are fixture authority. No production identity, OS ACL or malicious raw-filesystem writer protection.",
+  "alternatives": "Drain-before-publish serializes publication after all pins drain; pinned-generation permits new publication while old pins retain generation. Transactional store mapping remains a later comparison, not a selected implementation.",
+  "limits": {
+    "whole_seconds": 600,
+    "command_seconds": 10,
+    "kill_wait_seconds": 5,
+    "artifact_bytes": 67108864,
+    "maximum_children_alive": 5
+  },
+  "next": "Freeze exact case schedules and source after read-only challenge, then execute prospective admissions."
+}
