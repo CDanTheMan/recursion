@@ -90,6 +90,7 @@ def raw_check(directory,result,observations=None):
     schema=Draft202012Validator(load(ROOT/'schemas/control-plane/v3/execution/schema.json'));fixture=load(ROOT/'scripts/tests/v3/execution/fixtures/F-M1B-020.json')['input']
     require({p.name for p in cases.iterdir() if p.is_dir()}=={r['case'] for r in result['rows']},'raw case coverage')
     for row in result['rows']:
+        if row['kind']=='receiver-cut':require(row['application_recovery_at_cut'] is (row['cut']=='reset_committed'),'application recovery claim')
         case=bound(cases,row['case']);require((observations or {}).get(row['case'],load(case/'observation.json'))==row,'raw observation binding')
         inv=load(case/'inventory.json');actual={p.relative_to(case).as_posix():sha(p.read_bytes()) for p in case.rglob('*') if p.is_file() and p.name!='inventory.json'}
         require(inv==actual,'case inventory completeness')
@@ -136,6 +137,9 @@ def raw_check(directory,result,observations=None):
                 f=copy.deepcopy(fixture);f.update(messages=wire,queue_limit_bytes=2,queue_limit_events=2);schema.validate(f);require(oracle(f)==v['decision'] and v['decision']['status'] in ('accepted','accepted-reset'),'literal wire decision')
             else:require(v['refused'] is True and v['decision'] is None,'silent refusal')
     require(sorted(receipts)==list(range(1,436)) and cut_counts=={'update':40,'receive':24},'all helper/cut receipts')
+    ordered=[receipts[n] for n in sorted(receipts)]
+    require(all(datetime.datetime.fromisoformat(a['finished_at'])<=datetime.datetime.fromisoformat(b['started_at']) for a,b in zip(ordered,ordered[1:])),'writer exit precedes fresh helper')
+    nonces=[r['records'][0]['nonce'] for r in ordered if r['command'][5]=='read'];require(len(nonces)==len(set(nonces)) and all(re.fullmatch('[0-9a-f]{32}',n) for n in nonces),'fresh read nonces')
 def claims(e):
     ledger=(ROOT/'docs/v3/CLAIM-LEDGER.md').read_text(encoding='utf8');FM['HIST']['OLD']['registry_shape'](load(ROOT/'docs/v3/CLAIM-REGISTRY.json'),ledger)
     require(len(e['claims'])==3 and {c['id'] for c in e['claims']}=={'RSE-001','RSE-002','RSE-003'},'claim identities')
@@ -191,12 +195,13 @@ def main():
         else:bad['limits']['child_seconds']=999
         reject(lambda v:admission(v,x,directory),bad);labels.append('admission/'+kind)
     # Rebound observation mutations still fail against independent child records/files.
-    for key in ['wire','application','reader','floor']:
+    for key in ['wire','application','reader','floor','false-application-recovery']:
         bad=copy.deepcopy(actual)
         if key=='wire':bad['rows'][0]['receiver']['wire'].pop()
         elif key=='application':bad['rows'][0]['receiver']['application']['generation']=2
         elif key=='reader':bad['rows'][0]['store']['reads']['CURRENT.json']='0'*64
-        else:bad['rows'][0]['store']['derived_floor_event']=2
+        elif key=='floor':bad['rows'][0]['store']['derived_floor_event']=2
+        else:next(r for r in bad['rows'] if r['kind']=='receiver-cut')['application_recovery_at_cut']=True
         reject(lambda v:raw_check(directory,v,{r['case']:r for r in v['rows']}),bad);labels.append('raw/'+key)
     if args.working:print('REPLAY_STORE_WORKING_PASS_NOT_FINAL '+json.dumps({'run_id':runid,'adversarial_checks':len(labels)}));return
     inv=read('validation-inventory.json');prior=FM['HIST']['read']('validation-inventory.json');require(inv['start_commit']==BASE and inv['regression_commands']==prior['regression_commands']==FM['HIST']['OLD']['regression_commands']() and len(inv['regression_commands'])==25,'unchanged25')

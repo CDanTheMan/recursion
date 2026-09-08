@@ -23,6 +23,7 @@ class Campaign:
     def case(self,name):
         require(time.monotonic()-self.started<LIMITS['whole_seconds'],'whole-experiment-timeout');root=self.output/name;root.mkdir();(root/'store').mkdir();return root
     def child(self,root,role,*,cut=None,**kwargs):
+        require(time.monotonic()-self.started<LIMITS['whole_seconds'],'whole-experiment-timeout')
         command=[sys.executable,'-X','utf8','-B',str(HELPER),role,'--store',str(root/'store')]
         for k,v in kwargs.items():command += ['--'+k,str(v)]
         self.children+=1;tag=f'{self.children:04d}-{role}';q=queue.Queue();records=[];started=now();killed=False;phase_seen=False
@@ -31,7 +32,7 @@ class Campaign:
             try:
                 for line in p.stdout:q.put(line)
             finally:q.put(None)
-        thread=threading.Thread(target=drain,daemon=True);thread.start();deadline=time.monotonic()+LIMITS['child_seconds'];error=None
+        thread=threading.Thread(target=drain,daemon=True);thread.start();deadline=min(time.monotonic()+LIMITS['child_seconds'],self.started+LIMITS['whole_seconds']);error=None
         try:
             while True:
                 require(time.monotonic()<deadline,'child-deadline')
@@ -140,6 +141,7 @@ class Campaign:
         names=['hole-prefix','retained-suffix','trailing-hole','false-floor','snapshot-stream','snapshot-generation','snapshot-unit','snapshot-cursor','snapshot-content','missing-snapshot','tampered-snapshot','unknown-member','missing-event','rollback','duplicate-json','transplanted-proof','stale-proof']
         for unit in ('event','utf8-byte'):
             for name in names+(['inside-byte'] if unit=='utf8-byte' else []):self.control(unit,name)
+        require(time.monotonic()-self.started<LIMITS['whole_seconds'],'whole-experiment-timeout')
         require(sum(p.stat().st_size for p in self.output.rglob('*') if p.is_file())<=LIMITS['artifact_bytes'],'artifact-budget')
         return {'status':'local-named-cut-pass','case_count':len(self.rows),'helper_process_count':self.children,'live_provider_calls':0,'formal_freeze':False,'power_loss_durability_established':False,'rows':self.rows,'cleanup':'All owned helper handles waited and pipes closed; isolated fixture artifacts retained for forensics.'}
 if __name__=='__main__':
