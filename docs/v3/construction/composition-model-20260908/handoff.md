@@ -4,7 +4,7 @@ Read CONTROL_PLANE.md first, applicable CLAUDE/AGENTS instructions and ANCHOR.md
 
 ## Scope and continuation identity
 
-Parent goal: goal-recursion-v2-execution-fabric. Goal: recursion.v3.composition-model.20260908. Frozen input c6c05ad69e50d4acbeb429dfa3a15a8c3455d2a0 is the exact reviewed/published PR99 candidate; it was still open at preflight. Worktree: C:/Users/Lucas/Documents/GitHub/recursion-v3-composition-model-20260908. Branch: codex/v3-composition-model-20260908. Preserve later legitimate changes; hashes are provenance, never reset targets.
+Parent goal: goal-recursion-v2-execution-fabric. Goal: recursion.v3.composition-model.20260908. Frozen input c6c05ad69e50d4acbeb429dfa3a15a8c3455d2a0 is the exact reviewed/published PR99 candidate; it was still open at preflight. Dedicated worktree directory name: recursion-v3-composition-model-20260908; resolve its actual path using git worktree list. Branch: codex/v3-composition-model-20260908. Preserve later legitimate changes; hashes are provenance, never reset targets.
 
 The new four-hour envelope starts 2026-09-08T06:58:05Z, ends10:58:05Z, with discovery cutoff09:28:05Z and90-minute reserve. Initial account window reported10% used and two banked resets; none redeemed. Owner ceiling is10 active agents; this packet limits concurrent read-only workers to4. Root alone writes. Windows existing CPython3.12.10 runs standard-library models with no installation, provider call or service. Each prospective admission records exact executable/OS/source/command and limits under Git common research-attestations/composition-model/.
 
