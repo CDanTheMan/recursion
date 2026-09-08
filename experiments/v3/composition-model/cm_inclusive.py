@@ -5,7 +5,7 @@ def initial():return State()
 def successors(s,policy,mutant=None):
     transitions=[]
     def put(name,**changes):transitions.append((name,s._replace(**changes)))
-    hold=s.requested and s.selected!=3 and s.resident.bit_count()==2
+    hold=s.requested and s.selected!=3 and s.candidate==0 and s.resident.bit_count()==2 and mutant!='hidden_hold'
     put('status_hold' if hold else 'status')
     if mutant=='fork_authority' and s.admission!=1:put('inspect_fork',admission=1)
     else:put('inspect_fork')

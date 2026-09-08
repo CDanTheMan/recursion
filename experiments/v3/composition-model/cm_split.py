@@ -5,7 +5,7 @@ def initial():return Split()
 def successors(s,policy,mutant=None):
     a,b=s
     def edge(label,ka=None,ba=None):return (label,Split(a._replace(**(ka or {})),b._replace(**(ba or {}))))
-    yield edge('status_hold' if a.requested and a.selected<3 and a.resident.bit_count()==2 else 'status')
+    yield edge('status_hold' if a.requested and a.selected<3 and not a.candidate and a.resident.bit_count()==2 and mutant!='hidden_hold' else 'status')
     yield edge('inspect_fork',{'admission':1} if mutant=='fork_authority' and a.admission==2 else {})
     if a.selected==2 and not a.requested:yield edge('request_g3',{'requested':True})
     target=a.selected+1
