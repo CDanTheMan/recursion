@@ -122,3 +122,6 @@ for label, prefix in [('four-event', q.base.base.PROFILES['four-literal-events']
         else: steps.append(k)
     if label == 'typed-consultation': steps += ['query'] + setup('success')[6:] + publish('success') + q.reader()
     add(label, steps + ['reconcile','admitB'], outcomes=(1,), queue='coupled_adversarial')
+
+# Independent challenge: a retry-shaped call may be fresh when no receipt exists.
+add('fresh-conflict-retry-stale-source', setup('success') + collect('success') + ['stage','attempt:2','pub-retry-conflict'], outcomes=(1,))

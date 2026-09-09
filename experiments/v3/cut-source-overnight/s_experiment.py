@@ -56,6 +56,7 @@ def positive(name, states, decisions):
     if name in ('reverse-collection','delayed-record','restart-recollect'): d.require(s['publication_revision']==1, 'complete source recovery '+name)
     if name=='same-version-real-append': d.require(s['publication_revision']==2 and len(s['append_log'])==4 and s['reserved']==(6,0), 'same-version append advances genuine source')
     if name=='append-duplicate-lost-reply': d.require(len(s['append_log'])==3 and s['source_revision']==5 and s['append_reply']==s['append_receipts'][-1][2], 'retained exact duplicate after restart')
+    if name=='fresh-conflict-retry-stale-source': d.require(s['publication_revision']==0,'fresh retry-shaped publication must validate current source')
     if name=='four-event':
         import base64
         actual=[json.loads(m) for m in s['wire'] if json.loads(m)['type']=='EVENT']
