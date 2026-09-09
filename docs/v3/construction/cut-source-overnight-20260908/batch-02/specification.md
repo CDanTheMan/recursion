@@ -1,6 +1,6 @@
 # Batch 02 prospective scope — 2026-09-09
 
-Parent goal-recursion-v 2-execution-fabric. Lucas approved campaigns A-D together.
+Parent goal-recursion-v2-execution-fabric. Lucas approved campaigns A-D together.
 One six-hour envelope includes preflight: 18:51:23 UTC to 00:51:23 UTC next day.
 Discovery ends 22:51:23 UTC; final two hours are reserved. Stop on convergence or a
 binding global boundary. A blocked dependency cannot be assumed; unaffected independent
@@ -45,7 +45,7 @@ Preserve old manual traces as predecessor evidence; no shortestness claim is add
 
 D integrates A-C into a conditional decision dossier with supported premises, costs,
 counterexamples and blockers. It makes no runtime/product/framework/provider selection.
-All original A6/B6 pool 10 data, six obligations, 27 trace rows, M1 and history are immutable.
+All original A6/B6 pool10 data, six obligations, 27 trace rows, M1 and history are immutable.
 Q1-Q6, source validity, physical recovery, full composition and runtime integration remain
 unresolved unless separately established by authorized evidence; this batch cannot replay
 previously interrupted source experiments or migrate a runtime/common writer.

@@ -1,6 +1,6 @@
 # Batch 02 handoff — 2026-09-09
 
-Parent goal-recursion-v 2-execution-fabric. Lucas approved A-D and review publication.
+Parent goal-recursion-v2-execution-fabric. Lucas approved A-D and review publication.
 Astra High/Standard remains unchanged and sole writer. Fixed envelope:18:51:23 UTC
 2026-09-09 to 00:51:23 UTC2026-09-10; discovery ends 22:51:23 UTC. Earlier closures and
 deadlines remain immutable. No automatic continuation after reset is scheduled.
