@@ -237,7 +237,7 @@
     "docs/v3/construction/cut-source-overnight-20260908/research-queue.json": "04a5ace11e2ddd7a426db462eea28a548a4627851933344993442fb4ae914e09",
     "docs/v3/construction/cut-source-overnight-20260908/research.md": "2cd81de95aa29edc6007ac37303150b9bdbf8797db008bf74ec71e82a07cc619",
     "docs/v3/construction/cut-source-overnight-20260908/specification.md": "150e3b8afab54e4171c703872a355f098f5c8448d626339988820343fb24a148",
-    "experiments/v3/cut-source-overnight/check.py": "5ce7613499504e2c32b9ba15b79e29351abf690a9829ebcf872dd87b129cb3e2",
+    "experiments/v3/cut-source-overnight/check.py": "7bf1502e37bffd53656d8e1e78893da146a9a16675c06fe2b11b82d27fac6fd2",
     "experiments/v3/cut-source-overnight/maintain.py": "26b481e00e0406d811dce107c7add532d01b393d1682cac3576d74d1f48770fc",
     "experiments/v3/cut-source-overnight/prepare.py": "f699be3ddd9e5a2e8a6f3290a4c04125bd8b94d8c6ece82eaec80607f6085096",
     "experiments/v3/cut-source-overnight/run_packet.py": "41c7f1e88c4afc9af34a40b55306408988b27f52c4d90a9dc1dfa1b8d78ca21c",

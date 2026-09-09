@@ -172,7 +172,7 @@ def main():
     for path,digest in inv['artifacts'].items(): require(sha(runner.git('show',candidate+':'+path))==digest,'candidate artifact hash')
     import s_experiment as model
     if args.working:
-        fresh=model.run('all'); require(fresh==actual,'complete semantic reproduction'); print('CUT_SOURCE_WORKING_PASS_NOT_FINAL'); return
+        fresh=model.run('all'); require(json.dumps(fresh,sort_keys=True,separators=(',',':'))==json.dumps(actual,sort_keys=True,separators=(',',':')),'complete semantic reproduction'); print('CUT_SOURCE_WORKING_PASS_NOT_FINAL'); return
     runner.scope(final=True); out=runner.cache()/candidate; out.mkdir(exist_ok=True)
     runid=runner.now().strftime('%Y%m%dT%H%M%S%f'); directory=out/runid
     controls=out/(runid+'-containment');runner.containment_check(controls)
