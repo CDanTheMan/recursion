@@ -27,7 +27,7 @@ def cache(): return common()/'research-attestations/cut-source-overnight'
 
 def scope(expensive=True, final=False):
     goal=read(ROOT/PREFIX/'goal.json'); activation=read(cache()/'activation.json')['goal']
-    for field in ('parent_goal','started_at','deadline_utc','discovery_cutoff_utc','allowed_paths','model','reasoning','speed'):
+    for field in ('parent_goal','started_at','deadline_utc','discovery_cutoff_utc','allowed_paths','model','reasoning','speed','experiment_limits','new_metered_spend','usage_resets_allowed','resume_after_quota_reset'):
         assert goal[field]==activation[field], 'immutable activation '+field
     assert goal['parent_goal']=='goal-recursion-v2-execution-fabric'
     assert 'status: active' in (ROOT/'state/goals/goal-recursion-v2-execution-fabric.md').read_text()
@@ -96,6 +96,10 @@ def execute(directory,queue_item,final=False):
                 if status!='finished': process.kill(); process.wait(); break
                 time.sleep(.1)
         execution={'status':status,'exit_code':process.returncode,'finished_at':now().isoformat(),'seconds':time.monotonic()-begin,'sampled_peak_bytes':observed,'pid':process.pid}
+        terminal_size=sum(p.stat().st_size for p in directory.rglob('*') if p.is_file())
+        if terminal_size>goal['experiment_limits']['artifact_bytes']: execution['status']='artifact-limit'
+        elif execution['seconds']>600: execution['status']='timeout'
+        execution['terminal_artifact_bytes']=terminal_size
         write(directory/'execution.json',execution)
         print(json.dumps(execution),flush=True)
         return admission,execution

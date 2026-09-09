@@ -27,10 +27,15 @@ def invariant(s):
 def check(s,a,n,p,u,outcome):
     d.require(a in enabled(s,p), 'source independent enabledness')
     k=a.partition('@')[0]; patch={}; reason='ok'; delegate=False
+    pub = k in ('pub-commit','pub-rival','pub-retry','pub-retry-conflict','pub-retry-foreign')
+    request = d.q.incoming(s,k)[0].request if pub and (s['staged'] or s['publication_receipts']) else None
+    duplicate_id = request in {r[0].request for r in s['publication_receipts']}
     if k.startswith('register:'):
         f=d.q.lit.fixture(k.partition(':')[2]); header=f['original']['cut']['trace_header']
         value=encoded([header['intent'],header['admission'],f['binding']['body']['reservation']])
-        if s['remote']==0 or f['binding']['body']['reservation']!=list(s['bindings'][0]): reason='foreign-registration'
+        expected_fields=set(d.q.lit.fixture('success')['original']['cut']['trace_header']['intent'])
+        if set(header['intent'])!=expected_fields: reason='incomplete-registration'
+        elif s['remote']==0 or f['binding']['body']['reservation']!=list(s['bindings'][0]): reason='foreign-registration'
         elif s['registration'] and s['registration']!=value: reason='registration-conflict'
         elif not s['registration']: patch={'registration':value,'source_revision':s['source_revision']+1}
     elif k.startswith(('attempt:','atomic:')):
@@ -44,6 +49,7 @@ def check(s,a,n,p,u,outcome):
         elif pair in s['attempts']: reason='duplicate-attempt'
         elif number!=len(s['attempts'])+1: reason='attempt-gap'
         elif atomic and (p['policy']!='atomic-start' or offset!=len(s['append_log'])): reason='atomic-position'
+        elif atomic and (record['type']!='AttemptStarted@1' or record['attempt_id']!=pair[1] or any(record[f]!=json.loads(s['registration'])[0][f] for f in ('effect_id','idempotency_key','payload_digest','target_ref','admission_epoch','fence_epoch'))): reason='invalid-atomic-start'
         else:
             patch.update(attempts=s['attempts']+(pair,),source_revision=s['source_revision']+1)
             if atomic: patch['append_log']=s['append_log']+(encoded(record),)
@@ -93,7 +99,7 @@ def check(s,a,n,p,u,outcome):
             elif c[2]!=registry or c[3]!=attempt_map: reason='incomplete-registry'
             else: patch.update(attestation=(c[0],c[1],name),source_name=name,source_head=hashlib.sha256(encoded(original['records']).encode()).hexdigest(),source_version=max(s['source_version'],f['binding']['body']['source_version']))
     elif k.startswith('source:'): reason='registered-protocol-required'
-    elif k in ('pub-commit','pub-rival') and (s['attestation']==() or s['attestation'][:2]!=(s['source_generation'],s['source_revision']) or s['staged_source']!=s['attestation']): reason='source-boundary-stale'
+    elif pub and not duplicate_id and (s['attestation']==() or s['attestation'][:2]!=(s['source_generation'],s['source_revision']) or s['staged_source']!=s['attestation']): reason='source-boundary-stale'
     elif k=='reconcile' and (s['selected_source']==() or s['selected_source'][:2]!=(s['source_generation'],s['source_revision'])): reason='source-boundary-stale'
     else: delegate=True
     if delegate:

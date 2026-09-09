@@ -8,10 +8,14 @@ def step(s, a, p, u, outcome, mutant=None):
     k = a.split('@')[0]
     n = copy.deepcopy(s)
     n.update(done=s['done'] | (1 << p['actions'].index(a)), decision=k+':ok')
+    publication = k in ('pub-commit','pub-rival','pub-retry','pub-retry-conflict','pub-retry-foreign')
+    retained = publication and bool(s['staged'] or s['publication_receipts']) and any(row[0].request == d.q.incoming(s,k)[0].request for row in s['publication_receipts'])
     def deny(reason): n['decision'] = k+':'+reason
     if k.startswith('register:'):
         name = k.split(':')[1]; raw = d.registration(name)
-        if not s['remote'] or tuple(json.loads(raw)[2]) != s['bindings'][0]: deny('foreign-registration')
+        required = set(d.q.lit.fixture('success')['original']['cut']['trace_header']['intent'])
+        if set(json.loads(raw)[0]) != required and mutant != 'registration-complete': deny('incomplete-registration')
+        elif not s['remote'] or tuple(json.loads(raw)[2]) != s['bindings'][0]: deny('foreign-registration')
         elif s['registration'] and s['registration'] != raw: deny('registration-conflict')
         elif not s['registration']: n.update(registration=raw, source_revision=s['source_revision']+1)
     elif k.startswith('attempt:') or k.startswith('atomic:'):
@@ -25,6 +29,7 @@ def step(s, a, p, u, outcome, mutant=None):
         elif pair in s['attempts']: deny('duplicate-attempt')
         elif number != len(s['attempts'])+1: deny('attempt-gap')
         elif atomic and (p['policy'] != 'atomic-start' or int(index) != len(s['append_log'])): deny('atomic-position')
+        elif atomic and (record['type'] != 'AttemptStarted@1' or record['attempt_id'] != pair[1] or any(record[field] != json.loads(s['registration'])[0][field] for field in ('effect_id','idempotency_key','payload_digest','target_ref','admission_epoch','fence_epoch'))) and mutant != 'atomic-start-record': deny('invalid-atomic-start')
         else:
             n.update(attempts=s['attempts']+(pair,), source_revision=s['source_revision']+1)
             if atomic: n['append_log'] = s['append_log']+(raw,)
@@ -52,7 +57,7 @@ def step(s, a, p, u, outcome, mutant=None):
         else: n.update(collection=(s['source_generation'],s['source_revision'],s['registration'],s['attempts'],len(s['append_log'])),collected=())
     elif k.startswith('collect:'):
         index=int(k.split(':')[1])
-        if not s['collection'] or index >= s['collection'][4] or index >= len(s['append_log']): deny('outside-captured-cut')
+        if not s['collection'] or (index < 0 and mutant != 'collection-lower-bound') or index >= s['collection'][4] or index >= len(s['append_log']): deny('outside-captured-cut')
         elif any(i == index for i,raw in s['collected']): deny('duplicate-collection')
         else: n['collected'] = tuple(sorted(s['collected']+((index,s['append_log'][index]),)))
     elif k == 'source-attest':
@@ -63,7 +68,7 @@ def step(s, a, p, u, outcome, mutant=None):
         elif (capture[2] != d.registration(name) or capture[3] != d.mapping(name)) and mutant != 'complete-registry': deny('incomplete-registry')
         else: n.update(attestation=(capture[0],capture[1],name),source_name=name,source_head=d.q.head(name),source_version=max(s['source_version'],d.q.lit.fixture(name)['binding']['body']['source_version']))
     elif k.startswith('source:'): deny('registered-protocol-required')
-    elif k in ('pub-commit','pub-rival') and (not s['attestation'] or s['attestation'][:2] != (s['source_generation'],s['source_revision']) or s['staged_source'] != s['attestation']) and mutant != 'publication-source-current': deny('source-boundary-stale')
+    elif publication and not retained and (not s['attestation'] or s['attestation'][:2] != (s['source_generation'],s['source_revision']) or s['staged_source'] != s['attestation']) and mutant != 'publication-source-current': deny('source-boundary-stale')
     elif k == 'reconcile' and (not s['selected_source'] or s['selected_source'][:2] != (s['source_generation'],s['source_revision'])) and mutant != 'reconcile-source-current': deny('source-boundary-stale')
     else:
         n.update(old.step(d.project(s),a,p,u,outcome))

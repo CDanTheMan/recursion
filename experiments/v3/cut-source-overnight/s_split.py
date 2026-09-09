@@ -10,9 +10,14 @@ def step(state, action, profile, unit, outcome):
     verb = action.partition('@')[0]
     why = 'ok'
     delegate = False
+    publish_call = verb in ('pub-commit','pub-rival','pub-retry','pub-retry-conflict','pub-retry-foreign')
+    lookup_id = d.q.incoming(s,verb)[0].request if publish_call and (s['staged'] or s['publication_receipts']) else None
+    committed_request = any(r[0].request==lookup_id for r in s['publication_receipts'])
     if verb.startswith('register:'):
         value = d.registration(verb[9:])
-        if s['remote'] == 0 or json.loads(value)[2] != list(s['bindings'][0]): why = 'foreign-registration'
+        keys = d.q.lit.fixture('success')['original']['cut']['trace_header']['intent'].keys()
+        if json.loads(value)[0].keys() != keys: why = 'incomplete-registration'
+        elif s['remote'] == 0 or json.loads(value)[2] != list(s['bindings'][0]): why = 'foreign-registration'
         elif s['registration'] not in ('', value): why = 'registration-conflict'
         elif s['registration'] == '': authority.update(registration=value, source_revision=s['source_revision']+1)
     elif verb.startswith(('attempt:', 'atomic:')):
@@ -25,6 +30,9 @@ def step(state, action, profile, unit, outcome):
         checks = [(bool(s['registration']), 'no-registration'), (not s['paused'], 'E-PAUSED'),
                   (identity not in s['attempts'], 'duplicate-attempt'), (number == len(s['attempts'])+1, 'attempt-gap')]
         if immediate: checks.append((profile['policy']=='atomic-start' and offset==len(s['append_log']), 'atomic-position'))
+        if immediate and s['registration']:
+            record=json.loads(payload); original=json.loads(s['registration'])[0]
+            checks.append((record['type']=='AttemptStarted@1' and record['attempt_id']==identity[1] and all(record[f]==original[f] for f in ('effect_id','idempotency_key','payload_digest','target_ref','admission_epoch','fence_epoch')), 'invalid-atomic-start'))
         why = next((reason for ok, reason in checks if not ok), 'ok')
         if why == 'ok':
             authority['attempts'] = (*s['attempts'], identity)
@@ -60,7 +68,7 @@ def step(state, action, profile, unit, outcome):
             authority['collected'] = ()
     elif verb.startswith('collect:'):
         ordinal = int(verb[8:])
-        if not s['collection'] or ordinal >= s['collection'][4] or ordinal >= len(s['append_log']): why = 'outside-captured-cut'
+        if not s['collection'] or ordinal < 0 or ordinal >= s['collection'][4] or ordinal >= len(s['append_log']): why = 'outside-captured-cut'
         elif ordinal in dict(s['collected']): why = 'duplicate-collection'
         else: authority['collected'] = tuple(sorted((*s['collected'],(ordinal,s['append_log'][ordinal]))))
     elif verb == 'source-attest':
@@ -71,7 +79,7 @@ def step(state, action, profile, unit, outcome):
         elif captured[2:] != (d.registration(cut),d.mapping(cut),captured[4]): why = 'incomplete-registry'
         else: authority.update(attestation=(*captured[:2],cut),source_name=cut,source_head=d.q.head(cut),source_version=max(s['source_version'],d.q.lit.fixture(cut)['binding']['body']['source_version']))
     elif verb.startswith('source:'): why = 'registered-protocol-required'
-    elif verb in ('pub-commit','pub-rival'):
+    elif publish_call and not committed_request:
         valid = bool(s['attestation']) and s['attestation'][:2] == (s['source_generation'],s['source_revision']) and s['staged_source'] == s['attestation']
         if not valid: why = 'source-boundary-stale'
         else: delegate = True

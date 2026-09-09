@@ -27,6 +27,11 @@ MUTANTS = {'append-owner':'append-foreign','append-conflict':'equal-position-for
            'complete-collection':'omitted-record','complete-registry':'pending-attempt-before-collect',
            'publication-source-current':'append-between-collect-and-publish',
            'reconcile-source-current':'pending-after-selected'}
+MUTANTS.update({'registration-complete':'incomplete-registration','atomic-start-record':'atomic-receipt-not-start','collection-lower-bound':'negative-collection-ordinal'})
+FAILURE_OUTPUT = None
+
+def save_failure(value):
+    if FAILURE_OUTPUT is not None: FAILURE_OUTPUT.write_text(json.dumps(artifact.pack(value),sort_keys=True,separators=(',',':'))+'\n',encoding='utf-8')
 
 def limits(states):
     d.require(states<=500000,'incomplete frontier: states')
@@ -51,7 +56,8 @@ def positive(name, states, decisions):
         'unregistered-append':'unregistered-attempt','append-gap':'append-gap-or-fork',
         'append-fresh-old-boot':'stale-append-incarnation','collection-old-incarnation':'source-boundary-stale',
         'source-oracle-bypass':'registered-protocol-required','pause-append':'E-PAUSED','pause-publication':'E-PAUSED',
-        'copy-not-wait':'reader-live','publication-duplicate-retired':'E-IDEMPOTENCY-CONFLICT'}
+        'copy-not-wait':'reader-live','publication-duplicate-retired':'E-IDEMPOTENCY-CONFLICT',
+        'atomic-receipt-not-start':'invalid-atomic-start','negative-collection-ordinal':'outside-captured-cut','incomplete-registration':'incomplete-registration','same-head-foreign-cut':'incomplete-registry'}
     if name in expectations: d.require(saw(expectations[name]), 'reachable positive guard '+name)
     if name in ('reverse-collection','delayed-record','restart-recollect'): d.require(s['publication_revision']==1, 'complete source recovery '+name)
     if name=='same-version-real-append': d.require(s['publication_revision']==2 and len(s['append_log'])==4 and s['reserved']==(6,0), 'same-version append advances genuine source')
@@ -79,7 +85,10 @@ def explore(name,unit,outcome,state_limit=500000):
             n=inc.step(s,action,profile,unit,outcome)
             other=d.flatten(split.step(d.split(s),action,profile,unit,outcome))
             d.require(n==other,'independent representations differ '+action)
-            audit.check(s,action,n,profile,unit,outcome)
+            try: audit.check(s,action,n,profile,unit,outcome)
+            except Exception as error:
+                save_failure({'profile':name,'unit':unit,'outcome':outcome,'prefix':path,'action':action,'before':s,'after':n,'error':str(error)})
+                raise
             digest.update(d.canonical((s,action,n)).encode()); edges+=1; identity=d.canonical(n)
             if identity not in seen:
                 seen.add(identity); queue.append((n,path+(action,)))
@@ -90,7 +99,10 @@ def explore(name,unit,outcome,state_limit=500000):
     for action in sample:
         n=inc.step(s,action,profile,unit,outcome); audit.check(s,action,n,profile,unit,outcome)
         trace.append({'action':action,'before':s,'after':n}); states.append(n); decisions.append(n['decision']); s=n
-    triggers=positive(name,states,decisions)
+    try: triggers=positive(name,states,decisions)
+    except Exception as error:
+        save_failure({'profile':name,'unit':unit,'outcome':outcome,'trace':trace,'error':str(error)})
+        raise
     return {'states':len(seen),'edges':edges,'terminal_states':terminals,'frontier':0,'graph_sha256':digest.hexdigest(),
             'exact_graph_equal':True,'guard_decisions':triggers,'trace':trace,'final':s,
             'wire_histories':[{'wire':[json.loads(x) for x in key],'decision':value} for key,value in sorted(histories.items())]}
@@ -127,7 +139,8 @@ def run(queue_item):
         if queue_item!='all' and p['queue']!=queue_item: continue
         for unit in d.UNITS:
             for outcome in p['outcomes']:
-                key=name+'/'+unit+'/'+str(outcome); profiles[key]=explore(name,unit,outcome)
+                remaining=500000-sum(r['states'] for r in profiles.values()); limits(500000-remaining)
+                key=name+'/'+unit+'/'+str(outcome); profiles[key]=explore(name,unit,outcome,state_limit=remaining)
                 print(key,profiles[key]['states'],profiles[key]['edges'],flush=True)
     total=sum(x['states'] for x in profiles.values()); limits(total)
     return {'status':'cut-source-pass','queue_item':queue_item,'profiles':profiles,'states_per_representation':total,
@@ -140,7 +153,7 @@ if __name__=='__main__':
     sys.addaudithook(deny_network)
     parser=argparse.ArgumentParser(); parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--queue-item',choices=('source_authority','coupled_adversarial','bounded_scaling','all'),required=True)
-    args=parser.parse_args(); begin=datetime.datetime.now(datetime.timezone.utc)
+    args=parser.parse_args(); FAILURE_OUTPUT=args.output.parent/'counterexample.json'; begin=datetime.datetime.now(datetime.timezone.utc)
     result=run(args.queue_item)
     args.output.write_text(json.dumps({'started_at':begin.isoformat(),'finished_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'seconds':time.monotonic()-START,'peak_bytes':prior.peak(),'result':artifact.pack(result)},sort_keys=True,separators=(',',':'))+'\n',encoding='utf-8')

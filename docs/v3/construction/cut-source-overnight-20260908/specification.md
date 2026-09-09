@@ -62,3 +62,13 @@ unchanged25 regression commands; final exact reviews and hash closure remain ext
 Normal non-force codex review publication and draft PR master only after gates/reviews.
 Physical recovery, orphan readers, unbounded liveness, full original comparison and runtime
 or common-writer migration remain residual; formal_freeze remains false.
+
+Independent construction challenge, before coupled promotion: a no-receipt
+pub-retry-conflict supplies valid late-receipt bytes sharing the success record head.
+Run-02 reproduced fresh publication with stale registration revision. Fresh versus
+duplicate admission now depends on durable request identity, never verb spelling.
+The old pass remains superseded. Atomic registration/start additionally requires an
+actual AttemptStarted record, exact attempt identity and original scope; a receipt for
+attempt2 cannot substitute. Required intent fields and nonnegative collection ordinals
+are checked explicitly. New positive guards and removed-guard crossings retain these
+independent challenges. No runtime allowance breach was established by the retry failure.

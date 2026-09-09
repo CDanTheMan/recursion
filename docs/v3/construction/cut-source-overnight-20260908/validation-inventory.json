@@ -228,15 +228,15 @@
     "docs/v3/construction/cut-source-overnight-20260908/preflight.json": "f64293ddcee5c136f7430801b08b69ad5036413aa85e66fc43612fac86051cd6",
     "docs/v3/construction/cut-source-overnight-20260908/research-queue.json": "04a5ace11e2ddd7a426db462eea28a548a4627851933344993442fb4ae914e09",
     "docs/v3/construction/cut-source-overnight-20260908/research.md": "99ae11fa58d0ec1059faba36adfabf00a8de23cd55316bc90aa1affefeeae708",
-    "docs/v3/construction/cut-source-overnight-20260908/specification.md": "58ec2002913457222b0b32f065bd988e2cd2b6b560a7438ea33f64fb9c412a77",
+    "docs/v3/construction/cut-source-overnight-20260908/specification.md": "85c2ec3d2451b4aedc4c90376679b50a12de79cb1f6b3736037952fc8adde4a5",
     "experiments/v3/cut-source-overnight/check.py": "aa472321ab6c50f9e92a9fb1392e1f1535af948baf69ee88b2393e0e836759b6",
     "experiments/v3/cut-source-overnight/maintain.py": "26b481e00e0406d811dce107c7add532d01b393d1682cac3576d74d1f48770fc",
     "experiments/v3/cut-source-overnight/prepare.py": "f699be3ddd9e5a2e8a6f3290a4c04125bd8b94d8c6ece82eaec80607f6085096",
-    "experiments/v3/cut-source-overnight/run_packet.py": "8ad808bed600d3e95f1d4cf73e5720778705da0609b7427ed1ea838876496c26",
-    "experiments/v3/cut-source-overnight/s_audit.py": "985236871411fd7e506881e4af9b7d00b9c84e1fa59d92011a24b3ff60bb414d",
-    "experiments/v3/cut-source-overnight/s_domain.py": "b9539354584a31c34d6185886467f3757facf7bd3858d969345b39292ed9f88f",
-    "experiments/v3/cut-source-overnight/s_experiment.py": "51c833df2dbc412854a984ee9d0d832dd7b4a9fea6031054e6d1372bc5247bce",
-    "experiments/v3/cut-source-overnight/s_inclusive.py": "74ede31191dea2da0c67101ec0f20951e4b9a5a3aa59b7413ac6001dd0711746",
-    "experiments/v3/cut-source-overnight/s_split.py": "31ebb8017996021ad23958d27978a91b1c7ddd06b79ee87be27e435358d734d2"
+    "experiments/v3/cut-source-overnight/run_packet.py": "ee0a5b82ddb6191580a8ab097f05db737c60b1c869ca6d8df10b59a7864c2ce5",
+    "experiments/v3/cut-source-overnight/s_audit.py": "eccc154f436bcfcb80476b9f9bc780b06a55afc67b51c46bee177ff29274e504",
+    "experiments/v3/cut-source-overnight/s_domain.py": "1a651f74fd217896aeb9e9b0b31aca5f1bafb920b67ea1e9686a1c717cc5b252",
+    "experiments/v3/cut-source-overnight/s_experiment.py": "508a9507f42fd4b2e017db3d80e276537881a2d163d4b95a07c1af806175b4d4",
+    "experiments/v3/cut-source-overnight/s_inclusive.py": "612b3509c6c77d8d8de84285f981b7004003d41afaa5a4f2dcea1831050aa666",
+    "experiments/v3/cut-source-overnight/s_split.py": "1a4a22b23f18e36b9940cecb9d9c8bbe1aea3feb68a8138e4cf590c98a01148c"
   }
 }
