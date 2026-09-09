@@ -33,3 +33,9 @@ New snapshots use deterministic lossless gzip (mtime0). Working and Git blob has
 continue to bind original uncompressed source bytes; snapshot_codec identifies how
 to restore them. This changes storage, not source content, model limits or evidence
 claims. The failed receipt is never treated as an accepted run.
+
+The compressed admission then ran the static audit, whose registered-input check
+caught a missing manifest entry for the preserved reopen-01/work-inventory.json.
+No B graph had run. The exact baseline file is now an explicit immutable additional
+input. Failed receipt SHA-256 b66955e6c04eb63713bbfac239a3286a8dbf86f498da4294e9eeed0c7d9e2206 is retained;
+owned cleanup completed with zero processes and no errors.

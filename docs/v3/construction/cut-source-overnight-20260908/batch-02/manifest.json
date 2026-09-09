@@ -10,6 +10,7 @@
     "docs/v3/construction/cut-publication-20260908/coverage.json",
     "docs/v3/construction/cut-publication-20260908/results.json",
     "docs/v3/construction/cut-source-overnight-20260908/coverage.json",
+    "docs/v3/construction/cut-source-overnight-20260908/reopen-01/work-inventory.json",
     "docs/v3/construction/cut-source-overnight-20260908/results.json",
     "docs/v3/construction/effect-evidence-20260908/coverage.json",
     "docs/v3/construction/effect-evidence-20260908/results.json",
@@ -263,6 +264,10 @@
     {
       "path": "docs/v3/construction/cut-source-overnight-20260908/progress-01/specification.md",
       "git_blob_sha256": "4fb24afe104111180332d736614bb069653b102835e495a9280237bea6b065ca"
+    },
+    {
+      "path": "docs/v3/construction/cut-source-overnight-20260908/reopen-01/work-inventory.json",
+      "git_blob_sha256": "c19cc58f4c87cd36ae4bd6f4f09d5bb0b946fde7785859ce14740407d2b7ca8d"
     },
     {
       "path": "docs/v3/construction/cut-source-overnight-20260908/results.json",
