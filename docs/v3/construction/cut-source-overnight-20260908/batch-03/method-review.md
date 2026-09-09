@@ -1,7 +1,7 @@
 # Prospective method review — 2026-09-09
 
 Two independent read-only workers inspected the merged baseline. They did not execute
-models, modify files, alter settings or delegate. Each packet was limited to20 minutes.
+models, modify files, alter settings or delegate. Each packet was limited to 20 minutes.
 
 The contract reviewer proposed nine requirements and exact function/evidence anchors.
 The root encoded these in contracts.json. Existing conditions, correspondence obligations
@@ -15,7 +15,7 @@ differ in source_generation. The utf8-byte pair has the same obstruction. This i
 existing finite evidence, not a new source-validity or malformed-input experiment.
 
 An initial candidate approach was to audit only the retained representative traces.
-Those cover104 traces and2588 edges, while the admitted graphs contain31140 edges.
+Those cover 104 traces and 2588 edges, while the admitted graphs contain 31140 edges.
 The approved implementation plan reproduces the unchanged complete original graph family
 and checks its exact hashes, then classifies all edges locally. The representative-only
 approach is superseded because it cannot support complete finite-edge coverage.

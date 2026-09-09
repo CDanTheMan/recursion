@@ -25,10 +25,10 @@ The checker proves ledger fidelity only. It neither prescribes an encoding chang
 establishes that existing conditions are generally sufficient. Q1–Q6 stay deferred.
 
 B reproduces all existing source-model profiles without adding actions, fixtures,
-protocol variants, guard changes or source mutants. Require 51 profiles,104 environments,
-17966 states and31140 edges per representation, all original graph hashes and terminal
+protocol variants, guard changes or source mutants. Require 51 profiles, 104 environments,
+17966 states and 31140 edges per representation, all original graph hashes and terminal
 counts. No previously interrupted experiment is replayed. The cumulative new traversal
-ceiling is500000 states per representation, not permission to enlarge the declared domain.
+ceiling is 500000 states per representation, not permission to enlarge the declared domain.
 
 Project only the existing publication fields and hide exactly done and decision in
 the observation. Retain original S scheduling bookkeeping when invoking unchanged
@@ -70,14 +70,14 @@ provider or architecture policy and activates no further campaign. Q6 cannot be 
 by assuming Q1–Q5. Service activation, deployments, operational/config/auth/model/cron
 changes, runtime/common-writer migration and protected/default-branch merge are excluded.
 
-Each owned command is limited to600 seconds and2GiB, each accepted retained run to256MiB,
+Each owned command is limited to 600 seconds and 2GiB, each accepted retained run to 256MiB,
 with the unchanged Windows OwnedJob helper and shared heavy/model locks. Lossless gzip
 snapshots bind compressed bytes and original working/Git bytes. Capacity must be fresh
-within15 minutes; stop discovery at10%, new workers at6%, expensive work at3% remaining.
+within 15 minutes; stop discovery at 10%, new workers at 6%, expensive work at 3% remaining.
 
-Commit coherent slices. Final publication requires two complete46-command gates on one
+Commit coherent slices. Final publication requires two complete 46-command gates on one
 clean exact candidate and two independent exact-candidate reviews. Each gate preserves
-18 frozen checks,25 regressions, the append-handoff packet, Batch02 and this packet.
+18 frozen checks, 25 regressions, the append-handoff packet, Batch02 and this packet.
 Use the previously approved normal non-force codex review branch method and a draft PR
 against freshly verified master. Lucas merges. Retain failed/superseded evidence and
 finish with a complete handoff and one-page brief, with final receipts outside the tree.
