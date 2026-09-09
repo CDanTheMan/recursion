@@ -4,8 +4,8 @@ Parent goal-recursion-v2-execution-fabric; same SC-CUT-SOURCE-01 campaign. This 
 an independent source-authority subquestion under the existing approved scope,
 identified by read-only primary-source review after conservative resumption.
 It does not resume the interrupted Q1–Q6 work or advance the dependent coupled or
-scaling queue. Original activation03:40:33UTC, discovery cutoff12:30UTC and hard
-deadline15:30UTC on2026-09-09 remain unchanged. Preserve Astra High Standard.
+scaling queue. Original activation 03:40:33 UTC, discovery cutoff 12:30 UTC and hard
+deadline 15:30 UTC on 2026-09-09 remain unchanged. Preserve Astra High Standard.
 
 The documentation candidate 8f457c546e4d85fada73913efb900f921eaf6b1a remains frozen
 in its own worktree for two complete gates and review publication. Add this work
@@ -28,19 +28,19 @@ prior-unresolved and later-start-only, constructed by the unchanged ee_cases.uns
 factory. Retain their full original record bytes, intent/admission and provenance
 hashes. No record mutation, foreign caller, identifier substitution, type alteration,
 credential operation or external target belongs to this domain. Original attempts
-remain1–2 and record inventories2–4; no larger original admission is invented.
+remain 1–2 and record inventories 2–4; no larger original admission is invented.
 
-The original A6/B6 requests against pool10 and wire event lengths1,2,1,2 remain
+The original A6/B6 requests against pool10 and wire event lengths 1, 2, 1, 2 remain
 immutable inputs. All A6 stays held in this progress relation; it grants no allowance.
 The unchanged historical gates continue to exercise the complete original event
 flow and both cursor units. This new record-traversal metric supplies no additional
-wire-flow or full-composition coverage. Preserve all six obligations and27 rows.
+wire-flow or full-composition coverage. Preserve all six obligations and 27 rows.
 
 Conceptual service actions, identical for both alternatives:
 
 - O offers the next original valid record, once, in its original order. The offered
   cursor is independent of visible length. The record stays pending until serviced;
-  once all records are offered, O is idle. Record0 starts both offered and serviced.
+  once all records are offered, O is idle. Record 0 starts both offered and serviced.
 - A services at most one oldest pending append when that alternative's window is open.
   A closed sealed window postpones the request without deleting or rejecting it.
 - C services collection: open a capture; read one record ordinal; then perform a
@@ -82,7 +82,7 @@ serviced, no pending work and last locally checked count N. These are conditiona
 bookkeeping properties, never source validity or accepted publication conclusions.
 
 Initial preregistration: four valid streams, initially one visible record, every
-word of length6 over O/A/C, then a deterministic quiet suffix. In that suffix offer
+word of length 6 over O/A/C, then a deterministic quiet suffix. In that suffix offer
 any remaining valid records, then provide R=(N+1)(N+2)+1 rounds of A followed by C,
 where N is the original record count. Do not call the arbitrary prefix fair.
 The suffix explicitly supplies collector and append service after all offers finish.
@@ -104,8 +104,8 @@ Use independently implemented unified and separated representations of the paire
 optimistic/sealed state, plus an independent full transition relation. Shared code
 may supply only immutable inputs, encodings and schedules. Compare exact reachable
 graphs and all terminal metrics, not only summary hashes. A simple exploration upper
-bound is four times the full ternary prefix tree plus729 quiet tails of at most
-66 actions per stream, below200000 states per representation before optional checker
+bound is four times the full ternary prefix tree plus 729 quiet tails of at most
+66 actions per stream, below 200,000 states per representation before optional checker
 controls. Actual state/edge counts and any remaining frontier must be recorded.
 
 Positive witnesses must show an optimistic recollection, a postponed sealed append,
@@ -119,16 +119,16 @@ Retain failed and superseded attempts, including an insufficient suffix bound or
 resource exhaustion. No finite unfinished prefix establishes unbounded starvation.
 
 Sources must be committed before admitted execution. Construct a versioned explicit
-source/input manifest and resource runner first:500000 states/representation,
-600seconds,2GiB,256MiB artifacts, no model network, one owned model process. The
+source/input manifest and resource runner first: 500,000 states/representation,
+600 seconds, 2 GiB, 256 MiB artifacts, no model network, one owned model process. The
 currently running historical gate has priority; no new model may run concurrently.
 At most four read-only workers, ten active agents, twenty minutes/packet, no nested
-delegation or worker writes. Check usage every15minutes, checkpoint every20minutes,
+delegation or worker writes. Check usage every 15 minutes, checkpoint every 20 minutes,
 and preserve the existing single-reset authorization/ledger without new spend.
 
 Two complete final gates and two independent exact-candidate reviews remain required
 before normal non-force draft review publication against verified master. The gate
-pg_check.py --candidate FULL_HASH verifies all18 frozen predecessors and25 unchanged
+pg_check.py --candidate FULL_HASH verifies all 18 frozen predecessors and 25 unchanged
 regressions, regenerates exact original input bytes, and reproduces the complete
 results and graphs. No model run or result is admitted by this document alone.
 

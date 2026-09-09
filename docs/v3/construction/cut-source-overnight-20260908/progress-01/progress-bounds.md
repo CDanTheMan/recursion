@@ -15,10 +15,13 @@ start, including any unfinished capture. Each capture reads each of its ordinals
 at most once, so total read work is at most N(N+1)/2 on every finite action word.
 No fairness assumption is required for this work bound.
 
+Source metadata stays fixed, and only a change in visible record count invalidates
+a local check. Changes outside that reducer contract cannot inherit these bounds.
+
 The bound is attainable. Complete a capture at each successive visible size k,
 using C^(k+2), and place OA between successive captures. At N=4, the action sequence
-`CCC OA CCCC OA CCCCC OA CCCCCC` makes both policies read exactly10 records in
-captures of sizes1,2,3,4. This is a manually derived construction, not a new run.
+`CCC OA CCCC OA CCCCC OA CCCCCC` makes both policies read exactly 10 records in
+captures of sizes 1, 2, 3, 4. This is a manually derived construction, not a new run.
 
 Suppose all finite offers eventually occur and future A and C opportunities each
 occur infinitely often. Optimistic append service eventually drains the finite
@@ -43,18 +46,18 @@ service opportunities and does not establish physical-time latency dominance.
 
 A separate manually derived N=4 trace shows why optimistic collection has no
 universal advantage in total reads. Use `COACCOACOACCCAAC`, followed by six C actions.
-This16-action prefix is outside the preregistered H6 enumeration.
+This 16-action prefix is outside the preregistered H6 enumeration.
 
 | Steps | Optimistic | Sealed |
 |---|---|---|
-|1–5, COACC|Read capture1; invalidate at visible2|Postpone append; read and check1|
-|6–8, OAC|Advance to3 and capture3|Advance to2 and capture2|
-|9–13, OACCC|Advance to4 and read3 records|Postpone append, read2 and check2|
-|14–16, AAC|Invalidate capture3|Service through4 and capture4|
-|17–22, CCCCCC|Open, read and check4|Read and check4, then idle|
+|1–5, COACC|Read capture 1; invalidate at visible 2|Postpone append; read and check 1|
+|6–8, OAC|Advance to 3 and capture 3|Advance to 2 and capture 2|
+|9–13, OACCC|Advance to 4 and read 3 records|Postpone append, read 2 and check 2|
+|14–16, AAC|Invalidate capture 3|Service through 4 and capture 4|
+|17–22, CCCCCC|Open, read and check 4|Read and check 4, then idle|
 
-Both end with every record serviced and checked. Optimistic capture sizes1,3,4
-cost8 reads, two invalidations and two actual retries. Sealed sizes1,2,4 cost7 reads
+Both end with every record serviced and checked. Optimistic capture sizes 1, 3, 4
+cost 8 reads, two invalidations and two actual retries. Sealed sizes 1, 2, 4 cost 7 reads
 and two postponed append opportunities. This refutes universal optimistic read-work
 superiority; it supplies no average-case comparison or reverse universal dominance.
 

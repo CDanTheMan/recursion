@@ -13,7 +13,7 @@ nonterminal witnesses, and an incorrect nonnegative wait control that satisfies
 structural invariants before the transition relation rejects it. A separate schedule
 relation checks every prefix branch and every quiet-suffix service opportunity.
 
-Admission review of67d3c87 caught stale inherited hashes for canonical documents
+Admission review of 67d3c87 caught stale inherited hashes for canonical documents
 that had advanced since the original baseline manifest. The progress manifest now
 binds every immutable input to the verified documentation base8f457c5; the old
 manifest remains unchanged historical provenance and supplies the required path

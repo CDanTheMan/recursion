@@ -26,7 +26,7 @@ claim is allowed.
 
 Root alone writes. Only new progress-01 paths are mutable here. No installation,
 operational changes, provider calls, runtime migration or model/settings change.
-OriginalT0=03:40:33UTC; discovery ends12:30UTC; hard stop15:30UTC (08:30 Los Angeles).
+OriginalT0=03:40:33 UTC; discovery ends12:30 UTC; hard stop15:30 UTC (08:30 Los Angeles).
 
 Execution order: pg_admission.py prepare produces retained original inputs; root
 commits those complete bytes and input-provenance.json and refreshes the explicit
@@ -34,13 +34,13 @@ manifest before pg_admission.py explore. Preserve every admission/execution rece
 including failures. Commit accepted results, their evidence reference, findings and
 the immutable documentation-predecessor completion reference. Only then run
 pg_check.py --candidate FULL_HASH twice and obtain two independent exact reviews.
-Each full pass runs18 frozen predecessor checks and25 regressions and freshly
+Each full pass runs18 frozen predecessor checks and 25 regressions and freshly
 reproduces prepare/explore. No implicit post-expiry historical mode is provided.
 Do not publish an unvalidated candidate or mark the broader campaign complete.
 
-Preparation at a8fda63, run20260909T082356968232, completed in1.188seconds of owned
-execution with23,146,496-byte job peak and9,084,630 retained artifact bytes. It
-regenerated the four unchanged streams with record counts3,2,4,4; source/input
+Preparation at a8fda63, run 20260909T082356968232, completed in 1.188 seconds of owned
+execution with 23,146,496-byte job peak and 9,084,630 retained artifact bytes. It
+regenerated the four unchanged streams with record counts 3, 2, 4, 4; source/input
 bytes and full provenance are retained in the shared evidence cache. See
 input-provenance.json for the immutable execution receipt and inputs.json for the
 complete88,696-byte prepared input. This is input reproduction, not an exploration
@@ -51,9 +51,9 @@ a manually derived22-action work-comparison trace outside the H6 enumeration.
 Keep that reasoning distinct from future finite results and review it with the
 final candidate. No additional enumeration profile is claimed.
 
-The first exploration at0fff9ce, run20260909T082850361341, passed in3.391seconds
-with126,836,736-byte job peak and22,139,318 retained bytes. Both representations
-agree exactly across80,098 states and80,528 edges, with zero frontier. All quiet
+The first exploration at 0fff9ce, run 20260909T082850361341, passed in 3.391 seconds
+with 126,836,736-byte job peak and 22,139,318 retained bytes. Both representations
+agree exactly across 80,098 states and 80,528 edges, with zero frontier. All quiet
 continuations complete and all four accounting controls are detected. Results and
 their exact execution reference are committed separately from publication approval.
 The two N=4 input streams have byte-identical progress graphs and add no distinct
