@@ -1,19 +1,27 @@
 {
-  "status": "incomplete-construction",
+  "status": "incomplete-scaling-preregistered",
   "at": "2026-09-09T03:59:27.958327+00:00",
   "head": "3ce72688b441d7557afcbcde9974e22a32be6804",
   "dirty": [],
   "started_at": "2026-09-09T03:40:33Z",
   "discovery_cutoff_utc": "2026-09-09T12:40:33Z",
   "deadline_utc": "2026-09-09T15:40:33Z",
-  "queue_item": "source_authority",
+  "queue_item": "bounded_scaling",
   "admitted_runs": [
-    "run-01"
+    "run-01",
+    "run-02",
+    "run-03",
+    "run-04",
+    "run-05"
   ],
   "owned_processes": [],
-  "workers": "source_protocol_research finished read-only; none running",
+  "workers": "all read-only preliminary packets finished; no active workers",
   "hypothesis": "registration+append revision and exact ordinal/registry coverage establish bounded complete current source",
   "residuals": "all nonmodeled source truth and original comparison remain open",
-  "publication": "not-ready",
-  "next_command": "Run committed source_authority packet after gate preflight and fresh usage; retain any failures"
+  "publication": "not-ready; full combined run/gates/reviews pending",
+  "next_command": "Commit scaling and gate hardening, then admit bounded_scaling; retain all failures.",
+  "hypotheses_refuted": [
+    "fresh request cannot be recognized by verb name alone: run02",
+    "foreign-cut witness initially blocked at delivery: run03"
+  ]
 }

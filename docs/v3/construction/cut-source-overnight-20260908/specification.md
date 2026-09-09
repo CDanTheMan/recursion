@@ -72,3 +72,15 @@ actual AttemptStarted record, exact attempt identity and original scope; a recei
 attempt2 cannot substitute. Required intent fields and nonnegative collection ordinals
 are checked explicitly. New positive guards and removed-guard crossings retain these
 independent challenges. No runtime allowance breach was established by the retry failure.
+
+Scaling preregistration after repaired source run04 and coupled run05, independently
+challenged by coupled_scaling_challenge: expand pending registration count to4 and exact
+retry/restart multiplicity to4; preserve original literal attempt identities1–2 and record
+inventory lengths2–4. Pending registry entries3–4 are not original admissions or external
+executions. Include explicit sequential maximum-registry witnesses for original one/two
+start mappings, selected failure invalidation and the repaired no-receipt retry call.
+An eight-action collection/registration/restart core exhausts its offered-call orders,
+then an ordered suffix attempts attestation, publication, read/classification, reconciliation
+and B admission. Every terminal ordering must retain A6 with no publication. Reverse and
+duplicate collection cover the maximum four-record inventory. This is exact finite profile
+exploration, not fuzzing, larger original record count or the full Cartesian composition.

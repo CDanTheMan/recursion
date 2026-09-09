@@ -67,6 +67,15 @@ def positive(name, states, decisions):
         import base64
         actual=[json.loads(m) for m in s['wire'] if json.loads(m)['type']=='EVENT']
         d.require(s['delivered']==(1,2,3,4) and s['loss']==0 and [len(base64.b64decode(m['payload_base64'])) for m in actual]==[1,2,1,2], 'full original four-event flow')
+        d.require(s['publication_revision']==1 and s['consumed']==(6,0) and s['adoptions']==s['wakes']==1,'four-event source and settlement coupling')
+    if name=='typed-consultation':
+        d.require(bool(s['evidence']) and len(s['evidence'])==11 and s['evidence']==s['input_request'] and s['adoptions']==s['wakes']==0 and s['phase']==3 and s['publication_revision']==1 and decisions.count('adopt:stale-or-missing')==decisions.count('wake:stale-or-missing')==1,'actual retained typed advice and stale authority with source publication')
+    if name in ('scale-pending-four','scale-two-starts-four','scale-selected-failure-four','scale-stale-retry-four'):
+        d.require(len(s['attempts'])==4 and s['reserved']==(6,0),'maximum pending registry reached and A6 held')
+        d.require(s['publication_revision']==(1 if name=='scale-selected-failure-four' else 0),'pending registry denies fresh publication/settlement')
+    if name=='scale-duplicate-restart-four':
+        d.require(len(s['append_log'])==3 and len(s['append_receipts'])==3 and s['source_revision']==5 and s['source_generation'][-1]==4 and decisions.count('append:success:2:normal:duplicate')==4 and s['append_reply']==s['append_receipts'][-1][2],'four retained retries and restarts preserve exact receipt and append boundary')
+    if name=='scale-reverse-duplicate-collection': d.require(s['publication_revision']==1 and len(s['collected'])==4 and len(s['attempts'])==2 and s['reserved']==(6,0) and decisions.count('collect:3:duplicate-collection')==1 and decisions.count('collect:2:duplicate-collection')==1,'maximum original inventory and duplicate collection')
     return sorted(set(value.rsplit(':',1)[-1] for value in decisions))
 
 def explore(name,unit,outcome,state_limit=500000):
@@ -80,6 +89,8 @@ def explore(name,unit,outcome,state_limit=500000):
             histories[s['wire']]=result
         if not enabled:
             terminals+=1
+            if name=='scale-eight-action-race':
+                d.require(s['reserved']==(6,0) and s['publication_revision']==0 and len(s['append_log'])==3 and len(s['attempts'])>=2,'all terminal orders preserve pending source hold')
             if sample is None: sample=path
         for action in sorted(enabled):
             n=inc.step(s,action,profile,unit,outcome)

@@ -62,6 +62,7 @@ def validate_result(result):
     import s_experiment as experiment
     require(result['status']=='cut-source-pass' and result['queue_item']=='all','complete queue result')
     require(result['classification']=='modeled' and all(result[k] is False for k in ('formal_freeze','full_comparison_complete','runtime_integration_support')),'claim boundary')
+    require(result['network_operations']==0,'no model network operations')
     keys={n+'/'+u+'/'+str(o) for n,p in domain.PROFILES.items() for u in domain.UNITS for o in p['outcomes']}
     require(set(result['profiles'])==keys,'complete profile domain')
     require(result['frontier']==0 and all(r['frontier']==0 and r['exact_graph_equal'] for r in result['profiles'].values()),'zero finite frontier')
@@ -87,6 +88,35 @@ def verify_run(directory,accepted=False):
         require(sum(p.stat().st_size for p in directory.rglob('*') if p.is_file())<=268435456,'artifact bound')
     return a,x
 
+def validate_coverage(coverage):
+    prior=read(ROOT/'docs/v3/construction/cut-publication-20260908/coverage.json')
+    require(coverage['predecessor_coverage']==prior,'preserved six obligations and 27 trace history')
+    require([r['id'] for r in coverage['slice_obligations']]==[r['id'] for r in prior['slice_obligations']] and len(coverage['slice_obligations'])==6,'six obligations')
+    require([r['id'] for r in coverage['slice_traces']]==[r['id'] for r in prior['slice_traces']] and len(coverage['slice_traces'])==27,'27 trace rows')
+    require(coverage['formal_freeze'] is False and coverage['full_comparison_complete'] is False,'coverage residuals')
+    for row in coverage['slice_obligations']+coverage['slice_traces']:
+        require(row['status'] in ('partial-modeled-support','no-new-coverage') and row['residual'],'bounded row claim')
+
+def adversarial(result):
+    import copy
+    labels=[]
+    def reject(fn,value,label):
+        try: fn(value)
+        except (ValueError,KeyError,TypeError,AssertionError): labels.append(label); return
+        raise ValueError('gate accepted adversarial corruption '+label)
+    for key,value in [('profiles',{}),('mutants',[]),('frontier',1),('classification','measured'),('formal_freeze',True),('full_comparison_complete',True),('runtime_integration_support',True),('network_operations',1),('states_per_representation',1),('edges_per_representation',1)]:
+        bad=copy.deepcopy(result);bad[key]=value;reject(validate_result,bad,'result/'+key)
+    for kind in ('erase-trace','erase-obligation','rewrite-history','promote-support','promote-freeze'):
+        bad=copy.deepcopy(doc('coverage.json'))
+        if kind=='erase-trace': bad['slice_traces'].pop()
+        elif kind=='erase-obligation': bad['slice_obligations'].pop()
+        elif kind=='rewrite-history': bad['predecessor_coverage']['formal_freeze']=True
+        elif kind=='promote-support': bad['slice_traces'][0]['status']='complete'
+        else: bad['formal_freeze']=True
+        reject(validate_coverage,bad,'coverage/'+kind)
+    reject(candidate_check,'0'*40,'wrong-candidate')
+    return labels
+
 def evidence():
     import q_artifact as codec
     e=doc('evidence.json'); actual=codec.unpack(doc('results.json')); validate_result(actual)
@@ -100,16 +130,11 @@ def evidence():
         require(bool(row['disposition']),'truthful attempt disposition')
     accepted=runner.cache()/'discovery'/e['accepted_run']; raw=codec.unpack(read(accepted/'result.json')['result'])
     require(raw==actual,'accepted retained results')
-    coverage=doc('coverage.json'); prior=read(ROOT/'docs/v3/construction/cut-publication-20260908/coverage.json')
-    require(coverage['predecessor_coverage']==prior,'preserved six obligations and 27 trace history')
-    require([r['id'] for r in coverage['slice_obligations']]==[r['id'] for r in prior['slice_obligations']] and len(coverage['slice_obligations'])==6,'six obligations')
-    require([r['id'] for r in coverage['slice_traces']]==[r['id'] for r in prior['slice_traces']] and len(coverage['slice_traces'])==27,'27 trace rows')
-    require(coverage['formal_freeze'] is False and coverage['full_comparison_complete'] is False,'coverage residuals')
-    for row in coverage['slice_obligations']+coverage['slice_traces']:
-        require(row['status'] in ('partial-modeled-support','no-new-coverage') and row['residual'],'bounded row claim')
+    validate_coverage(doc('coverage.json'))
     return actual
 
 def command(args,root,out,label,deadline):
+    runner.scope(expensive=False,final=True)
     remain=(deadline-runner.now()).total_seconds(); require(remain>0,'hard deadline')
     started=time.monotonic(); status='finished'
     try:
@@ -125,7 +150,7 @@ def main():
     preflight()
     if args.preflight: print('CUT_SOURCE_PREFLIGHT_PASS_NOT_FINAL'); return
     candidate=args.candidate or git('rev-parse','HEAD'); paths=candidate_check(candidate)
-    actual=evidence(); inv=doc('validation-inventory.json')
+    actual=evidence(); labels=adversarial(actual); inv=doc('validation-inventory.json')
     previous=read(ROOT/'docs/v3/construction/cut-publication-20260908/validation-inventory.json')
     require(inv['frozen_gates']==[{'commit':PREVIOUS,'branch':'codex/v3-cut-publication-20260908','script':'experiments/v3/cut-publication/check.py'}]+previous['frozen_gates'] and len(inv['frozen_gates'])==16,'sixteen unchanged predecessors')
     require(inv['regression_commands']==previous['regression_commands'] and len(inv['regression_commands'])==25,'unchanged25 regressions')
@@ -148,9 +173,16 @@ def main():
     for i,cmd in enumerate(inv['regression_commands']): regressions.append(command([sys.executable,*cmd[1:]],ROOT,out,runid+'-regression-'+str(i),deadline))
     candidate_check(candidate); require(runner.now()<=deadline,'final deadline')
     receipt={'status':'CUT_SOURCE_GATE_PASS','candidate':candidate,'run_id':runid,'semantic_sha256':doc('evidence.json')['semantic_sha256'],
-             'frozen_validations':frozen,'regressions':regressions,'execution_directory':str(directory),
+             'frozen_validations':frozen,'regressions':regressions,'adversarial_checks':labels,'execution_directory':str(directory),
              'execution_files':{p.relative_to(directory).as_posix():sha(p.read_bytes()) for p in directory.rglob('*') if p.is_file()},'formal_freeze':False}
     runner.write(out/(runid+'.json'),receipt); print('CUT_SOURCE_GATE_PASS '+candidate,flush=True)
 
 if __name__=='__main__':
-    main()
+    import os
+    final='--candidate' in sys.argv and '--working' not in sys.argv and '--preflight' not in sys.argv
+    lock=runner.cache()/'heavy-gate.lock'
+    if final:
+        fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY);os.write(fd,str(os.getpid()).encode());os.close(fd)
+    try: main()
+    finally:
+        if final: lock.unlink()

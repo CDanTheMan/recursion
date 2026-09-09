@@ -17,7 +17,7 @@ ROOT=Path(__file__).resolve().parents[3]
 CODE='experiments/v3/cut-source-overnight/'
 PREFIX='docs/v3/construction/cut-source-overnight-20260908/'
 
-def git(*args): return subprocess.check_output(['git',*args],cwd=ROOT)
+def git(*args): return subprocess.check_output(['git',*args],cwd=ROOT,timeout=30)
 def read(path): return json.loads(path.read_text(encoding='utf-8'))
 def write(path,obj): path.write_text(json.dumps(obj,indent=2)+'\n',encoding='utf-8')
 def sha(raw): return hashlib.sha256(raw).hexdigest()
@@ -36,7 +36,7 @@ def scope(expensive=True, final=False):
     assert now()<end, 'absolute envelope expired'
     usage=read(cache()/'usage.json')
     assert 0<=(now()-dt.datetime.fromisoformat(usage['checked_at'])).total_seconds()<900, 'fresh capacity telemetry required'
-    assert usage['remaining_percent']>3 and (not expensive or usage['remaining_percent']>10), 'capacity stop/finalize'
+    assert usage['remaining_percent']>3 and (not expensive or final or usage['remaining_percent']>10), 'capacity stop/finalize'
     assert usage['new_metered_spend']==0 and usage['reset_credits_used']==0
     assert git('branch','--show-current').decode().strip()==goal['branch'], 'source branch'
     changed=git('diff','--name-only',goal['start_commit']).decode().splitlines()
@@ -60,18 +60,27 @@ def peak(process):
         return 0
     return max(value.PeakWorkingSetSize,value.PeakPagefileUsage)
 
+def free_memory():
+    class Status(ctypes.Structure):
+        _fields_=[('length',ctypes.c_ulong),('load',ctypes.c_ulong)]+[(name,ctypes.c_ulonglong) for name in ('total_physical','available_physical','total_page','available_page','total_virtual','available_virtual','available_extended')]
+    status=Status();status.length=ctypes.sizeof(status)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)): raise OSError('host memory admission telemetry')
+    return status.available_physical
+
 def execute(directory,queue_item,final=False):
     goal,end,usage=scope(final=final)
     assert directory.resolve().is_relative_to(cache().resolve()) and not directory.exists(), 'fresh evidence path required'
     assert not git('status','--porcelain','--untracked-files=all').strip(), 'clean committed execution required'
     head=git('rev-parse','HEAD').decode().strip()
     assert shutil.disk_usage(ROOT).free>1073741824, 'disk admission'
+    available=free_memory(); assert available>3221225472, 'physical memory admission reserve'
     lock=cache()/'model.lock'; directory.mkdir(parents=True)
     fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY); os.write(fd,str(os.getpid()).encode()); os.close(fd)
     process=None
     try:
         sources={}
         for path in source_paths():
+            assert now()<end, 'absolute deadline while snapshotting sources'
             raw=(ROOT/path).read_bytes(); blob=git('show',head+':'+path)
             assert raw.replace(b'\r\n',b'\n')==blob.replace(b'\r\n',b'\n'), 'source differs from commit '+path
             target=directory/'source'/path; target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(raw)
@@ -82,6 +91,7 @@ def execute(directory,queue_item,final=False):
                    'started_at':now().isoformat(),'queue_item':queue_item,'usage':usage,'limits':goal['experiment_limits'],
                    'host':{'python':sys.version,'executable':sys.executable,'system':platform.system(),'machine':platform.machine()},
                    'dependencies':{'jsonschema':importlib.metadata.version('jsonschema')},'model_network':False,
+                   'available_physical_bytes':available,
                    'enforcement':'600-second owned process deadline; 100ms sampled peak working/private bytes and artifact bound; Python network/process audit refusal; not an OS sandbox'}
         write(directory/'admission.json',admission)
         begin=time.monotonic(); observed=0; status='finished'
@@ -101,6 +111,12 @@ def execute(directory,queue_item,final=False):
         elif execution['seconds']>600: execution['status']='timeout'
         execution['terminal_artifact_bytes']=terminal_size
         write(directory/'execution.json',execution)
+        # Include the execution receipt itself; iterate until its decimal size stabilizes.
+        for _ in range(4):
+            total=sum(p.stat().st_size for p in directory.rglob('*') if p.is_file())
+            new_status='artifact-limit' if total>goal['experiment_limits']['artifact_bytes'] else execution['status']
+            if execution['terminal_artifact_bytes']==total and execution['status']==new_status: break
+            execution.update(terminal_artifact_bytes=total,status=new_status); write(directory/'execution.json',execution)
         print(json.dumps(execution),flush=True)
         return admission,execution
     except BaseException as error:

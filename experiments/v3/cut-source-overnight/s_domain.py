@@ -129,3 +129,21 @@ add('atomic-receipt-not-start', setup('success','atomic-start') + ['atomic:prior
 add('negative-collection-ordinal', setup('success') + ['collect-open','collect:-1'], outcomes=(1,))
 add('incomplete-registration', list(q.SETUP) + ['register:missing-original','attempt:1',append('success',0)], outcomes=(1,))
 add('same-head-foreign-cut', setup('success') + ['collect-open','collect:0','collect:1','collect:2'] + q.deliver('foreign-attempt') + ['source-attest','stage','pub-commit'], outcomes=(1,))
+
+# Independently challenged scaling: larger pending registry, unchanged original records.
+add('scale-pending-four', setup('success') + ['attempt:2','attempt:3','attempt:4'] + publish('success') + q.reader() + ['reconcile','admitB'], outcomes=(1,),queue='bounded_scaling')
+add('scale-two-starts-four', setup('later-start-only') + ['attempt:3','attempt:4'] + publish('later-start-only') + q.reader() + ['reconcile','admitB'], outcomes=(1,),queue='bounded_scaling')
+add('scale-selected-failure-four', setup('failure') + publish('failure') + q.reader() + ['attempt:2','attempt:3','attempt:4','reconcile','admitB'], outcomes=(2,),queue='bounded_scaling')
+add('scale-stale-retry-four', setup('success') + collect('success') + ['stage','attempt:2','attempt:3','attempt:4','pub-retry-conflict','admitB'], outcomes=(1,),queue='bounded_scaling')
+add('scale-duplicate-restart-four', setup('success') + ['append-lose-reply'] + ['source-restart',append('success',2)]*4, outcomes=(1,),queue='bounded_scaling')
+add('scale-reverse-duplicate-collection', setup('later-start-only') + ['collect-open','collect:3','collect:2','collect:1','collect:0','collect:3','collect:2'] + q.deliver('later-start-only') + ['source-attest','stage','pub-commit'] + q.reader() + ['reconcile','admitB'], outcomes=(1,),queue='bounded_scaling')
+
+def add_with_suffix(name, prefix, core, suffix):
+    add(name,prefix,core,outcomes=(1,),queue='bounded_scaling')
+    profile=PROFILES[name]; prior=profile['actions']; following=tuple(k+'@'+str(len(prior)+i) for i,k in enumerate(suffix))
+    profile['actions']=prior+following
+    for i,k in enumerate(following): profile['requires'][k]=(following[i-1],) if i else prior[len(prefix):]
+
+add_with_suffix('scale-eight-action-race', setup('success'),
+    ('collect-open','collect:0','collect:1','collect:2','attempt:2','attempt:3','attempt:4','source-restart'),
+    q.deliver('success')+['source-attest','stage','pub-commit']+q.reader()+['reconcile','admitB'])
