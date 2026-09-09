@@ -3,7 +3,7 @@
 Read CONTROL_PLANE first, applicable CLAUDE/AGENTS, then ANCHOR. Parent is active
 goal-recursion-v2-execution-fabric. SC-CUT-PUB-01 began after verified Owner merge of
 PR108 at master5e46acc84a18921dc982cc98830488cbe6125626. Worktree
-C:\Users\Lucas\Documents\GitHub\recursion-v3-cut-publication-20260908;
+recursion-v3-cut-publication-20260908;
 branch codex/v3-cut-publication-20260908. These are starting facts, never reset targets.
 Verify current master and this branch's PR before continuing; preserve later changes.
 

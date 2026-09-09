@@ -143,6 +143,17 @@
   ],
   "formal_freeze": false,
   "new_owner_questions": [],
-  "superseded_candidate_validations": [],
+  "superseded_candidate_validations": [
+    {
+      "candidate": "fed4cbcb29c019c1bc76b6c0b3a4abac61758135",
+      "disposition": "superseded-not-a-pass",
+      "reason": "Unchanged publication scan rejected absolute Windows user path in handoff before model/gate execution; removed path and retained failed outer logs.",
+      "files": {
+        "gate-attempt-01-execution.json": "4610445e9147542109503db6865803d792721e288b283335f728d591e74fd487",
+        "gate-attempt-01.stderr.log": "83a2bc09935393d46f49115e0d1e9c14063ab214d5b2e9d4e5a96339e76f562c",
+        "gate-attempt-01.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
   "preflight_attempts": []
 }

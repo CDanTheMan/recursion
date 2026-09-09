@@ -57,3 +57,8 @@ real cryptographic deployment and unbounded liveness remain unproved.
 
 No new Owner decision or settings change is required. A bounded source-completeness
 attestation campaign is the proposed successor; it has not been executed here.
+
+The first synthesized candidate gate stopped before new model execution because the
+unchanged publication scan rejected an absolute local Windows user path in handoff.
+The path was replaced with the worktree name; failed outer logs remain externally and
+are bound in superseded_candidate_validations. No model result was changed.
