@@ -59,3 +59,13 @@ both complete gates and two exact reviews succeed. Do not weaken those condition
 for documentation, or retry interrupted activity through an alternate model. If a
 binding boundary prevents final gates, keep local commits and publish no completion
 claim. A successful documentation PR must still say campaign incomplete. Lucas merges.
+
+Candidate aa7f1f24756542d0c533d1daa2a397dc21a408a2 completed both full passes. Preserve
+its runs 20260909T065343114772 and 20260909T072335080728 and conditional reviews as
+superseded evidence. The compatibility repair adds check_final.py --working for a
+future enclosing gate: clean exact HEAD, documentation checks and all 983 historical
+references, with no model execution or full-pass receipt. Only present-time expiry
+is skipped there. Recorded clock identities and all other historical checks remain.
+The distinct DOCUMENTATION_SLICE_WORKING_PASS_NOT_FINAL marker is never publication
+evidence. Full mode still requires --candidate, live admission, locks and 42 commands.
+Obtain two fresh complete passes and two exact reviews for the repaired candidate.

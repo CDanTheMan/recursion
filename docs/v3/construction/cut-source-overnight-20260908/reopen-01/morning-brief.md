@@ -22,9 +22,10 @@ are not being replayed through another model. No new counterexample execution or
 implementation result is claimed. The safeguard record preserves observations
 without guessing classifier triggers.
 
-Local slice5f20f3f passes its documentation checker. The final candidate additionally
-requires two complete passes of17 unchanged historical gates and25 regressions,
-plus two independent exact-candidate reviews. Final outcomes and any new draft PR
+Candidate aa7f1f2 passed both complete validations. A compatibility repair adds a
+distinct historical working check for future gates; the repaired candidate requires
+two fresh full passes of17 historical gates and25 regressions and two exact reviews.
+The working check cannot authorize publication. Final outcomes and any new draft PR
 are recorded externally under Git-common research-attestations/cut-source-overnight/
 reopen-01/<candidate>/. This committed brief does not preclaim those outcomes.
 

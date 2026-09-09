@@ -43,8 +43,16 @@ the frozen source inventory uses a nonrecursive Python-file listing. Do not reus
 that listing to silently omit continuation code, or add top-level modules that
 change old admitted inventories. This observation does not authorize a new run.
 
-All current changes are additive nested documents and a documentation checker. The
-checker verifies the frozen prior completion identity and unchanged prior tree;
-it does not claim a fresh verification of every old external evidence file. Full
-historical validation remains required before review publication. Formal freeze,
-full original comparison and runtime integration support remain false.
+All current changes are additive nested documents and validation wrappers. The
+documentation checker verifies prior completion identity and the unchanged prior
+tree. The full wrapper additionally verifies all 983 old external references and
+executes the complete inherited validation inventory. Formal freeze, full original
+comparison and runtime integration support remain false.
+
+For use as a frozen predecessor, check_final.py --working verifies the clean exact
+candidate, documentation obligations and all 983 references without executing models
+or acquiring heavy locks. It ignores only present-time expiry, retaining the recorded
+clock identities and other historical obligations. Its distinct WORKING_PASS_NOT_FINAL
+marker supplies no current capacity admission, reset-redemption validation, full-pass
+receipt, campaign completion or publication readiness. Publication requires two exact
+DOCUMENTATION_SLICE_FULL_GATE_PASS receipts; the working marker cannot substitute.

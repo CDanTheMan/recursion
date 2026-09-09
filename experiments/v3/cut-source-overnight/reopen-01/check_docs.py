@@ -29,7 +29,7 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def check(candidate=None):
+def check(candidate=None, *, historical=False):
     amendment = read(ROOT / DOC / "amendment.json")
     inventory = read(ROOT / DOC / "work-inventory.json")
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir"))
@@ -40,7 +40,8 @@ def check(candidate=None):
     require(amendment["original_started_at"] == "2026-09-09T03:40:33Z", "preserved activation")
     require(amendment["deadline_utc"] == "2026-09-09T15:30:00Z", "fixed amended deadline")
     require(amendment["discovery_cutoff_utc"] == "2026-09-09T12:30:00Z", "final three-hour reserve")
-    require(dt.datetime.now(dt.timezone.utc) < dt.datetime.fromisoformat(amendment["deadline_utc"]), "absolute deadline has expired")
+    if not historical:
+        require(dt.datetime.now(dt.timezone.utc) < dt.datetime.fromisoformat(amendment["deadline_utc"]), "absolute deadline has expired")
     require(amendment["clock_restart"] is False, "clock cannot restart")
     require(dt.datetime.fromisoformat(amendment["local_deadline"]) == dt.datetime.fromisoformat(amendment["deadline_utc"]), "local/UTC deadline agreement")
     require(amendment["timezone"] == "America/Los_Angeles", "timezone")

@@ -48,14 +48,15 @@ def scope():
     return usage
 
 
-def history():
+def history(enforce_live_clock=True):
     complete = read(OLD / PRIOR / "completion.json")
     counts = {}
     for key, base, count in (("all_external_files_before_completion", OLD / PRIOR, 969), ("parent_external_files", OLD, 14)):
         entries = complete[key]
         require(len(entries) == count, "full historical closure count: " + key)
         for name, expected in entries.items():
-            require(now() < END, "deadline during historical verification")
+            if enforce_live_clock:
+                require(now() < END, "deadline during historical verification")
             target = (base / name).resolve()
             require(target.is_relative_to(base.resolve()) and digest(target) == expected, "historical file: " + name)
         counts[key] = len(entries)
@@ -169,8 +170,20 @@ def main(candidate):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--candidate", required=True)
+    parser.add_argument("--candidate")
+    parser.add_argument("--working", action="store_true", help="Verify this frozen documentation predecessor only; never a full or publication pass")
     arguments = parser.parse_args()
+    if arguments.working:
+        candidate = arguments.candidate or docs.git("rev-parse", "HEAD")
+        docs.check(candidate, historical=True)
+        closure = history(enforce_live_clock=False)
+        print(json.dumps({"status": "DOCUMENTATION_SLICE_WORKING_PASS_NOT_FINAL", "candidate": candidate,
+                          "historical_closure": closure, "current_capacity_admitted": False,
+                          "reset_redemption_validated": False, "publication_ready": False,
+                          "campaign_complete": False}, sort_keys=True))
+        sys.exit(0)
+    if not arguments.candidate:
+        parser.error("full validation requires --candidate")
     acquired = []
     try:
         for name in ("heavy-gate.lock", "model.lock"):
