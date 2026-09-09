@@ -218,8 +218,11 @@ def containment_check(directory):
         job=OwnedJob()
         try:
             process=job.launch([sys.executable,'-B','-c','print("contained-normal")'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-            raw=process.communicate(timeout=10)[0];assert process.returncode==0 and raw.strip()==b'contained-normal' and job.active()==0
-            (directory/'normal.log').write_bytes(raw);cases.append('normal-exit-no-descendants')
+            raw=process.communicate(timeout=10)[0];(directory/'normal.log').write_bytes(raw)
+            state={'returncode':process.returncode,'active':job.active(),'output':raw.decode('utf-8',errors='replace')}
+            write(directory/'normal-state.json',state)
+            assert process.returncode==0 and raw.strip()==b'contained-normal' and state['active']==0, state
+            cases.append('normal-exit-no-descendants')
         finally:job.close()
         job=OwnedJob()
         try:
@@ -229,15 +232,17 @@ def containment_check(directory):
             while job.active()<2:
                 assert time.monotonic()<until,'descendant did not start';time.sleep(.01)
             before=job.active();job.stop();raw=process.communicate(timeout=5)[0]
-            assert before==2 and job.active()==0 and process.returncode!=0
-            (directory/'terminated-tree.log').write_bytes(raw);cases.append('owned-parent-and-grandchild-terminated')
+            (directory/'terminated-tree.log').write_bytes(raw)
+            assert before==2 and job.active()==0 and process.returncode!=0, {'before':before,'active':job.active(),'returncode':process.returncode}
+            cases.append('owned-parent-and-grandchild-terminated')
         finally:job.close()
         job=OwnedJob(64*1024*1024)
         try:
             process=job.launch([sys.executable,'-B','-c','x=bytearray(128*1024*1024);print("unexpected allocation")'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
             raw=process.communicate(timeout=10)[0]
-            assert process.returncode!=0 and b'MemoryError' in raw and job.peak()<=64*1024*1024 and job.active()==0
-            (directory/'memory-limit.log').write_bytes(raw);cases.append('job-committed-memory-cap-refuses-allocation')
+            (directory/'memory-limit.log').write_bytes(raw)
+            assert process.returncode!=0 and b'MemoryError' in raw and job.peak()<=64*1024*1024 and job.active()==0, {'returncode':process.returncode,'active':job.active(),'peak':job.peak(),'output':raw.decode('utf-8',errors='replace')}
+            cases.append('job-committed-memory-cap-refuses-allocation')
         finally:job.close()
         write(directory/'result.json',{'status':'CONTAINMENT_PASS','source_commit':head,'source_sha256':sha(source),'cases':cases,'finished_at':now().isoformat()})
         print('CONTAINMENT_PASS',flush=True)
