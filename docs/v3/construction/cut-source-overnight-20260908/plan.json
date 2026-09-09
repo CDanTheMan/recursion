@@ -1,0 +1,52 @@
+{
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "status": "preregistered-before-first-model-run",
+  "limits": {
+    "states_per_representation": 500000,
+    "seconds_per_experiment": 600,
+    "memory_bytes": 2147483648,
+    "artifact_bytes": 268435456,
+    "owned_model_processes": 1,
+    "model_network": false
+  },
+  "queue_order": [
+    "source_authority",
+    "coupled_adversarial",
+    "bounded_scaling"
+  ],
+  "profiles": "s_domain.PROFILES literal schedules, policies, outcomes and queue labels; commit identity in each admission",
+  "domains": {
+    "source_incarnations": [
+      0,
+      1
+    ],
+    "original_attempts": [
+      1,
+      2
+    ],
+    "record_inventory_lengths": [
+      2,
+      3,
+      4
+    ],
+    "reader_slots": 2,
+    "pool": 10,
+    "requests": [
+      6,
+      6
+    ],
+    "cursor_units": [
+      "event",
+      "utf8-byte"
+    ],
+    "event_lengths": [
+      1,
+      2,
+      1,
+      2
+    ]
+  },
+  "orders": "Every topological ordering of declared six-action cores; ordered prefixes retain all actions. No full original Cartesian claim.",
+  "coverage": "complete finite declared domain only; all inherited support preserved separately",
+  "historical_command_timeout_seconds": 600
+}

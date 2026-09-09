@@ -1,0 +1,242 @@
+{
+  "start_commit": "ec4232e95722d58dc0eff03289fb629b58d29247",
+  "frozen_gates": [
+    {
+      "commit": "e4b844b1af6c309263812c6961ccb50b3e5b8a82",
+      "branch": "codex/v3-cut-publication-20260908",
+      "script": "experiments/v3/cut-publication/check.py"
+    },
+    {
+      "commit": "ed8841e47b32ced6ed2364306d036463ebe4541f",
+      "branch": "codex/v3-coupled-cut-pause-20260908",
+      "script": "experiments/v3/coupled-cut-pause/check.py"
+    },
+    {
+      "commit": "6bbbbdedb328eb457abce1ca337f48e041a04a2d",
+      "branch": "codex/v3-coupled-construction-20260908",
+      "script": "experiments/v3/coupled-construction/check.py"
+    },
+    {
+      "commit": "27ab6bada7ae339069616bd5b44c634a6bc40f32",
+      "branch": "codex/v3-typed-consultation-20260908",
+      "script": "experiments/v3/typed-consultation/check.py"
+    },
+    {
+      "commit": "191cf5d06a95b509f6b98748b93afa3188eb4ecf",
+      "branch": "codex/v3-wire-correspondence-20260908",
+      "script": "experiments/v3/wire-correspondence/check.py"
+    },
+    {
+      "commit": "f1a68cd8d3d0091dc0a91c32197c32c707620ed4",
+      "branch": "codex/v3-shared-reservations-20260908",
+      "script": "experiments/v3/shared-reservations/check.py"
+    },
+    {
+      "commit": "68d50fcde039504ad9519cca119cc39034d71dc7",
+      "branch": "codex/v3-shared-composition-20260908",
+      "script": "experiments/v3/shared-composition/check.py"
+    },
+    {
+      "commit": "c9a51c0a0bcfa0946b410733b7910f477d89f1cc",
+      "branch": "codex/v3-effect-evidence-20260908",
+      "script": "experiments/v3/effect-evidence/check.py"
+    },
+    {
+      "commit": "ace2d4272047dccde05e1863e126aa39b2306c9c",
+      "branch": "codex/v3-composition-model-20260908",
+      "script": "experiments/v3/composition-model/check.py"
+    },
+    {
+      "commit": "c6c05ad69e50d4acbeb429dfa3a15a8c3455d2a0",
+      "branch": "codex/v3-generation-authority-20260907",
+      "script": "experiments/v3/generation-authority/check.py"
+    },
+    {
+      "commit": "04b664c58bddb72674d297f4bcf4bef5435bda0f",
+      "branch": "codex/v3-replay-store-evidence-20260907",
+      "script": "experiments/v3/replay-store-evidence/check.py"
+    },
+    {
+      "commit": "03fd11014a5be99006d637ad5eb692faa0557f8f",
+      "branch": "codex/v3-flow-recovery-integration-20260907",
+      "script": "experiments/v3/flow-recovery-integration/check.py"
+    },
+    {
+      "commit": "f86f169c61ca6db4a3d7870353f270e35ef954d6",
+      "branch": "codex/v3-reset-mapping-20260907",
+      "script": "experiments/v3/reset-mapping/check.py"
+    },
+    {
+      "commit": "c87f492780087772e3bcb06249ef14d89e812a25",
+      "branch": "codex/v3-formal-comparison-20260907",
+      "script": "experiments/v3/formal-comparison/check.py"
+    },
+    {
+      "commit": "a497bae10dddc3adf176242aed878f83b4519316",
+      "branch": "codex/v3-interface-probes-20260907",
+      "script": "experiments/v3/interface-probes/check.py"
+    },
+    {
+      "commit": "51733c48537d91ad17774b0c05c48ec289a75517",
+      "branch": "codex/v3-formal-model-experiment",
+      "script": "docs/v3/foundation-research/mark2-research/mark3-comparison/check.py"
+    }
+  ],
+  "regression_commands": [
+    [
+      "python",
+      "-B",
+      "schemas/control-plane/v3/planning/materialize.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/materialize_fixtures.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/red_fixture.test.py",
+      "--validate-only"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/adversarial.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/conformance.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/property.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/red_fixture.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/schema.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/static.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/planning/validation.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "schemas/control-plane/v3/execution/materialize.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/materialize_fixtures.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/adversarial.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/conformance.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/fixture.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/schema.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/execution/static.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "schemas/control-plane/v3/integrity/materialize.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/materialize_fixtures.py",
+      "--check"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/adversarial.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/conformance.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/fixture.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/schema.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "scripts/tests/v3/integrity/static.test.py"
+    ],
+    [
+      "python",
+      "-B",
+      "-u",
+      "scripts/tests/recursion-v2-mvp.test.py"
+    ]
+  ],
+  "artifacts": {
+    "docs/v3/construction/cut-source-overnight-20260908/activation.json": "669afa908c777072e9b7fa61644be221eee83460b0fa45767fed8ebfe2313601",
+    "docs/v3/construction/cut-source-overnight-20260908/checkpoint.json": "1a653a85c477b5c54b44607a91478269218af0ff7890e434fc9485ebb34e294e",
+    "docs/v3/construction/cut-source-overnight-20260908/coverage.json": "19e2d827de5ffe1df79e5f981cb1378fca2caa6a944406727bf6020a2e201b1e",
+    "docs/v3/construction/cut-source-overnight-20260908/goal.json": "52ee2849ca18e2443d7f25e5e504ad5eacb69c82c212c555897ce744010d1e86",
+    "docs/v3/construction/cut-source-overnight-20260908/manifest.json": "63c9f7174968bdbbc4d9d7c0598735b761dc320cb03f30cff1613548debde354",
+    "docs/v3/construction/cut-source-overnight-20260908/method-review.json": "f12c2fdf41e6c81ac92caec15bacf4a58cbbebd322c3a696feb15a4880411406",
+    "docs/v3/construction/cut-source-overnight-20260908/plan.json": "55367b1cdd59827fc8017f3515e1bd980ddb1a953f94c65553f9c8d725b177fa",
+    "docs/v3/construction/cut-source-overnight-20260908/preflight.json": "f64293ddcee5c136f7430801b08b69ad5036413aa85e66fc43612fac86051cd6",
+    "docs/v3/construction/cut-source-overnight-20260908/research-queue.json": "04a5ace11e2ddd7a426db462eea28a548a4627851933344993442fb4ae914e09",
+    "docs/v3/construction/cut-source-overnight-20260908/research.md": "99ae11fa58d0ec1059faba36adfabf00a8de23cd55316bc90aa1affefeeae708",
+    "docs/v3/construction/cut-source-overnight-20260908/specification.md": "58ec2002913457222b0b32f065bd988e2cd2b6b560a7438ea33f64fb9c412a77",
+    "experiments/v3/cut-source-overnight/check.py": "aa472321ab6c50f9e92a9fb1392e1f1535af948baf69ee88b2393e0e836759b6",
+    "experiments/v3/cut-source-overnight/maintain.py": "26b481e00e0406d811dce107c7add532d01b393d1682cac3576d74d1f48770fc",
+    "experiments/v3/cut-source-overnight/prepare.py": "f699be3ddd9e5a2e8a6f3290a4c04125bd8b94d8c6ece82eaec80607f6085096",
+    "experiments/v3/cut-source-overnight/run_packet.py": "8ad808bed600d3e95f1d4cf73e5720778705da0609b7427ed1ea838876496c26",
+    "experiments/v3/cut-source-overnight/s_audit.py": "985236871411fd7e506881e4af9b7d00b9c84e1fa59d92011a24b3ff60bb414d",
+    "experiments/v3/cut-source-overnight/s_domain.py": "a53caca2ffe0c48e649157c7ed008c96fc08b152617c9a72ebc57e25db6213a7",
+    "experiments/v3/cut-source-overnight/s_experiment.py": "047a2a4f952d847fe1492840b612128f31ed70f58f429537dcd8db70a194393a",
+    "experiments/v3/cut-source-overnight/s_inclusive.py": "74ede31191dea2da0c67101ec0f20951e4b9a5a3aa59b7413ac6001dd0711746",
+    "experiments/v3/cut-source-overnight/s_split.py": "31ebb8017996021ad23958d27978a91b1c7ddd06b79ee87be27e435358d734d2"
+  }
+}

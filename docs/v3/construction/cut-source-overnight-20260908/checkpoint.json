@@ -1,0 +1,20 @@
+{
+  "status": "incomplete-construction",
+  "at": "2026-09-09T03:56:43.970901+00:00",
+  "head": "ec4232e95722d58dc0eff03289fb629b58d29247",
+  "dirty": [
+    "?? docs/v3/construction/cut-source-overnight-20260908/",
+    "?? experiments/v3/cut-source-overnight/"
+  ],
+  "started_at": "2026-09-09T03:40:33Z",
+  "discovery_cutoff_utc": "2026-09-09T12:40:33Z",
+  "deadline_utc": "2026-09-09T15:40:33Z",
+  "queue_item": "source_authority",
+  "admitted_runs": [],
+  "owned_processes": [],
+  "workers": "source_protocol_research finished read-only; none running",
+  "hypothesis": "registration+append revision and exact ordinal/registry coverage establish bounded complete current source",
+  "residuals": "all nonmodeled source truth and original comparison remain open",
+  "publication": "not-ready",
+  "next_command": "Run committed source_authority packet after gate preflight and fresh usage; retain any failures"
+}
