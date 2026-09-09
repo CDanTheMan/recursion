@@ -482,3 +482,8 @@ SC-EPOCH-03 is the second Owner-authorized successor campaign. The next bounded 
 
 SC-COUPLED-01 adds scoped central reservation/wire/consultation composition. Next propose coupled effect-evidence-cut and PAUSE admission for original10/13/14/15 crossings, preserving current bounds. General rights, full core/cross comparison, authenticated physical persistence and common-writer migration remain residuals; product language/store/framework selection remains deferred.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
+
+## Coupled evidence cut and PAUSE — 2026-09-08
+
+SC-CUT-PAUSE-01 adds scoped coupled cut/PAUSE support. Next proposed bounded work is retained-cut ownership and stale publication; full comparison precedes language/storage selection and common-writer migration remains blocked.
+See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.

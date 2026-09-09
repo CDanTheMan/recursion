@@ -416,3 +416,9 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | CPL-001 | The declared coupled central reservation, transport and consultation product preserves six-plus-six admission against ten under an independent complete relation. | modeled | [SC-COUPLED-01](construction/coupled-construction-20260908/evidence.json) |
 | CPL-002 | Transported advice, current adoption and continuation authority remain distinct from verified effect reconciliation and cumulative allowance. | modeled | [SC-COUPLED-01](construction/coupled-construction-20260908/evidence.json) |
 | CPL-003 | The bounded four-event flow retains explicit source, receiver and application ownership through snapshot recovery and scoped Stop without granting effect authority. | modeled | [SC-COUPLED-01](construction/coupled-construction-20260908/evidence.json) |
+
+## Coupled evidence cut and PAUSE — 2026-09-08
+
+| CCP-001 | Authenticated complete original cut and typed attempt mapping remain separate from historical classification, current cut freshness and reservation ownership. | modeled | [SC-CUT-PAUSE-01](construction/coupled-cut-pause-20260908/evidence.json) |
+| CCP-002 | The actual joined observation preserves literal current-immediate PAUSE refusal and exact duplicate receipt semantics without granting classification authority. | modeled | [SC-CUT-PAUSE-01](construction/coupled-cut-pause-20260908/evidence.json) |
+| CCP-003 | The declared coupled cut and PAUSE product preserves six-plus-six allowance against ten while full original comparison and runtime migration remain incomplete. | modeled | [SC-CUT-PAUSE-01](construction/coupled-cut-pause-20260908/evidence.json) |

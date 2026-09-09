@@ -611,3 +611,8 @@ EPC-003 checks16 typed-consultation environments, including an unordered12-actio
 
 CPL-001 closes the declared central reservation/transport/typed-consultation product across100 finite environments,74,332 states and279,976 edges per representation, with a third complete relation. The original two six-unit requests against ten remain actual admission. This scoped result does not close the original full Cartesian comparison, general rights coupling or common-writer migration.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
+
+## Coupled evidence cut and PAUSE — 2026-09-08
+
+CCP-001 preserves actual original-cut and typed attempt mapping under independent complete comparison. Valid signatures cannot substitute for complete inventory or current cut ownership.
+See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
