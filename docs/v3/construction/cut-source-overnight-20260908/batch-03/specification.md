@@ -39,9 +39,10 @@ For every original S edge, record one disjoint category, in this precedence:
    relation agree, and their observed successor equals the observed S successor.
 2. Observational stutter: observed S before and after are equal.
 3. Explicit mapping gap: neither condition holds; retain differing fields and a full
-   shortest-discovered source-prefix witness for each category/action-family/field set.
+   first-discovered source-prefix witness for each category/action-family/field set.
 
-Private source actions have no Q action and may qualify only as stutter or gap. Q
+Each witness comes from breadth-first traversal within its profile; no cross-profile
+shortestness claim is made. Private source actions have no Q action and may qualify only as stutter or gap. Q
 steps at projected S states establish local kernel correspondence; those states are
 not thereby proved reachable in original Q graphs. A rejected S action can stutter
 even where Q would move. Response-label equivalence and fairness transfer do not follow.

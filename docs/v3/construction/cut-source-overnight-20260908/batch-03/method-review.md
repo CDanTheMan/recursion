@@ -29,3 +29,16 @@ excluded. Full composition remains unproved if any mapping gap remains.
 The reviewer suggested a decreasing finite schedule rank and corruption of mapping
 certificates rather than protocol inputs. The registered checker includes these controls.
 Final execution results and exact-candidate review remain separate requirements.
+
+Before execution, root identified that the new direct source imports require an
+explicit additional s_split.py snapshot. The inherited source model had previously
+been checked in its frozen worktree. The new packet checks all loaded local module
+paths against its own input/source manifest before traversing a graph.
+
+Prospective implementation review caught a retained-artifact schema mismatch: S
+stores its representative trace at trace, whereas Q stores witness/events. The
+initial Q trace lookup was repaired before execution. The original evidence is unchanged.
+
+The reviewer also corrected witness wording: first encounter under per-profile BFS does
+not imply a shortest witness across different profiles. The specification now states
+first-discovered evidence and makes no cross-profile shortestness claim.

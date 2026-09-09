@@ -88,7 +88,7 @@ def run():
         source_key = 'pending-success/' + unit + '/1'
         target_key = 'current-success/' + unit + '/1'
         left = next(r for r in original['profiles'][source_key]['trace'] if r['action'].partition('@')[0] == 'source-attest')
-        right = next(r for r in prior_target['profiles'][target_key]['trace'] if r['action'].partition('@')[0] == 'source-attest')
+        right = next(r for r in prior_target['profiles'][target_key]['witness']['events'] if r['action'].partition('@')[0] == 'source-attest')
         require(project(left['before']) == project(right['before']), 'retained matching observed prestates')
         different = sorted(k for k in VISIBLE if left['after'][k] != right['after'][k])
         require(different == ['source_generation'], 'retained direct-mapping counterexample')

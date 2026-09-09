@@ -2,17 +2,28 @@
 import argparse
 import json
 from pathlib import Path
+import sys
 import contracts
 import mapping
 
 
 def main(output):
     output.mkdir(parents=True, exist_ok=False)
+    manifest = contracts.read(contracts.DOC / 'manifest.json')
+    registered = {r['path'] for r in manifest['inputs']} | set(manifest['sources'])
+    local_modules = set()
+    for module in tuple(sys.modules.values()):
+        filename = getattr(module, '__file__', None)
+        if filename:
+            path = Path(filename).resolve()
+            if path.is_relative_to(contracts.ROOT) and path.suffix == '.py':
+                local_modules.add(path.relative_to(contracts.ROOT).as_posix())
+    contracts.require(local_modules <= registered, 'complete loaded module closure: ' + repr(sorted(local_modules - registered)))
     ledger = contracts.read(contracts.DOC / 'contracts.json')
     a = contracts.validate(ledger)
     a['controls'] = contracts.controls(ledger)
     b = mapping.run()
-    result = {'status': 'BATCH03_CONTRACT_AND_LOCAL_MAPPING_PASS_WITH_GAPS', 'A': a, 'B': b,
+    result = {'status': 'BATCH03_CONTRACT_AND_LOCAL_MAPPING_PASS_WITH_GAPS', 'registered_local_modules': sorted(local_modules), 'A': a, 'B': b,
               'full_comparison_complete': False, 'runtime_selection': None, 'deferred_questions_resolved': []}
     packed = mapping.codec.pack(result)
     accepted = contracts.DOC / 'results.json'

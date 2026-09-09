@@ -621,6 +621,10 @@
       "git_blob_sha256": "612b3509c6c77d8d8de84285f981b7004003d41afaa5a4f2dcea1831050aa666"
     },
     {
+      "path": "experiments/v3/cut-source-overnight/s_split.py",
+      "git_blob_sha256": "1a4a22b23f18e36b9940cecb9d9c8bbe1aea3feb68a8138e4cf590c98a01148c"
+    },
+    {
       "path": "experiments/v3/effect-evidence/check.py",
       "git_blob_sha256": "1f20780734fb4dfe82a1514e8a46e12488adbf0e1b50aebf49685416ebe30852"
     },
@@ -1228,7 +1232,8 @@
   "additional_inputs": [
     "experiments/v3/cut-source-overnight/s_audit.py",
     "experiments/v3/cut-source-overnight/s_domain.py",
-    "experiments/v3/cut-source-overnight/s_inclusive.py"
+    "experiments/v3/cut-source-overnight/s_inclusive.py",
+    "experiments/v3/cut-source-overnight/s_split.py"
   ],
   "sources": [
     "docs/v3/construction/cut-source-overnight-20260908/batch-03/contracts.json",
