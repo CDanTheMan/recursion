@@ -98,12 +98,14 @@ def main(output):
     prepared = output / "predecessor-prepare"
     explored = output / "predecessor-explore"
     prepared.mkdir(); explored.mkdir()
-    previous.prepare(prepared)
+    prepared_result = previous.prepare(prepared)
+    write(prepared / "result.json", prepared_result)
     old = previous.explore(explored)
+    write(explored / "result.json", old)
     doc = ROOT / "docs/v3/construction/cut-source-overnight-20260908/progress-01"
     require((prepared / "inputs.json").read_bytes().replace(b"\r\n", b"\n") ==
             (doc / "inputs.json").read_bytes().replace(b"\r\n", b"\n"), "original input bytes")
-    require(old == json.loads((doc / "results.json").read_text()), "complete prior finite result")
+    require(json.loads((explored / "result.json").read_text()) == json.loads((doc / "results.json").read_text()), "complete prior finite JSON result")
     for profile in old["profiles"]:
         require(hashlib.sha256((explored / profile["graph_file"]).read_bytes()).hexdigest() == profile["graph_sha256"], "prior graph bytes")
     witnesses = [replay(4, "COACCOACOACCCAAC" + "C" * 6)]
