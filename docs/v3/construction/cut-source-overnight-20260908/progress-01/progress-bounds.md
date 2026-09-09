@@ -30,6 +30,17 @@ Repeating this finitely many times services and checks N. These sufficient
 assumptions imply eventual completion, but provide no uniform scheduling-step or
 wall-clock latency bound and are not necessary conditions.
 
+Optimistic visibility is at least sealed visibility after every action prefix.
+O and C preserve both visible counts. On A, an existing optimistic lead of at
+least one covers sealed's possible single increment; with equal counts, sealed
+service implies pending work that optimistic also services. FIFO then means every
+record serviced by sealed was serviced by optimistic no later. Shared offer times
+give no greater optimistic completed wait for that matched record, without fairness.
+If both still have a record pending, its age is equal; if only sealed has it pending,
+optimistic's completed wait is at most that pending age. Do not compare averages
+over differently sized completed-record sets. This assumes identical arrivals and
+service opportunities and does not establish physical-time latency dominance.
+
 A separate manually derived N=4 trace shows why optimistic collection has no
 universal advantage in total reads. Use `COACCOACOACCCAAC`, followed by six C actions.
 This16-action prefix is outside the preregistered H6 enumeration.
@@ -47,8 +58,9 @@ cost8 reads, two invalidations and two actual retries. Sealed sizes1,2,4 cost7 r
 and two postponed append opportunities. This refutes universal optimistic read-work
 superiority; it supplies no average-case comparison or reverse universal dominance.
 
-The read-only coupled_scaling_challenge reviewer independently checked both proofs,
-the trace and the tight-bound construction without model execution. Exact final
+The read-only coupled_scaling_challenge reviewer independently checked the work,
+eventual-completion and matched-wait arguments, trace and tight-bound construction
+without model execution. Exact final
 reviews must still assess these claims with the final candidate. No additional
 finite profiles, source-completeness claims, general protocol proof, architecture
 selection, formal freeze or Q1–Q6 resolution follows from this reasoning.

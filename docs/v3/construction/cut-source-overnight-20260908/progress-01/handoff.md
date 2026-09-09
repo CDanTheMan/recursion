@@ -2,7 +2,7 @@
 
 Same campaign/parent and absolute deadline; see specification.md. This work is a
 prospective conditional scheduling comparison over stipulated valid inputs.
-The reviewed input-preparation run completed; no progress graph has executed yet.
+The reviewed input-preparation and first finite progress runs completed.
 This work cannot resolve deferred Q1–Q6 or establish source validity.
 
 Worktree recursion-v3-cut-source-progress-20260909, branch
@@ -50,3 +50,11 @@ progress-bounds.md records independently reasoned work/fairness propositions and
 a manually derived22-action work-comparison trace outside the H6 enumeration.
 Keep that reasoning distinct from future finite results and review it with the
 final candidate. No additional enumeration profile is claimed.
+
+The first exploration at0fff9ce, run20260909T082850361341, passed in3.391seconds
+with126,836,736-byte job peak and22,139,318 retained bytes. Both representations
+agree exactly across80,098 states and80,528 edges, with zero frontier. All quiet
+continuations complete and all four accounting controls are detected. Results and
+their exact execution reference are committed separately from publication approval.
+The two N=4 input streams have byte-identical progress graphs and add no distinct
+scheduling behavior. Deferred Q1–Q6 remain unresolved.

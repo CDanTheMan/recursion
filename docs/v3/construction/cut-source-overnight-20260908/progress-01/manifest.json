@@ -838,6 +838,7 @@
   ],
   "sources": [
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/activation.json",
+    "docs/v3/construction/cut-source-overnight-20260908/progress-01/evidence.json",
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/goal.json",
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/handoff.md",
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/input-provenance.json",
@@ -845,6 +846,7 @@
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/manifest.json",
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/method-review.md",
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/progress-bounds.md",
+    "docs/v3/construction/cut-source-overnight-20260908/progress-01/results.json",
     "docs/v3/construction/cut-source-overnight-20260908/progress-01/specification.md",
     "experiments/v3/cut-source-overnight/progress-01/pg_admission.py",
     "experiments/v3/cut-source-overnight/progress-01/pg_check.py",

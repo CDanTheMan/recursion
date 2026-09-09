@@ -1,0 +1,10 @@
+{
+  "execution_relative": "0fff9cee7e434dc70900aaaa453c79907905585a/20260909T082850361341/execution.json",
+  "execution_sha256": "734b4a3d4538e275295d8b9fcb1d36a2f485fbfd06c2e0549f3d677bc4abe231",
+  "source_commit": "0fff9cee7e434dc70900aaaa453c79907905585a",
+  "classification": "modeled-conditional-collection-progress",
+  "scope": "Declared finite H6 prefixes and deterministic quiet suffix only",
+  "source_validity_proven": false,
+  "deferred_questions_resolved": [],
+  "campaign_complete": false
+}
