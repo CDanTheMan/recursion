@@ -128,4 +128,4 @@ add('fresh-conflict-retry-stale-source', setup('success') + collect('success') +
 add('atomic-receipt-not-start', setup('success','atomic-start') + ['atomic:prior-unresolved:3'], outcomes=(1,),policy='atomic-start')
 add('negative-collection-ordinal', setup('success') + ['collect-open','collect:-1'], outcomes=(1,))
 add('incomplete-registration', list(q.SETUP) + ['register:missing-original','attempt:1',append('success',0)], outcomes=(1,))
-add('same-head-foreign-cut', setup('success') + collect('success') + q.deliver('foreign-attempt') + ['source-attest','stage','pub-commit'], outcomes=(1,))
+add('same-head-foreign-cut', setup('success') + ['collect-open','collect:0','collect:1','collect:2'] + q.deliver('foreign-attempt') + ['source-attest','stage','pub-commit'], outcomes=(1,))
