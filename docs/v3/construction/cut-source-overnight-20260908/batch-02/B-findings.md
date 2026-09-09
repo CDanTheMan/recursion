@@ -1,13 +1,13 @@
 # Campaign B: conditional workload bounds — 2026-09-09
 
-The admitted workload study passes184482 states per representation across nine domains:
+The admitted workload study passes 184482 states per representation across nine domains:
 N=2,3,4 crossed with AC,AAC,ACC. Equal-count original N4 streams share a scheduling
 domain. All original AC graph hashes reproduce exactly, both reducers agree, all edges
-and metrics pass the independent relation, five controls are detected and frontier is0.
+and metrics pass the independent relation, five controls are detected and frontier is 0.
 
-Every original H6 word is paired across service families. Results retain729 matched
+Every original H6 word is paired across service families. Results retain 729 matched
 prefixes per comparison and explicit witnesses. Counts are descriptive, not probabilities.
-A/C/O each cost one modeled tick; AC periods cost2 while AAC/ACC cost3. These are
+A/C/O each cost one modeled tick; AC periods cost 2 while AAC/ACC cost 3. These are
 conditional service schedules, not physical throughput measurements.
 
 | N | Period | Maximum joint completion ticks after suffix start | Proven conservative bound | one read range | drain read range |
