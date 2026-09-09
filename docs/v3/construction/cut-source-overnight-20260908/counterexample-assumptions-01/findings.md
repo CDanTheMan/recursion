@@ -34,7 +34,7 @@ infinitely many A and C opportunities, yet the actual sealed append is enabled o
 between check and reseal. Weak fairness does not force a step that is repeatedly
 disabled; strong fairness of that append step would exclude this recurrence. This
 applies Lamport's distinction to our explicitly defined transition; it does not claim
-a TLA+ verification. [Lamport, PlusCal tutorial session 9, section 5](https://lamport.azurewebsites.net/tla/tutorial/session 9.html).
+a TLA+ verification. [Lamport, PlusCal tutorial session 9, section 5](https://lamport.azurewebsites.net/tla/tutorial/session9.html).
 
 Validation: the admitted run reproduced the predecessor's complete original input
 bytes, accepted result and all four graph hashes. Every new original-policy witness
