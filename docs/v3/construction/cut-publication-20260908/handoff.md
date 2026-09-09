@@ -9,9 +9,11 @@ Verify current master and this branch's PR before continuing; preserve later cha
 
 Read goal/plan/preflight/manifest/specification/research/findings/evidence/results/
 coverage/method-review/validation-inventory and next-probes completely. Accepted source
-4e1120511b46f49404af038d11ae2ca7a701c13f ran in discovery/run-03. Run-01 failed original
+a2eb4375ff7baec4af65b7b172033fd2b414ba05 ran in discovery/run-04. Run-01 failed original
 scope path lookup; run-02 was a superseded pass missing fresh-publication scope checks.
-All source/admission/stdout/stderr/results remain hash-bound with actual dispositions.
+Run-03 passed the semantic repair; a later whitespace gate required source re-admission
+asrun-04 with unchanged semantics. Failed publication-path and whitespace candidate gates
+remain retained. All source/admission/stdout/stderr/results remain hash-bound.
 
 Results use text-interning/1. Import experiments/v3/cut-publication/q_artifact.py and call
 unpack(json.load(...)) for tracked results; external raw experiment results wrap the

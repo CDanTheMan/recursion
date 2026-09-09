@@ -3,7 +3,7 @@
 Readiness is scoped modeled support. Final publication requires the external two-gate,
 two-review exact-candidate closure; this immutable packet does not invent a later pass.
 
-Accepted run-03 executed committed source 4e1120511b46f49404af038d11ae2ca7a701c13f.
+Accepted run-04 executed committed source a2eb4375ff7baec4af65b7b172033fd2b414ba05.
 All44 named profiles /132 environments completed: 4,384 states and6,232 edges per
 representation, zero remaining frontier, exact labeled graph correspondence and third
 complete relation. Both cursor units and every declared outcome/order were explored.
@@ -38,11 +38,12 @@ new current-cut check matters independently of the inherited numeric source-vers
 
 Run-01 failed on an incorrect original intent/admission path; all source and error output
 remain. Run-02 passed its declared exploration but was superseded by the independent
-same-head scope finding. Run-03 is the only accepted discovery. Evidence hashes every
+same-head scope finding. Run-03 passed the semantic repair but was superseded after final whitespace validation;
+run-04 re-admits the committed whitespace repair and is the only accepted discovery. Evidence hashes every
 retained byte; no failed/superseded result is promoted.
 
-Run-03 model time25.369819600018673seconds; observed peak110252032bytes; outer owned
-process26.924313500057906seconds. The raw result is37112249bytes. Lossless text interning
+Run-04 model time23.56708109995816seconds; observed peak110530560bytes; outer
+owned process24.992808899958618seconds. The raw result is37112248bytes. Lossless text interning
 preserves original bytes without state merging or graph-hash changes; strict reference
 closure and corruption controls are checked. This is an evidence codec, not product storage.
 Semantic result SHA256: f80ae38cc93c0bbc54eb3c4a0968be4beaf5ee666817cf52d28dea859a54062b.
@@ -62,3 +63,9 @@ The first synthesized candidate gate stopped before new model execution because 
 unchanged publication scan rejected an absolute local Windows user path in handoff.
 The path was replaced with the worktree name; failed outer logs remain externally and
 are bound in superseded_candidate_validations. No model result was changed.
+
+The replacement candidate07da999 passed the new model and24adversarial checks before
+the unchanged git diff --check found one space on a blank source line. The independent
+gate reviewer reported the same defect. The source was committed and re-admitted as
+run-04; exact semantic hash is unchanged. Failed gate execution, conditional method
+approval, repair-required gate review and never-published preparation remain retained.

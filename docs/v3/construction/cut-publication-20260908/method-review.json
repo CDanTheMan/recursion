@@ -13,7 +13,8 @@
     "Success and late-receipt share ordered-record head but differ in complete cut identity.",
     "Construction challenge discovered fresh publication lacked original reservation/attempt scope check despite identical head; later join rejected and preserved A6.",
     "Lossless artifact codec round trips actual cut bytes/Unicode and rejects malformed object/reference closure.",
-    "Shared immutable fixture catalog cannot prove collector truth or physical deletion."
+    "Shared immutable fixture catalog cannot prove collector truth or physical deletion.",
+    "Final gate reviewer independently caught blank-line source whitespace in07da999; re-admitted committed repair asrun04 with unchanged semantic hash. Both exact replacement reviews still required."
   ],
   "repair_review": {
     "candidate": "4e1120511b46f49404af038d11ae2ca7a701c13f",
