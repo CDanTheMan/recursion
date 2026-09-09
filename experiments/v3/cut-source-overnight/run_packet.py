@@ -134,10 +134,14 @@ class OwnedJob:
 
     def stop(self):
         if not self.k.TerminateJobObject(self.handle,1): raise ctypes.WinError(ctypes.get_last_error())
-        until=time.monotonic()+5
+        if not self.wait_idle(5): raise TimeoutError('owned job termination did not complete')
+
+    def wait_idle(self,seconds):
+        until=time.monotonic()+seconds
         while self.active():
-            if time.monotonic()>until: raise TimeoutError('owned job termination did not complete')
+            if time.monotonic()>until: return False
             time.sleep(.01)
+        return True
 
     def close(self):
         try:
@@ -182,6 +186,7 @@ def execute(directory,queue_item,final=False):
                 elif size>goal['experiment_limits']['artifact_bytes']: status='artifact-limit'
                 if status!='finished': job.stop(); process.wait(timeout=5); break
                 time.sleep(.1)
+        idle=job.wait_idle(min(5,max(0,(end-now()).total_seconds())))
         execution={'status':status,'exit_code':process.returncode,'finished_at':now().isoformat(),'seconds':time.monotonic()-begin,'sampled_peak_bytes':observed,'owned_job_peak_bytes':job.peak(),'owned_job_active_after_exit':job.active(),'pid':process.pid}
         if job.active(): job.stop();execution['status']='unexpected-owned-descendant'
         terminal_size=sum(p.stat().st_size for p in directory.rglob('*') if p.is_file())
@@ -219,7 +224,8 @@ def containment_check(directory):
         try:
             process=job.launch([sys.executable,'-B','-c','print("contained-normal")'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
             raw=process.communicate(timeout=10)[0];(directory/'normal.log').write_bytes(raw)
-            state={'returncode':process.returncode,'active':job.active(),'output':raw.decode('utf-8',errors='replace')}
+            idle=job.wait_idle(5)
+            state={'returncode':process.returncode,'active':job.active(),'output':raw.decode('utf-8',errors='replace'),'settled':idle}
             write(directory/'normal-state.json',state)
             assert process.returncode==0 and raw.strip()==b'contained-normal' and state['active']==0, state
             cases.append('normal-exit-no-descendants')
@@ -241,6 +247,7 @@ def containment_check(directory):
             process=job.launch([sys.executable,'-B','-c','x=bytearray(128*1024*1024);print("unexpected allocation")'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
             raw=process.communicate(timeout=10)[0]
             (directory/'memory-limit.log').write_bytes(raw)
+            job.wait_idle(5)
             assert process.returncode!=0 and b'MemoryError' in raw and job.peak()<=64*1024*1024 and job.active()==0, {'returncode':process.returncode,'active':job.active(),'peak':job.peak(),'output':raw.decode('utf-8',errors='replace')}
             cases.append('job-committed-memory-cap-refuses-allocation')
         finally:job.close()

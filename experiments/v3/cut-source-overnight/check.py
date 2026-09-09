@@ -149,7 +149,7 @@ def command(args,root,out,label,deadline):
         process=job.launch(args,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         try:
             raw=process.communicate(timeout=min(600,remain))[0];code=process.returncode
-            if job.active(): job.stop();status='unexpected-owned-descendant';code=None
+            if not job.wait_idle(min(5,max(0,(deadline-runner.now()).total_seconds()))): job.stop();status='unexpected-owned-descendant';code=None
         except subprocess.TimeoutExpired:
             job.stop();raw=process.communicate(timeout=5)[0];code=None;status='timeout-owned-job-terminated-and-waited'
     finally:
