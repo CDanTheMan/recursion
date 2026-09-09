@@ -43,6 +43,7 @@ def step(s,a,p,u,outcome,mutant=None):
    elif (type(e.expected_revision) is not int or e.expected_revision!=s['publication_revision'] or e.parent!=(s['selected'].generation if s['selected'] else '')) and mutant!='publication-parent':deny('stale-parent')
    elif (raw!=d.raw_cut(e.cut) or d.digest(json.loads(raw))!=e.content) and mutant!='publication-content':deny('bad-content')
    elif e.inventory!=d.record_ids(e.cut) and mutant!='publication-inventory':deny('bad-inventory')
+   elif (not s['source_name'] or tuple(d.lit.fixture(e.cut)['binding']['body']['reservation'])!=s['bindings'][0] or d.scope(e.cut)!=d.scope(s['source_name'])) and mutant!='publication-scope':deny('foreign-publication')
    elif d.canonical(e.source_generation)!=d.canonical(s['source_generation']) and mutant!='source-generation':deny('stale-source-generation')
    elif (e.source_head!=d.head(e.cut) or e.source_head!=s['source_head']) and mutant!='source-head':deny('stale-source-head')
    elif any(x[0].generation==e.generation for x in s['publication_store']):deny('generation-used')

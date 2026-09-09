@@ -102,3 +102,6 @@ add('typed-advice-publication',[a.split('@')[0] for a in base.base.PROFILES['tra
 add('foreign-source-scope',SETUP+source('foreign')+['pub-commit','admitB'])
 
 add('duplicate-after-retirement',OLD+['reader-copy:0','reader-wait:0','reader-release:0','reclaim','pub-lose-reply','authority-restart','pub-retry','pub-retry'],outcomes=(1,))
+
+for foreign in ('foreign','foreign-attempt'):
+ add('same-head-'+foreign,SETUP+pub('success')+deliver(foreign)+['stage','pub-commit']+reader()+['reconcile','admitB'],outcomes=(1,))

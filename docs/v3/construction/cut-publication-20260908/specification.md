@@ -111,3 +111,5 @@ Construction refinement before run02: run01 failed at the first source-append re
 because the new mapping incorrectly looked for original intent/admission at top level.
 Use the complete frozen original.cut.trace_header fields; record lists remain original.records.
 The failed admitted source/output is retained. No prior passing discovery is claimed.
+
+Fresh publication additionally binds the candidate original intent, admission and reservation to the current attested source, and its reservation tuple to the actual admitted A request. Equal original record heads do not establish equal scope. Independent construction challenge found same-head foreign-reservation and foreign-attempt publication after a legitimate A publication; the later join had refused these and retained A capacity, but publication itself incorrectly accepted them. Run-02 is retained as superseded passing evidence. The repaired relation adds both profiles and a publication-scope guard-removal counterexample.
