@@ -104,8 +104,8 @@ def snapshot(directory, head, limit):
     actual_code = {p.relative_to(ROOT).as_posix() for p in (ROOT / CODE).rglob("*.py")}
     require(actual_code <= set(paths), "all nested model and runner sources included")
     historical_manifest = read(ROOT / "docs/v3/construction/cut-source-overnight-20260908/manifest.json")
-    required_inputs = {r["path"]: r["git_blob_sha256"] for r in historical_manifest["inputs"] if not r["path"].startswith("docs/v3/construction/")}
-    require(all(inputs.get(p) == expected for p, expected in required_inputs.items()), "complete unchanged nonconstruction input closure")
+    required_inputs = {r["path"] for r in historical_manifest["inputs"] if not r["path"].startswith("docs/v3/construction/")}
+    require(required_inputs <= set(inputs) and manifest["input_reference_commit"] == BASE, "complete nonconstruction path closure at frozen continuation base")
     require({DOC + name for name in ("goal.json", "specification.md", "manifest.json", "activation.json")} <= set(paths), "all execution-defining documents included")
     if (ROOT / DOC / "inputs.json").exists():
         require(DOC + "inputs.json" in paths, "prepared original input bytes included")
@@ -117,6 +117,8 @@ def snapshot(directory, head, limit):
         blob, raw = git("show", head + ":" + name), path.read_bytes()
         require(raw.replace(b"\r\n", b"\n") == blob.replace(b"\r\n", b"\n"), "working source equals commit: " + name)
         require(name not in inputs or digest(blob) == inputs[name], "frozen input identity: " + name)
+        if name in inputs:
+            require(digest(git("show", BASE + ":" + name)) == inputs[name], "input identity at immutable continuation base: " + name)
         copy = directory / "source" / name
         copy.parent.mkdir(parents=True, exist_ok=True)
         copy.write_bytes(raw)

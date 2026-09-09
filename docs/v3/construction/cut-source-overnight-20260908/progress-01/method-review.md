@@ -13,6 +13,14 @@ nonterminal witnesses, and an incorrect nonnegative wait control that satisfies
 structural invariants before the transition relation rejects it. A separate schedule
 relation checks every prefix branch and every quiet-suffix service opportunity.
 
+Admission review of67d3c87 caught stale inherited hashes for canonical documents
+that had advanced since the original baseline manifest. The progress manifest now
+binds every immutable input to the verified documentation base8f457c5; the old
+manifest remains unchanged historical provenance and supplies the required path
+closure. Snapshotting verifies both current committed bytes and that exact base.
+The review also added a terminal full-gate artifact check including its own receipt.
+No model ran on the superseded preregistration candidate.
+
 The admission review identified duplicate-input collapse, insufficient reserve
 rechecking after source snapshot, and cleanup errors potentially suppressing the
 execution receipt. Root added explicit uniqueness, refreshed usage and reserve

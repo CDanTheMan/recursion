@@ -17,11 +17,11 @@
     },
     {
       "path": "docs/v3/ACCEPTANCE.md",
-      "git_blob_sha256": "4a78440521b96ac0a7274d319bba8245251f836502fe32c6491abca7cd0abe5a"
+      "git_blob_sha256": "42f56bc8cc673349778b544bc4298cdfd191b49476348aca2e02b037fc862621"
     },
     {
       "path": "docs/v3/ARCHITECTURE.md",
-      "git_blob_sha256": "660513fe511a3d66d041c001601eab2a952f208328063d072c5282167440dd63"
+      "git_blob_sha256": "0f151d2f6d2dc8e6b8b1474f4b10333f96c75d7dbf09240db7d9db2809723ebe"
     },
     {
       "path": "docs/v3/AUTONOMOUS-PLANNING.md",
@@ -37,11 +37,11 @@
     },
     {
       "path": "docs/v3/CONSTRUCTION-RUNBOOK.md",
-      "git_blob_sha256": "34e3567dfa0a5b3e35593332e1568cd8d490403704dfa752212d91d176d65fbf"
+      "git_blob_sha256": "4c8e6b58db9ecbd031aa376bc582062807b6795b410e589ce88d14a020798dea"
     },
     {
       "path": "docs/v3/EXECUTION-FABRIC.md",
-      "git_blob_sha256": "149ee48a5bba273b4a3577aa474fd97c1b7b43b56597dd76319089b5e3fa0b33"
+      "git_blob_sha256": "08e3ab95491a3df0dd2bd9a68dc551319d368c3bb7241f535f537853be15a0b3"
     },
     {
       "path": "docs/v3/EXECUTIVES.md",
@@ -73,11 +73,11 @@
     },
     {
       "path": "docs/v3/ROADMAP.md",
-      "git_blob_sha256": "4773dd1cf5a21bfaa29013dc8773863869c948363dc163ba2109cd7305143c1c"
+      "git_blob_sha256": "edff43f35de824104003c38499576d9271b1f10ff4c4c098a5527017cc69b477"
     },
     {
       "path": "docs/v3/TERMINAL-RUNTIME.md",
-      "git_blob_sha256": "d80a927daf8377cb09a0bdb5143dddfefc18f1cabbc6431f420aba8ad6b7c019"
+      "git_blob_sha256": "a155bc31e7f89701f1b8173b4eb8db66c6d59b6cb437772519763d05d12dd2f9"
     },
     {
       "path": "docs/v3/construction/cut-source-overnight-20260908/manifest.json",
@@ -851,5 +851,6 @@
     "experiments/v3/cut-source-overnight/progress-01/pg_separated.py",
     "experiments/v3/cut-source-overnight/progress-01/pg_unified.py"
   ],
-  "note": "Explicit input and nested source closure. Sources are individually bound to the clean commit and retained at admission."
+  "note": "Explicit input and nested source closure. Sources are individually bound to the clean commit and retained at admission.",
+  "input_reference_commit": "8f457c546e4d85fada73913efb900f921eaf6b1a"
 }

@@ -117,6 +117,10 @@ def main(candidate):
         receipt["finished_at"] = runner.now().isoformat()
         receipt["files"] = {p.name: sha(p) for p in directory.iterdir() if p.is_file()}
         write(directory / "receipt.json", receipt)
+        if runner.artifact_size(directory) > 268435456:
+            receipt.update(status="FAILED_RETAINED", error="terminal full-gate artifact bound including receipt")
+            write(directory / "receipt.json", receipt)
+            raise ValueError(receipt["error"])
         print(str(directory / "receipt.json"), flush=True)
 
 
