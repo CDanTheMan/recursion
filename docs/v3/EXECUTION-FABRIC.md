@@ -469,3 +469,13 @@ while current-cut/source reconciliation authority and A6 reservation remain sepa
 A restarted reader cannot steal an old live pin; physical orphan recovery is unconstructed.
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
+
+## Complete-source reservation boundary — 2026-09-08
+
+The bounded source protocol preserves actual A6/B6 pool10. Registration-only source
+change invalidates fresh publication and selected-cut reconciliation even with identical
+record bytes. Pending registry entries absent from original attempt-start mapping retain
+A6. Existing publication receipts, reader pins/copies, worker lifetime, quota/reset, replay
+and classification remain distinct. Pending registry scaling to4 does not authorize
+additional original literal attempts or external execution.
+See [scope and results](construction/cut-source-overnight-20260908/findings.md).

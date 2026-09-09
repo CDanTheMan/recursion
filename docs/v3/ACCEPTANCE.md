@@ -522,3 +522,14 @@ This is scoped modeled support; source completeness, physical recovery and full 
 formal comparison/runtime integration remain unproved.
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
+
+## SC-CUT-SOURCE-01 acceptance — 2026-09-08
+
+Require two clean exact-candidate full gates,16 frozen predecessor gates per pass,
+unchanged25 regressions and two independent reviews before normal draft review
+publication. New exact finite source/coupled/scaling profiles retain A6/B6 pool10,
+six obligations,27 trace rows and every historical contract. A superseded pass or
+failed guard/schedule is retained and cannot substitute for accepted combined evidence.
+The fixed twelve-hour deadline and three-hour finalization reserve survive restart;
+no automatic resumption after quota reset. Formal freeze and runtime integration remain
+unestablished. See [handoff](construction/cut-source-overnight-20260908/handoff.md).

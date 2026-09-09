@@ -11,6 +11,7 @@ import runpy
 import run_packet as runner
 
 ROOT=runner.ROOT; PREFIX=runner.PREFIX; CODE=runner.CODE
+sys.path.insert(0,str(ROOT/'experiments/v3/cut-publication'))
 BASE='ec4232e95722d58dc0eff03289fb629b58d29247'
 PREVIOUS='e4b844b1af6c309263812c6961ccb50b3e5b8a82'
 read=runner.read; sha=runner.sha
@@ -130,16 +131,29 @@ def evidence():
         require(bool(row['disposition']),'truthful attempt disposition')
     accepted=runner.cache()/'discovery'/e['accepted_run']; raw=codec.unpack(read(accepted/'result.json')['result'])
     require(raw==actual,'accepted retained results')
+    for row in e['containment_checks']:
+        path=runner.cache()/'containment'/row['id']
+        require(row['files']=={p.relative_to(path).as_posix():sha(p.read_bytes()) for p in path.rglob('*') if p.is_file()},'containment evidence closure')
+        if row['accepted']:
+            result=read(path/'result.json');require(result['status']=='CONTAINMENT_PASS' and len(result['cases'])==3,'executed containment controls')
+            require(result['source_sha256']==sha((ROOT/CODE/'run_packet.py').read_bytes()),'current contained wrapper tested')
+    require(sum(r['accepted'] for r in e['containment_checks'])==1,'one accepted containment control run')
     validate_coverage(doc('coverage.json'))
     return actual
 
 def command(args,root,out,label,deadline):
     runner.scope(expensive=False,final=True)
     remain=(deadline-runner.now()).total_seconds(); require(remain>0,'hard deadline')
-    started=time.monotonic(); status='finished'
+    started=time.monotonic(); status='finished';job=runner.OwnedJob();process=None
     try:
-        result=subprocess.run(args,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=min(600,remain)); raw=result.stdout; code=result.returncode
-    except subprocess.TimeoutExpired as error: raw=error.stdout or b''; code=None; status='timeout-owned-command-killed-and-waited'
+        process=job.launch(args,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        try:
+            raw=process.communicate(timeout=min(600,remain))[0];code=process.returncode
+            if job.active(): job.stop();status='unexpected-owned-descendant';code=None
+        except subprocess.TimeoutExpired:
+            job.stop();raw=process.communicate(timeout=5)[0];code=None;status='timeout-owned-job-terminated-and-waited'
+    finally:
+        job.close()
     (out/(label+'.log')).write_bytes(raw)
     row={'command':args,'root':str(root),'seconds':time.monotonic()-started,'exit_code':code,'status':status,'log':label+'.log','sha256':sha(raw)}
     runner.write(out/(label+'-execution.json'),row); print(json.dumps(row),flush=True)
@@ -161,6 +175,7 @@ def main():
         fresh=model.run('all'); require(fresh==actual,'complete semantic reproduction'); print('CUT_SOURCE_WORKING_PASS_NOT_FINAL'); return
     runner.scope(final=True); out=runner.cache()/candidate; out.mkdir(exist_ok=True)
     runid=runner.now().strftime('%Y%m%dT%H%M%S%f'); directory=out/runid
+    controls=out/(runid+'-containment');runner.containment_check(controls)
     a,x=runner.execute(directory,'all',final=True); verify_run(directory,True)
     import q_artifact as codec
     require(codec.unpack(read(directory/'result.json')['result'])==actual,'fresh exact final reproduction')
@@ -175,6 +190,7 @@ def main():
     receipt={'status':'CUT_SOURCE_GATE_PASS','candidate':candidate,'run_id':runid,'semantic_sha256':doc('evidence.json')['semantic_sha256'],
              'frozen_validations':frozen,'regressions':regressions,'adversarial_checks':labels,'execution_directory':str(directory),
              'execution_files':{p.relative_to(directory).as_posix():sha(p.read_bytes()) for p in directory.rglob('*') if p.is_file()},'formal_freeze':False}
+    receipt['containment_directory']=str(controls);receipt['containment_files']={p.relative_to(controls).as_posix():sha(p.read_bytes()) for p in controls.rglob('*') if p.is_file()}
     runner.write(out/(runid+'.json'),receipt); print('CUT_SOURCE_GATE_PASS '+candidate,flush=True)
 
 if __name__=='__main__':

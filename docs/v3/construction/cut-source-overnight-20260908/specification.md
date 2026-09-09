@@ -84,3 +84,12 @@ then an ordered suffix attempts attestation, publication, read/classification, r
 and B admission. Every terminal ordering must retain A6 with no publication. Reverse and
 duplicate collection cover the maximum four-record inventory. This is exact finite profile
 exploration, not fuzzing, larger original record count or the full Cartesian composition.
+
+Final gate-wrapper refinement: Windows anonymous jobs contain the owned historical checker
+and its ordinary subprocess descendants. Launch suspended, assign to the job, then resume;
+no breakaway flags. Timeout terminates/waits the owned job, including any model grandchild.
+The new model additionally has an OS committed-memory cap of2GiB for process/job, alongside
+sampled working/private-memory checks. This is process containment, not filesystem/network
+sandboxing or any operational configuration change. Committed wrapper controls test normal
+exit, parent/grandchild termination and refusal above a64MiB test allocation cap. Historical
+scripts and their internal checks remain unchanged.

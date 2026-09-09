@@ -40,3 +40,10 @@ head, delayed collection, concurrent registration, append before publication, sa
 append/fork, foreign mapping/body/caller, lost reply and duplicate request, source restart,
 PAUSE and stale reconciliation retaining A6. Source truth outside admitted transitions,
 physical recovery/reclamation and full original comparison remain explicitly unproved.
+
+[Microsoft job-object documentation](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
+documents default subprocess membership, job termination and kill-on-close. The new wrapper
+uses an anonymous job assigned before resuming its suspended child, covering frozen gate
+grandchildren without editing historical scripts. The [extended limit structure](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_extended_limit_information)
+defines committed-memory limits and accounting. These controls do not establish a general
+network/filesystem sandbox; actual local containment probes are separately retained.

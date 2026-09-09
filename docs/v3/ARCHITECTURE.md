@@ -626,3 +626,13 @@ scope or cut identity. Durable exact retries return old receipts without selecti
 Synthetic source truth and atomic durability remain premises; this is not common-writer migration.
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
+
+## Complete-source admission — 2026-09-08
+
+SC-CUT-SOURCE-01 constructs registration/append revision, exact ordinal collection and
+current source admission in two representations with a third complete relation. A new
+pending attempt changes authority even when the record head is unchanged. Fresh versus
+retained duplicate publication depends on durable request identity, not call spelling.
+Atomic registration/start and pending registration are bounded alternatives, not product
+architecture selection. Physical source truth, recovery and common-writer migration remain
+premises or residuals. See [evidence](construction/cut-source-overnight-20260908/findings.md).
