@@ -101,7 +101,7 @@ def hazard(m,s,k,n):
 
 def mutant(m,u='event',outcome=2):
  name=MUTANTS[m];p=d.PROFILES[name];outcome=p.get('outcomes',d.OUTCOMES)[-1] if outcome not in p.get('outcomes',d.OUTCOMES) else outcome;s=d.initial(u);events=[];first=None
- 
+
  for a in p['actions']:
   n=inc.step(s,a,p,u,outcome,m);k=a.split('@')[0];events.append(dict(action=a,before=s,after=n))
   try:audit.check(s,a,n,p,u,outcome)

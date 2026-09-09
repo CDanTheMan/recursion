@@ -113,3 +113,8 @@ Use the complete frozen original.cut.trace_header fields; record lists remain or
 The failed admitted source/output is retained. No prior passing discovery is claimed.
 
 Fresh publication additionally binds the candidate original intent, admission and reservation to the current attested source, and its reservation tuple to the actual admitted A request. Equal original record heads do not establish equal scope. Independent construction challenge found same-head foreign-reservation and foreign-attempt publication after a legitimate A publication; the later join had refused these and retained A capacity, but publication itself incorrectly accepted them. Run-02 is retained as superseded passing evidence. The repaired relation adds both profiles and a publication-scope guard-removal counterexample.
+
+Final whitespace validation found a space on an otherwise blank experiment-source line.
+The semantic model is unchanged by removing it. The source is committed and re-admitted
+as run-04; run-03 remains superseded passing evidence, and the interrupted final gate
+remains failed with complete raw execution and review records.
