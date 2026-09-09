@@ -2,8 +2,8 @@
 
 Same campaign/parent and absolute deadline; see specification.md. This work is a
 prospective conditional scheduling comparison over stipulated valid inputs.
-Model sources are being implemented but no model is admitted or executed yet.
-This work cannot resolve deferred Q1–Q6.
+The reviewed input-preparation run completed; no progress graph has executed yet.
+This work cannot resolve deferred Q1–Q6 or establish source validity.
 
 Worktree recursion-v3-cut-source-progress-20260909, branch
 codex/v3-cut-source-progress-20260909, starts at frozen documentation candidate
@@ -11,9 +11,8 @@ codex/v3-cut-source-progress-20260909, starts at frozen documentation candidate
 is under complete validation in the separate continuation worktree; preserve it.
 
 The finite service contract, bound and prospective code received read-only challenge;
-see method-review.md for findings and root's repairs. Next: commit the explicit input
-closure, two representations, independent relation, resource admission and full gate,
-then obtain an admission review before any run. Existing valid input
+see method-review.md for findings and root's repairs. Candidate a8fda63 received two
+independent preparation-admission approvals after the prospective repairs. Existing valid input
 factory is experiments/v3/effect-evidence/ee_cases.py:unsigned. Its original source
 data include scripts/tests/v3/integrity/fixtures/F-M1C-007.json and planning fixture
 F-M1A-014.json, with dependencies in the immutable prior manifest. Full record bytes
@@ -38,3 +37,16 @@ pg_check.py --candidate FULL_HASH twice and obtain two independent exact reviews
 Each full pass runs18 frozen predecessor checks and25 regressions and freshly
 reproduces prepare/explore. No implicit post-expiry historical mode is provided.
 Do not publish an unvalidated candidate or mark the broader campaign complete.
+
+Preparation at a8fda63, run20260909T082356968232, completed in1.188seconds of owned
+execution with23,146,496-byte job peak and9,084,630 retained artifact bytes. It
+regenerated the four unchanged streams with record counts3,2,4,4; source/input
+bytes and full provenance are retained in the shared evidence cache. See
+input-provenance.json for the immutable execution receipt and inputs.json for the
+complete88,696-byte prepared input. This is input reproduction, not an exploration
+or source-validity result. Commit these bytes and refreshed manifest before explore.
+
+progress-bounds.md records independently reasoned work/fairness propositions and
+a manually derived22-action work-comparison trace outside the H6 enumeration.
+Keep that reasoning distinct from future finite results and review it with the
+final candidate. No additional enumeration profile is claimed.
