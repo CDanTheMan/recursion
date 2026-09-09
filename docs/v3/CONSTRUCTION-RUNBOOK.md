@@ -340,3 +340,14 @@ For SC-COUPLED-01 verify external completion and all receipt/source/log hashes, 
 
 The new cut/PAUSE gate retains all14 frozen gates and unchanged25commands. Admit600seconds per historical command for the larger immediate predecessor, preserving exact scripts. Retain failed runs and require two exact clean gates/two independent reviews before normal draft publication.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
+
+## Retained-cut publication — 2026-09-08
+
+Retained-cut publication packet: construction/cut-publication-20260908/handoff.md.
+Read complete packet and external Git-common cut-publication/<candidate>/completion.json;
+verify exact receipts/raw evidence before continuing. New evidence text interning is lossless
+and strict; q_artifact.unpack reconstructs every full original cut byte and witness.
+Two full clean candidate gates include15 immutable predecessors and unchanged25 regressions;
+retain failed/superseded attempts, exact re-review after repair, normal draft PR to master.
+
+See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.

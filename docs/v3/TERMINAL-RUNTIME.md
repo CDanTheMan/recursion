@@ -509,3 +509,13 @@ CPL-003 retains four-event costs1,2,1,2 and the full declared stage, in-flight, 
 
 Supplemental retained-cut delivery stays separate from the full four-event stream. ACK/restart/snapshot installation cannot give a stale, foreign or uncertain cut reservation-settlement authority.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
+
+## Retained-cut publication — 2026-09-08
+
+Retained-cut historical installation may expose a pure joined classification under PAUSE
+without changing current selected revision, source incarnation/head, runtime admission or
+external-effect allowance. Exact internal publication receipt lookup is awareness. Current
+reconciliation still requires the selected cut plus all inherited literal admission guards.
+No runtime service, operational PAUSE behavior or common-writer bridge is implemented.
+
+See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
