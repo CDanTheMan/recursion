@@ -963,9 +963,14 @@
     }
   ],
   "sources": [
+    "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/derivations.md",
+    "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/evidence.json",
+    "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/findings.md",
     "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/goal.json",
+    "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/handoff.md",
     "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/historical-closure.json",
     "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/manifest.json",
+    "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/results.json",
     "docs/v3/construction/cut-source-overnight-20260908/append-handoff-01/specification.md",
     "experiments/v3/cut-source-overnight/append-handoff-01/check.py",
     "experiments/v3/cut-source-overnight/append-handoff-01/full_gate.py",
