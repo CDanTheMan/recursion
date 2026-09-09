@@ -58,3 +58,12 @@ continuations complete and all four accounting controls are detected. Results an
 their exact execution reference are committed separately from publication approval.
 The two N=4 input streams have byte-identical progress graphs and add no distinct
 scheduling behavior. Deferred Q1–Q6 remain unresolved.
+
+The next source revision adds directly reproduced waiting aggregates, distinct
+terminal read-comparison counts, and observed work/wait-bound checks. It changes
+no inputs or transitions. The existing preparation and finite result remain valid
+historical evidence, but cannot validate changed measurement sources. After the
+second documentation full gate releases its locks, freshly prepare and explore
+the committed revision, retain identical input/graph bytes and prior result fields,
+then update the current evidence references. Do not run final gates against stale
+source references or describe the reporting revision as new finite-domain coverage.

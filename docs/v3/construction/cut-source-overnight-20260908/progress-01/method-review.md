@@ -40,3 +40,13 @@ declared positive witnesses, detected accounting controls, zero finite frontier,
 complete historical validation, two final full passes and two exact reviews.
 Conditional finite progress does not establish source validity, general fairness,
 semantic diversity across equal-length inputs or superiority of either alternative.
+
+After the first finite pass, root read the retained terminal states to aggregate
+append waits and matched-read comparisons. To make the report's quantitative claims
+part of exact final reproduction, the experiment now emits these aggregates and
+checks the independently reasoned capture/read and matched-wait bounds on every
+reachable state. No transition, initial state, input, action schedule or domain is
+changed. Terminal comparison counts refer to distinct terminal states, never
+probabilities of schedules. Commit this reporting revision, then freshly prepare
+and explore before final validation. Preserve the first complete result and graph
+bytes; the next run must retain their graph identities and previous result fields.

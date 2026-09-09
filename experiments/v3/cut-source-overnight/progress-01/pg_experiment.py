@@ -176,10 +176,30 @@ def explore(directory):
         for i, measured in zip(terminals, terminal_metrics):
             pg_relation.metric_valid(nodes[i][2], measured)
         pg_relation.require(terminal_metrics == [metrics(b[0][i][2]) for i in b[3]], "all exact terminal measurements")
+        read_bound = size * (size + 1) // 2
+        work_bounds = all(p[7] <= size and sum(p[6]) <= read_bound for node in nodes for p in node[2][3:])
+        pg_relation.require(work_bounds, "observed capture and read-work bounds")
+        wait_dominance = all(
+            node[2][3][0] >= node[2][4][0] and
+            all(node[2][3][12][i] <= node[2][4][12][i] for i in range(node[2][4][0]))
+            for node in nodes)
+        pg_relation.require(wait_dominance, "observed matched-record append-wait bound")
+        read_pairs = [(m["optimistic"]["read_work"], m["sealed"]["read_work"]) for m in terminal_metrics]
         summaries.append({"name": stream["name"], "record_count": size, "states_per_representation": len(nodes),
                           "edges_per_representation": len(edges), "terminal_count": len(terminals), "frontier": 0,
                           "graph_file": filename, "graph_sha256": digest(graph_bytes), "exact_graph_equality": True,
                           "independent_relation_all_edges": True, "witnesses": witnesses,
+                          "observed_all_state_work_bounds": work_bounds, "read_work_bound": read_bound,
+                          "observed_matched_record_wait_dominance": wait_dominance,
+                          "terminal_count_basis": "Distinct complete states, not schedule probabilities",
+                          "terminal_read_comparisons": {
+                              "optimistic_fewer": sum(a < b for a, b in read_pairs),
+                              "equal": sum(a == b for a, b in read_pairs),
+                              "sealed_fewer": sum(a > b for a, b in read_pairs)},
+                          "terminal_maximum_record_wait_ranges": {
+                              name: [min(max(m[name]["completed_waits"]) for m in terminal_metrics),
+                                     max(max(m[name]["completed_waits"]) for m in terminal_metrics)]
+                              for name in ("optimistic", "sealed")},
                           "terminal_read_work_ranges": {
                               name: [min(m[name]["read_work"] for m in terminal_metrics), max(m[name]["read_work"] for m in terminal_metrics)]
                               for name in ("optimistic", "sealed")}})
