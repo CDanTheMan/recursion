@@ -28,6 +28,7 @@ MUTANTS = {'append-owner':'append-foreign','append-conflict':'equal-position-for
            'publication-source-current':'append-between-collect-and-publish',
            'reconcile-source-current':'pending-after-selected'}
 MUTANTS.update({'registration-complete':'incomplete-registration','atomic-start-record':'atomic-receipt-not-start','collection-lower-bound':'negative-collection-ordinal'})
+MUTANTS.update({'scale-complete-registry':'scale-pending-four','scale-reconcile-source-current':'scale-selected-failure-four','scale-publication-source-current':'scale-stale-retry-four'})
 FAILURE_OUTPUT = None
 
 def save_failure(value):
@@ -121,7 +122,7 @@ def explore(name,unit,outcome,state_limit=500000):
 def mutant(guard,unit):
     name=MUTANTS[guard]; p=d.PROFILES[name]; outcome=p['outcomes'][-1]; s=d.initial(unit); trace=[]
     for action in p['actions']:
-        n=inc.step(s,action,p,unit,outcome,guard); correct=inc.step(s,action,p,unit,outcome)
+        n=inc.step(s,action,p,unit,outcome,guard.removeprefix('scale-')); correct=inc.step(s,action,p,unit,outcome)
         trace.append({'action':action,'before':s,'after':n})
         if n!=correct:
             try: audit.check(s,action,n,p,unit,outcome)

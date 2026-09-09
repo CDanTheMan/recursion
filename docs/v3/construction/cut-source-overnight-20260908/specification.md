@@ -93,3 +93,8 @@ sampled working/private-memory checks. This is process containment, not filesyst
 sandboxing or any operational configuration change. Committed wrapper controls test normal
 exit, parent/grandchild termination and refusal above a64MiB test allocation cap. Historical
 scripts and their internal checks remain unchanged.
+
+Final sensitivity closure repeats complete-registry, current-source publication and
+current-source reconciliation guard removals at the maximum pending registry of4, in both
+cursor units. These six additional counterexamples supplement the smaller-domain guards;
+they do not promote the unchanged record-count bound or full original comparison.
