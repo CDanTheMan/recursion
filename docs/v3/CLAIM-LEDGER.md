@@ -422,3 +422,9 @@ These are bounded research findings. Existing Owner approvals remain operative; 
 | CCP-001 | Authenticated complete original cut and typed attempt mapping remain separate from historical classification, current cut freshness and reservation ownership. | modeled | [SC-CUT-PAUSE-01](construction/coupled-cut-pause-20260908/evidence.json) |
 | CCP-002 | The actual joined observation preserves literal current-immediate PAUSE refusal and exact duplicate receipt semantics without granting classification authority. | modeled | [SC-CUT-PAUSE-01](construction/coupled-cut-pause-20260908/evidence.json) |
 | CCP-003 | The declared coupled cut and PAUSE product preserves six-plus-six allowance against ten while full original comparison and runtime migration remain incomplete. | modeled | [SC-CUT-PAUSE-01](construction/coupled-cut-pause-20260908/evidence.json) |
+
+## Retained-cut publication — 2026-09-08
+
+| CPB-001 | Fresh retained-cut publication binds current publisher authority, exact original source scope and content, while durable exact duplicates preserve their old result without reselection. | modeled | [SC-CUT-PUB-01](construction/cut-publication-20260908/evidence.json) |
+| CPB-002 | Exact generation reader pins, owned wait and independent copies preserve historical inspection through restart and retirement without granting current reconciliation authority. | modeled | [SC-CUT-PUB-01](construction/cut-publication-20260908/evidence.json) |
+| CPB-003 | The declared retained-cut publication product preserves six-plus-six admission against ten while source completeness, physical recovery and full original comparison remain unproved. | modeled | [SC-CUT-PUB-01](construction/cut-publication-20260908/evidence.json) |

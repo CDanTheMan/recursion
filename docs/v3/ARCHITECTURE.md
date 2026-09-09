@@ -616,3 +616,13 @@ CPL-001 closes the declared central reservation/transport/typed-consultation pro
 
 CCP-001 preserves actual original-cut and typed attempt mapping under independent complete comparison. Valid signatures cannot substitute for complete inventory or current cut ownership.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
+
+## Retained-cut publication — 2026-09-08
+
+CPB-001: Fresh retained-cut publication checks current publisher boot/serial, exact parent,
+full cut content/inventory and original intent/admission/reservation against actual admitted
+A ownership and current source head/incarnation. Equal record heads do not establish equal
+scope or cut identity. Durable exact retries return old receipts without selecting old state.
+Synthetic source truth and atomic durability remain premises; this is not common-writer migration.
+
+See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.

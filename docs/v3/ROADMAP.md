@@ -487,3 +487,13 @@ SC-COUPLED-01 adds scoped central reservation/wire/consultation composition. Nex
 
 SC-CUT-PAUSE-01 adds scoped coupled cut/PAUSE support. Next proposed bounded work is retained-cut ownership and stale publication; full comparison precedes language/storage selection and common-writer migration remains blocked.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
+
+## Retained-cut publication — 2026-09-08
+
+SC-CUT-PUB-01 adds bounded retained-cut publication and reader ownership correspondence;
+all six original obligations,27 traces,experiment families and integration requirements
+remain. Proposed next bounded request: complete-source attestation and append admission,
+which must construct the current trusted completeness premise. Orphan-reader recovery,
+physical persistence, full original comparison and common-writer migration remain separate gaps.
+
+See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.

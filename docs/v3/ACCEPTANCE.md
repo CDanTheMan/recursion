@@ -511,3 +511,14 @@ SC-COUPLED-01 requires two exact clean full gates,13 frozen predecessors, unchan
 
 CCP-003 requires complete176-environment exploration,82 guard counterexamples,44 joined observation controls and11 actual PAUSE guard mutations. Fourteen unchanged predecessor gates and25regressions run twice on the exact reviewed candidate.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
+
+## Retained-cut publication — 2026-09-08
+
+CPB-003: SC-CUT-PUB-01 completes44 declared profiles/132 environments:4384 states and6232
+edges per representation,56 guard counterexamples, independent full relation and zero
+frontier. A6/B6 pool10 is unchanged. Require two exact clean gates (15 frozen predecessors,
+unchanged25 regressions) and two independent exact reviews externally before publication.
+This is scoped modeled support; source completeness, physical recovery and full original
+formal comparison/runtime integration remain unproved.
+
+See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
