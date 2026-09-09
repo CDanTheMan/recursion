@@ -1,0 +1,34 @@
+# Prospective method review — 2026-09-09
+
+Read-only packets from source_protocol_research and coupled_scaling_challenge
+identified this conditional progress question and challenged the finite service
+bound before implementation. It remains independent of deferred Q1–Q6. Four streams
+retain their original bytes; the two N=4 streams share the same scheduling domain.
+
+The subsequent code review found no concrete transition disagreement, but identified
+three gaps: shared initialization, shared metric reporting, and a completed-wait
+control that only challenged a missing sentinel. Root added independent exact
+initial equations, complete independent metric projections for terminal and
+nonterminal witnesses, and an incorrect nonnegative wait control that satisfies
+structural invariants before the transition relation rejects it. A separate schedule
+relation checks every prefix branch and every quiet-suffix service opportunity.
+
+The admission review identified duplicate-input collapse, insufficient reserve
+rechecking after source snapshot, and cleanup errors potentially suppressing the
+execution receipt. Root added explicit uniqueness, refreshed usage and reserve
+checks immediately before admission, and nested cleanup with retained errors and
+a failed receipt. Prepare and explore now use the same semantic input digest;
+the final gate separately compares complete generated input bytes, normalizing only
+Git line endings.
+
+These are prospective repairs, not executed findings. No model has run at this
+checkpoint. Commit all sources, preserve their explicit manifest and immutable
+scope receipt, then obtain a read-only admission review before bounded execution.
+The ongoing documentation gate retains both shared locks and has priority.
+
+Final acceptance still requires exact graph equality between independent transition
+representations, the independent transition/initial/metric/schedule relations, all
+declared positive witnesses, detected accounting controls, zero finite frontier,
+complete historical validation, two final full passes and two exact reviews.
+Conditional finite progress does not establish source validity, general fairness,
+semantic diversity across equal-length inputs or superiority of either alternative.
