@@ -351,3 +351,15 @@ Two full clean candidate gates include15 immutable predecessors and unchanged25 
 retain failed/superseded attempts, exact re-review after repair, normal draft PR to master.
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
+
+## SC-CUT-SOURCE-01 continuation — 2026-09-08
+
+Use construction/cut-source-overnight-20260908/handoff.md and the immutable Git-common
+activation receipt. T0 is2026-09-09T03:40:33Z, discovery cutoff12:40:33Z and hard deadline
+15:40:33Z. Verify the same absolute envelope after interruption; never reset the clock
+or auto-resume after quota reset. Astra remains sole writer with selected settings unchanged.
+New accepted sources must be committed before admission, including any gate or canonical
+source edits. Final receipts/reviews/publication closure remain outside the exact candidate
+under research-attestations/cut-source-overnight/<candidate>. Preserve16 predecessors,
+25 regressions, failed/superseded evidence and two independent exact-candidate reviews.
+Owner alone merges; no operational/configuration changes.

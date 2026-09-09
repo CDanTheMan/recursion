@@ -497,3 +497,11 @@ which must construct the current trusted completeness premise. Orphan-reader rec
 physical persistence, full original comparison and common-writer migration remain separate gaps.
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
+
+## Complete-source construction — 2026-09-08
+
+SC-CUT-SOURCE-01 narrows complete-source attestation to a constructed registration/append
+protocol with explicit bounded adversarial and scaling evidence. It does not close source
+truth outside admitted events, physical recovery/reclamation, orphan readers, full original
+formal comparison or common-writer migration. No successor is activated by this result.
+See [remaining gaps](construction/cut-source-overnight-20260908/next-probes.md).

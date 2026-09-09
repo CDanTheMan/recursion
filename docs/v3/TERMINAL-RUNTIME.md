@@ -519,3 +519,11 @@ reconciliation still requires the selected cut plus all inherited literal admiss
 No runtime service, operational PAUSE behavior or common-writer bridge is implemented.
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
+
+## Source collection and retained readers — 2026-09-08
+
+Complete captured inventory and current reconciliation authority remain separate. The
+source experiment retains copied historical cuts, owned wait/release, typed consultation
+evidence and the full four-event stream. It adds no service, runtime migration, physical
+recovery or orphan-reader reclamation mechanism.
+See [continuation](construction/cut-source-overnight-20260908/handoff.md).
