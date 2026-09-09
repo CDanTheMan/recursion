@@ -29,10 +29,9 @@ a failed receipt. Prepare and explore now use the same semantic input digest;
 the final gate separately compares complete generated input bytes, normalizing only
 Git line endings.
 
-These are prospective repairs, not executed findings. No model has run at this
-checkpoint. Commit all sources, preserve their explicit manifest and immutable
-scope receipt, then obtain a read-only admission review before bounded execution.
-The ongoing documentation gate retains both shared locks and has priority.
+Those repairs preceded model execution. The reviewed preparation and exploration
+then completed; the earlier checkpoint and receipts remain preserved in Git and
+the external evidence cache. The documentation gates have now completed.
 
 Final acceptance still requires exact graph equality between independent transition
 representations, the independent transition/initial/metric/schedule relations, all
@@ -50,3 +49,8 @@ changed. Terminal comparison counts refer to distinct terminal states, never
 probabilities of schedules. Commit this reporting revision, then freshly prepare
 and explore before final validation. Preserve the first complete result and graph
 bytes; the next run must retain their graph identities and previous result fields.
+
+Fresh preparation and exploration now reproduce the reporting revision. Every
+prior result field and all four graph files remain equal. See input-provenance.json
+and evidence.json for exact admitted source commits and immutable receipts. Final
+full gates and exact reviews remain separate publication requirements.

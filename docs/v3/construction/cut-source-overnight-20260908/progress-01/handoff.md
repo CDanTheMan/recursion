@@ -1,69 +1,53 @@
-# Progress subquestion checkpoint — 2026-09-09
+# Conditional progress handoff — 2026-09-09
 
-Same campaign/parent and absolute deadline; see specification.md. This work is a
-prospective conditional scheduling comparison over stipulated valid inputs.
-The reviewed input-preparation and first finite progress runs completed.
-This work cannot resolve deferred Q1–Q6 or establish source validity.
+Parent goal-recursion-v2-execution-fabric; same SC-CUT-SOURCE-01 campaign. Original
+activation 2026-09-09T03:40:33Z, discovery cutoff 12:30Z and hard stop 15:30Z
+(08:30 Los Angeles) remain fixed across continuations. Astra High Standard remains
+unchanged. Root is the sole writer; workers are read-only. Included capacity only,
+no metered spend, and no reset has been used. The existing one-reset authorization
+requires actual depletion and the durable ledger; no automatic quota-reset restart.
 
-Worktree recursion-v3-cut-source-progress-20260909, branch
-codex/v3-cut-source-progress-20260909, starts at frozen documentation candidate
-8f457c546e4d85fada73913efb900f921eaf6b1a. That documentation compatibility candidate
-is under complete validation in the separate continuation worktree; preserve it.
+This branch, codex/v3-cut-source-progress-20260909, adds only progress-01 files to
+frozen documentation candidate 8f457c546e4d85fada73913efb900f921eaf6b1a. That candidate
+is now published as draft PR 112 after two complete gates and two independent exact
+reviews. predecessor.json binds its immutable 267-file evidence closure through
+completion.json. Preserve that worktree and every earlier frozen worktree.
 
-The finite service contract, bound and prospective code received read-only challenge;
-see method-review.md for findings and root's repairs. Candidate a8fda63 received two
-independent preparation-admission approvals after the prospective repairs. Existing valid input
-factory is experiments/v3/effect-evidence/ee_cases.py:unsigned. Its original source
-data include scripts/tests/v3/integrity/fixtures/F-M1C-007.json and planning fixture
-F-M1A-014.json, with dependencies in the immutable prior manifest. Full record bytes
-are premises, never a new source-validity result.
+This study assumes already accepted original immutable records and fixed source
+metadata. Only visible record count changes invalidate its local collection check.
+It examines logical scheduling work and waiting, not source validity, crashes,
+physical time, runtime integration or the deferred Q1–Q6. The original four-event
+flow, A6/B6 pool10, attempts 1–2, six obligations and 27 rows remain unchanged.
 
-Preserve original event count/costs from coupled-construction/c_domain.py and pool
-requests from coupled-cut-pause/p_literal.py without executing unrelated controls.
-The new comparison measures record service, while unchanged historical gates retain
-the actual original four-event flow and both cursor units. No substitute full-flow
-claim is allowed.
+The first preparation at a8fda63 and exploration at 0fff9ce remain retained. Reviews
+identified reporting and provenance gaps; method-review.md records their repairs.
+Fresh preparation at 11fd058, run 20260909T090511266800, regenerated the same complete
+input bytes and bound the final executable sources and specification. Preparation
+used 1.156 seconds and 23,228,416-byte job peak, with zero owned processes after cleanup.
+input-provenance.json names its exact receipt; no source-validity result is implied.
 
-Root alone writes. Only new progress-01 paths are mutable here. No installation,
-operational changes, provider calls, runtime migration or model/settings change.
-OriginalT0=03:40:33 UTC; discovery ends12:30 UTC; hard stop15:30 UTC (08:30 Los Angeles).
+Fresh exploration at 82911c2, run 20260909T090633347607, passed in 3.359 seconds with
+126,713,856-byte job peak and successful cleanup. Its 234 retained file hashes, all
+four graph bytes and every earlier result field were verified. results.json and
+evidence.json bind that complete result. Both representations agree across 80,098
+states and 80,528 edges with zero frontier. Four input streams yield three distinct
+record-count domains; the two N=4 graphs are identical. All quiet continuations
+complete and all four accounting controls are detected. See findings.md for
+measurements and progress-bounds.md for separately reasoned claims and the manual
+22-action example outside H6. No additional enumeration coverage is claimed.
 
-Execution order: pg_admission.py prepare produces retained original inputs; root
-commits those complete bytes and input-provenance.json and refreshes the explicit
-manifest before pg_admission.py explore. Preserve every admission/execution receipt,
-including failures. Commit accepted results, their evidence reference, findings and
-the immutable documentation-predecessor completion reference. Only then run
-pg_check.py --candidate FULL_HASH twice and obtain two independent exact reviews.
-Each full pass runs18 frozen predecessor checks and 25 regressions and freshly
-reproduces prepare/explore. No implicit post-expiry historical mode is provided.
-Do not publish an unvalidated candidate or mark the broader campaign complete.
+Final acceptance requires two runs on the identical clean candidate:
+`python -X utf8 -B experiments/v3/cut-source-overnight/progress-01/pg_check.py --candidate FULL_HASH`
+Each runs 18 frozen predecessor checks and 25 regressions, then freshly prepares and
+explores with complete input/result/graph equality. Shared owned-job, usage, memory,
+artifact, PAUSE, parent and fixed-clock checks remain binding. Two independent
+exact-candidate reviews must also approve before normal review-branch publication
+and a draft PR against freshly verified master. Lucas handles merging. Actual gate,
+review and publication outcomes belong in the candidate's external evidence folder;
+this committed checkpoint itself makes no publication-ready claim.
 
-Preparation at a8fda63, run 20260909T082356968232, completed in 1.188 seconds of owned
-execution with 23,146,496-byte job peak and 9,084,630 retained artifact bytes. It
-regenerated the four unchanged streams with record counts 3, 2, 4, 4; source/input
-bytes and full provenance are retained in the shared evidence cache. See
-input-provenance.json for the immutable execution receipt and inputs.json for the
-complete88,696-byte prepared input. This is input reproduction, not an exploration
-or source-validity result. Commit these bytes and refreshed manifest before explore.
-
-progress-bounds.md records independently reasoned work/fairness propositions and
-a manually derived22-action work-comparison trace outside the H6 enumeration.
-Keep that reasoning distinct from future finite results and review it with the
-final candidate. No additional enumeration profile is claimed.
-
-The first exploration at 0fff9ce, run 20260909T082850361341, passed in 3.391 seconds
-with 126,836,736-byte job peak and 22,139,318 retained bytes. Both representations
-agree exactly across 80,098 states and 80,528 edges, with zero frontier. All quiet
-continuations complete and all four accounting controls are detected. Results and
-their exact execution reference are committed separately from publication approval.
-The two N=4 input streams have byte-identical progress graphs and add no distinct
-scheduling behavior. Deferred Q1–Q6 remain unresolved.
-
-The next source revision adds directly reproduced waiting aggregates, distinct
-terminal read-comparison counts, and observed work/wait-bound checks. It changes
-no inputs or transitions. The existing preparation and finite result remain valid
-historical evidence, but cannot validate changed measurement sources. After the
-second documentation full gate releases its locks, freshly prepare and explore
-the committed revision, retain identical input/graph bytes and prior result fields,
-then update the current evidence references. Do not run final gates against stale
-source references or describe the reporting revision as new finite-domain coverage.
+All failures and superseded evidence are retained. The broader campaign remains
+incomplete and Q1–Q6 remain deferred after the observed cybersecurity notice; its
+cause is unknown. No new notice has been observed during this conservative work.
+Do not route interrupted work through another model. Do not change publisher scripts,
+config, auth, routing, cron, providers, runtime, deployment or protected history.
