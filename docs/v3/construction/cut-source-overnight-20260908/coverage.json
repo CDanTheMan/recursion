@@ -6472,51 +6472,76 @@
   "slice_obligations": [
     {
       "id": "effect-join",
-      "status": "no-new-coverage",
-      "support": "Pending new evidence; preserve complete predecessor support.",
-      "profiles": [],
-      "residual": "Trusted complete original source and synthetic authentication remain premises; no general collector, common-writer adoption bridge or original full comparison.",
-      "result": null
+      "status": "partial-modeled-support",
+      "support": "Independent inclusive and split transitions plus third relation pass declared source profiles; complete predecessor support is preserved below.",
+      "profiles": [
+        "pending-success",
+        "pending-failure",
+        "pending-later-start-only",
+        "atomic-start-success",
+        "four-event"
+      ],
+      "residual": "Bounded admitted source only; truthful complete registration and intact retained abstract state remain premises. Trusted complete original source and synthetic authentication remain premises; no general collector, common-writer adoption bridge or original full comparison.",
+      "result": "results.json"
     },
     {
       "id": "epoch-types",
-      "status": "no-new-coverage",
-      "support": "Pending new evidence; preserve complete predecessor support.",
-      "profiles": [],
-      "residual": "Fixed actors/nonces and bounded action schedules; no general authenticated issuer recovery or arbitrary original namespaces.",
-      "result": null
+      "status": "partial-modeled-support",
+      "support": "Independent inclusive and split transitions plus third relation pass declared source profiles; complete predecessor support is preserved below.",
+      "profiles": [
+        "append-fresh-old-boot",
+        "foreign-registration",
+        "typed-consultation"
+      ],
+      "residual": "Bounded admitted source only; truthful complete registration and intact retained abstract state remain premises. Fixed actors/nonces and bounded action schedules; no general authenticated issuer recovery or arbitrary original namespaces.",
+      "result": "results.json"
     },
     {
       "id": "writer-pool",
-      "status": "no-new-coverage",
-      "support": "Pending new evidence; preserve complete predecessor support.",
-      "profiles": [],
-      "residual": "Serialized central abstract commit; conserved-rights transfer remains frozen predecessor support, without new coupled transfer or common-writer implementation.",
-      "result": null
+      "status": "partial-modeled-support",
+      "support": "Independent inclusive and split transitions plus third relation pass declared source profiles; complete predecessor support is preserved below.",
+      "profiles": [
+        "quota-worker-independent",
+        "scale-eight-action-race"
+      ],
+      "residual": "Bounded admitted source only; truthful complete registration and intact retained abstract state remain premises. Serialized central abstract commit; conserved-rights transfer remains frozen predecessor support, without new coupled transfer or common-writer implementation.",
+      "result": "results.json"
     },
     {
       "id": "pause",
-      "status": "no-new-coverage",
-      "support": "Pending new evidence; preserve complete predecessor support.",
-      "profiles": [],
-      "residual": "Modeled current-immediate admission, synthetic fixtures and actual immutable literal adapter; no activated service, actual runtime PAUSE race or operational change.",
-      "result": null
+      "status": "partial-modeled-support",
+      "support": "Independent inclusive and split transitions plus third relation pass declared source profiles; complete predecessor support is preserved below.",
+      "profiles": [
+        "pause-append",
+        "pause-publication"
+      ],
+      "residual": "Bounded admitted source only; truthful complete registration and intact retained abstract state remain premises. Modeled current-immediate admission, synthetic fixtures and actual immutable literal adapter; no activated service, actual runtime PAUSE race or operational change.",
+      "result": "results.json"
     },
     {
       "id": "uncertainty",
-      "status": "no-new-coverage",
-      "support": "Pending new evidence; preserve complete predecessor support.",
-      "profiles": [],
-      "residual": "Publication receipts are internal cut commits, not external-effect rendezvous; remote outcome truth and intact retained restart remain premises.",
-      "result": null
+      "status": "partial-modeled-support",
+      "support": "Independent inclusive and split transitions plus third relation pass declared source profiles; complete predecessor support is preserved below.",
+      "profiles": [
+        "pending-ambiguous",
+        "atomic-start-ambiguous",
+        "publication-duplicate-retired"
+      ],
+      "residual": "Bounded admitted source only; truthful complete registration and intact retained abstract state remain premises. Publication receipts are internal cut commits, not external-effect rendezvous; remote outcome truth and intact retained restart remain premises.",
+      "result": "results.json"
     },
     {
       "id": "flow-replay",
-      "status": "no-new-coverage",
-      "support": "Pending new evidence; preserve complete predecessor support.",
-      "profiles": [],
-      "residual": "Only declared histories and two six-action cores; inherited wider flow profiles stay frozen, and no original full Cartesian product, physical framing or unbounded liveness is established.",
-      "result": null
+      "status": "partial-modeled-support",
+      "support": "Independent inclusive and split transitions plus third relation pass declared source profiles; complete predecessor support is preserved below.",
+      "profiles": [
+        "append-gap",
+        "reverse-collection",
+        "equal-position-fork",
+        "four-event"
+      ],
+      "residual": "Bounded admitted source only; truthful complete registration and intact retained abstract state remain premises. Only declared histories and two six-action cores; inherited wider flow profiles stay frozen, and no original full Cartesian product, physical framing or unbounded liveness is established.",
+      "result": "results.json"
     }
   ],
   "slice_traces": [
@@ -6525,23 +6550,27 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
       "id": "comparison.trace.02",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "append-gap"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "One declared gap; no arbitrary stream recovery or physical receiver restart."
     },
     {
       "id": "comparison.trace.03",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "append-duplicate-lost-reply"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "No external-effect reexecution/rendezvous extension or physical crash protocol."
     },
     {
@@ -6549,7 +6578,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
@@ -6557,15 +6586,17 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
       "id": "comparison.trace.06",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "collection-old-incarnation"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "Fixed goal/lease versions; no general preference churn or full original core."
     },
     {
@@ -6573,7 +6604,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
@@ -6581,31 +6612,37 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
       "id": "comparison.trace.09",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "publication-source-race"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "This is the retained-cut subsystem; original M1C artifact publication and common-writer migration remain unchanged and unproved by these analogous guards."
     },
     {
       "id": "comparison.trace.10",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "pause-publication"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "No new original plan/Permit side-effect bridge; inherited immediate admission remains frozen support."
     },
     {
       "id": "comparison.trace.11",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "restart-recollect"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "Intact abstract durable state; orphan ownership resolution and physical process recovery unconstructed."
     },
     {
@@ -6613,15 +6650,19 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
       "id": "comparison.trace.13",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "pending-success",
+        "pending-failure",
+        "pending-later-start-only"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "Trusted complete source and synthetic issuer fixture; no production authentication or arbitrary effect histories."
     },
     {
@@ -6629,23 +6670,28 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
       "id": "comparison.trace.15",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "pause-append",
+        "pause-publication"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "No physical service or common-writer runtime integration; local classification is awareness."
     },
     {
       "id": "comparison.trace.16",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "fresh-conflict-retry-stale-source"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "Internal publication identity only; arbitrary external effect or consultation payload conflicts retain prior coverage."
     },
     {
@@ -6653,7 +6699,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
@@ -6661,7 +6707,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
@@ -6669,7 +6715,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage. Internal publication lost-reply or retired-source duplicate witnesses do not establish external-effect rendezvous, recipient relocation or effect-retirement safety."
     },
     {
@@ -6677,15 +6723,18 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage. Internal publication lost-reply or retired-source duplicate witnesses do not establish external-effect rendezvous, recipient relocation or effect-retirement safety."
     },
     {
       "id": "comparison.trace.21",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "quota-worker-independent",
+        "scale-eight-action-race"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "No new conserved-rights product, full original Cartesian comparison or production central writer."
     },
     {
@@ -6693,15 +6742,17 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
       "id": "comparison.trace.23",
-      "status": "no-new-coverage",
-      "result": null,
-      "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "status": "partial-modeled-support",
+      "result": "results.json",
+      "profiles": [
+        "copy-not-wait"
+      ],
+      "support": "Additional bounded source-side analogue in named profiles, preserving all predecessor trace support; no original trace completion claim.",
       "residual": "One eligible executor and declared prefix; new cut-reader wait is separate, not evidence for a general executor liveness theorem."
     },
     {
@@ -6709,7 +6760,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
@@ -6717,7 +6768,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
@@ -6725,7 +6776,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     },
     {
@@ -6733,7 +6784,7 @@
       "status": "no-new-coverage",
       "result": null,
       "profiles": [],
-      "support": "Pending new evidence; preserve complete predecessor support.",
+      "support": "No new claim for this original trace; full predecessor history and residual retained.",
       "residual": "Original schedule remains outside this new publication product; exact prior support, residuals and required mutants remain preserved in predecessor_coverage."
     }
   ]

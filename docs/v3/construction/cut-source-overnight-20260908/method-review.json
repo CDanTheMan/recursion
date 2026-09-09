@@ -1,5 +1,5 @@
 {
-  "status": "primary-source-read-only-packet-complete; construction challenge and final exact reviews pending",
+  "status": "research and preliminary challenges incorporated; final exact-candidate reviews required externally",
   "worker": "source_protocol_research",
   "writes": false,
   "nested_delegation": false,
@@ -39,5 +39,15 @@
       "one/two original attempt mappings"
     ],
     "status": "incorporated before scaling admission; not final review"
+  },
+  "gate_challenge": {
+    "reviewer": "gate_preliminary_challenge",
+    "read_only": true,
+    "findings": [
+      "predecessor codec import order",
+      "every snapshotted source edit requires new accepted run",
+      "historical child-process timeout must contain descendants"
+    ],
+    "disposition": "All repaired; three actual containment controls pass; not final approval"
   }
 }
