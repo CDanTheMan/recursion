@@ -110,7 +110,7 @@ def main(candidate):
         actual = {p.relative_to(ROOT).as_posix() for p in (ROOT / CODE).glob("*.py")}
         require(actual <= set(paths) and {DOC + n for n in ("goal.json", "manifest.json", "specification.md")} <= set(paths), "execution defining sources present")
         receipt["sources"] = {}
-        for name in paths:
+        for index, name in enumerate(paths):
             require(now() < end, "snapshot deadline")
             path = (ROOT / name).resolve()
             require(path.is_relative_to(ROOT), "source path containment")
@@ -118,10 +118,11 @@ def main(candidate):
             require(raw.replace(b"\r\n", b"\n") == blob.replace(b"\r\n", b"\n"), "working/committed bytes")
             if name in inputs:
                 require(digest(blob) == inputs[name] == digest(git("show", BASE + ":" + name)), "immutable input")
-            target = directory / "source" / name
+            snapshot_name = "source/" + str(index).zfill(4) + ".bin"
+            target = directory / snapshot_name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(raw)
-            receipt["sources"][name] = {"git_blob_sha256": digest(blob), "working_sha256": digest(raw)}
+            receipt["sources"][name] = {"git_blob_sha256": digest(blob), "working_sha256": digest(raw), "snapshot_file": snapshot_name}
         end, usage = scope(candidate)
         require((end - now()).total_seconds() > 605 and size(directory) < 268435456, "post-snapshot reserve")
         command = [sys.executable, "-X", "utf8", "-B", CODE + "check.py", str(directory / "output")]
