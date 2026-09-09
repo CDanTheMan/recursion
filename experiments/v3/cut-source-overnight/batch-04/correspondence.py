@@ -1,4 +1,5 @@
 """Response-visible local correspondence on the unchanged complete S graph family."""
+import ast
 import collections
 import copy
 import hashlib
@@ -102,6 +103,51 @@ def check_coverage(row, expected):
     for counts in row['classifications'].values():
         require(set(counts) == set(KINDS) and sum(counts.values()) == row['edges'], 'disjoint complete edge classification')
 
+def barrier(first, stage):
+    return {'scope':'retained-two-step-generation-only-same-action-exact-other-fields',
+            'profile':first['profile'], 'actions':[first['action'],stage['action']],
+            'source_middle_sha256':digest(first['after']),
+            'source_edges':[digest((x['before'],x['action'],x['after'])) for x in (first,stage)],
+            'target_attestation_sha256':digest(first['target_after']),
+            'target_stage_sha256':digest(stage['target_after']),
+            'exact_staged_object_required':True, 'single_shared_middle_state_required':True,
+            'necessary_middle_generations':[first['target_after']['source_generation'], stage['after']['staged'][0].source_generation],
+            'satisfiable':False}
+
+def verify_barrier(row, first, stage):
+    for ref in read(DOC/'contract.json')['barrier_function_anchors']:
+        source = (ROOT/ref['path']).read_text(encoding='utf-8')
+        node = next(n for n in ast.parse(source).body if isinstance(n,ast.FunctionDef) and n.name==ref['function'])
+        snippet = '\n'.join(source.splitlines()[node.lineno-1:node.end_lineno])
+        require(node.lineno==ref['line'] and hashlib.sha256(snippet.encode()).hexdigest()==ref['function_sha256'], 'exact barrier function anchor')
+    require(first['after'] == stage['before'] and tuple(stage['prefix']) == tuple(first['prefix'])+(first['action'],), 'consecutive retained source edges')
+    require(first['profile']==stage['profile'] and first['profile'].startswith('pending-success/'), 'same retained profile')
+    require(first['action'].partition('@')[0] == 'source-attest' and stage['action'].partition('@')[0] == 'stage', 'exact retained action sequence')
+    require(first['before']['source_name'] == '' and first['before']['cut_delivery'] == 'success'
+            and first['before']['remote'] == 1, 'first successful attestation guards')
+    require(s.q.lit.fixture('success')['binding']['body']['reservation'] == list(first['before']['bindings'][0]), 'valid retained reservation guard')
+    require(first['certificate']['kind'] == 'matching-step' and first['certificate']['variant'] == 'first-attestation-floor', 'retained matching attestation endpoint')
+    require(first['target_after'] == projection(stage['before'],'first-attestation-floor'), 'single concrete target intermediate state')
+    require(first['after']['decision']=='source-attest:ok' and first['target_after']['decision']=='source-attest:ok'
+            and stage['after']['decision']=='stage:ok' and stage['target_after']['decision']=='stage:ok', 'successful observable responses at both steps')
+    required_by_attestation = first['target_after']['source_generation']
+    required_by_exact_stage = stage['after']['staged'][0].source_generation
+    require(required_by_attestation == ('cut-source','collectorA','effectA',1)
+            and required_by_exact_stage == ('cut-source','collectorA','effectA',0), 'contradictory necessary middle generations')
+    require(stage['target_after']['staged'][0].source_generation == required_by_attestation, 'Q stage carries the shared middle generation')
+    target_check.checked_payload(*stage['after']['staged'])
+    target_check.checked_payload(*stage['target_after']['staged'])
+    expected = {'scope':'retained-two-step-generation-only-same-action-exact-other-fields',
+                    'profile':stage['profile'],'actions':[first['action'],stage['action']],
+                    'source_middle_sha256':digest(stage['before']),
+                    'source_edges':[digest((first['before'],first['action'],first['after'])),digest((stage['before'],stage['action'],stage['after']))],
+                    'target_attestation_sha256':digest(first['target_after']),
+                    'target_stage_sha256':digest(stage['target_after']),
+                    'exact_staged_object_required':True,'single_shared_middle_state_required':True,
+                    'necessary_middle_generations':[required_by_attestation,required_by_exact_stage],
+                    'satisfiable':False}
+    require(encoded(row)==encoded(expected), 'independent retained two-step contradiction certificate')
+
 def run():
     contract = read(DOC/'contract.json')
     require(contract['variants'] == list(VARIANTS) and contract['hidden_actions'] == []
@@ -178,6 +224,7 @@ def run():
                 check_coverage(row, old['profiles'][key]); profiles[key] = row; total += len(seen)
     require(set(profiles) == set(old['profiles']) and total == 17966 and sum(r['edges'] for r in profiles.values()) == 31140, 'exact original graph family coverage')
     require(baseline == {'same-action':10292, 'stutter':20794, 'gap':54}, 'unchanged Batch03 baseline classification')
+    barriers = {}
     for unit in s.UNITS:
         first = required_examples['pending-success/'+unit+'/1/first-attestation-floor/source-attest']
         require(first['certificate']['kind'] == 'matching-step', 'retained first-attestation endpoint matches under lift')
@@ -187,6 +234,8 @@ def run():
         require('staged' in stage['certificate']['differing_state_fields'], 'retained signed-envelope obstruction')
         omitted = required_examples['omitted-record/'+unit+'/1/identity/source-attest']
         require(omitted['certificate']['source_response'] != omitted['certificate']['target_response'], 'retained response obstruction')
+        barriers[unit] = barrier(first,stage)
+        verify_barrier(barriers[unit],first,stage)
     controls = []
     def reject(label, fn):
         try: fn()
@@ -214,10 +263,18 @@ def run():
     reject('omitted-classification', lambda:check_coverage(incomplete,old['profiles'][entry]))
     x = samples['unmapped-operation']; misclassified = copy.deepcopy(x[5]); misclassified['kind'] = 'matching-step'
     reject('source-only-operation-hidden', lambda:verify_certificate(misclassified,*x[:5]))
+    proof = barriers[unit]
+    bad_proof = copy.deepcopy(proof); bad_proof['necessary_middle_generations'][1] = bad_proof['necessary_middle_generations'][0]
+    reject('erased-generation-contradiction', lambda:verify_barrier(bad_proof,first,stage))
+    bad_proof2 = copy.deepcopy(proof); bad_proof2['exact_staged_object_required'] = False
+    reject('erased-exact-staged-premise', lambda:verify_barrier(bad_proof2,first,stage))
+    bad_proof3 = copy.deepcopy(proof); bad_proof3['source_middle_sha256'] = '0'*64
+    reject('misbound-shared-middle-state', lambda:verify_barrier(bad_proof3,first,stage))
     return {'status':'RESPONSE_VISIBLE_LOCAL_COMPARISON_COMPLETE', 'states_per_representation':total,
             'edges_per_representation':31140, 'initializations':initialization, 'profiles':profiles,
             'classifications':{v:{k:sum(r['classifications'][v][k] for r in profiles.values()) for k in KINDS} for v in VARIANTS},
-            'witnesses':witnesses, 'required_examples':required_examples, 'controls':controls, 'baseline_classifications':baseline,
+            'witnesses':witnesses, 'required_examples':required_examples, 'two_step_obstructions':barriers,
+            'controls':controls, 'baseline_classifications':baseline,
             'observable_state_fields':STATE_FIELDS, 'observable_transition_decision':True, 'hidden_actions':[],
             'target_original_graph_reachability_proved':False, 'whole_path_composition_proved':False,
             'generation_relation_proved':False, 'response_equivalence_proved':False,

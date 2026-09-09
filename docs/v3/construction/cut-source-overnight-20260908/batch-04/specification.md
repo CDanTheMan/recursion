@@ -61,6 +61,20 @@ classification and hidden source-only operation. Original protocol inputs and gu
 are unchanged. Frozen historical gates still reproduce their original mutants,
 traces and truncated calibration; those are reported as historical activity.
 
+After the first complete comparison, use the already retained consecutive
+pending-success attestation/stage edges for a restricted contradiction certificate.
+With one shared target intermediate state, same actions and exact preservation of
+all other fields including staged, first successful Q attestation requires its
+generation to be token 1. Normal Q staging copies that generation into the envelope,
+while exact preservation of the S envelope requires token 0. Verify source-edge
+adjacency/prefixes, both successful responses, guard facts, typed tokens, the shared
+target intermediate state and exact source/function anchors. Record the inconsistent
+necessary equalities in both original encodings. Controls erase the contradiction,
+erase exact staged preservation or misbind the shared source middle state.
+This checks retained facts plus an equality contradiction; the source-backed argument
+explains necessity. It is not an unrestricted proof about arbitrary Python programs
+or relations that change nested observations, action translation or intermediate steps.
+
 The two read-only prospective reviews corrected the inherited accounting estimate:
 three Batch03 mapping traversals cost 53898 states; its two frozen source gates
 also traverse 35932 states plus four conservatively charged calibration states.

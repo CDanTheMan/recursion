@@ -25,5 +25,32 @@
   "controls": "Certificate, projection, observation and coverage corruptions only. No new original protocol guard/input mutations.",
   "deferred_questions_resolved": [],
   "source_truth_established": false,
-  "whole_path_composition_proved": false
+  "whole_path_composition_proved": false,
+  "barrier_function_anchors": [
+    {
+      "path": "experiments/v3/cut-publication/q_inclusive.py",
+      "function": "step",
+      "line": 6,
+      "function_sha256": "af98339dda84d6fc26abd8a3e099ff026c243eda571aed86eb7c5275ae78d6bd"
+    },
+    {
+      "path": "experiments/v3/cut-publication/q_split.py",
+      "function": "step",
+      "line": 6,
+      "function_sha256": "bce5a4f5effd053903479d93d8b78183f3ecb639cf1161905e4c656337d2e09e"
+    },
+    {
+      "path": "experiments/v3/cut-publication/q_audit.py",
+      "function": "check",
+      "line": 43,
+      "function_sha256": "743004d9d115dc0672f0a1dbeb23c0f2e3e4f59408ca89adce067d9d15f5d7cb"
+    },
+    {
+      "path": "experiments/v3/cut-publication/q_domain.py",
+      "function": "candidate",
+      "line": 31,
+      "function_sha256": "dda244926e2a160fe9a7117338f6bc26d1a91181f4e7e3188804cdc38e99b582"
+    }
+  ],
+  "restricted_barrier": "Consecutive retained attestation/stage requires one shared target generation to equal both token1 and token0 if all other observed fields remain exact."
 }

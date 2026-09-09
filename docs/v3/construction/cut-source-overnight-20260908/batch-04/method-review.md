@@ -32,3 +32,13 @@ functions, and adds Batch03's final completion to the existing closure map.
 Both reviews distinguish finite local correspondence from original target reachability,
 whole-prefix composition, fairness or source truth. Known failed relations are
 research evidence; they are not authorization to change original model semantics.
+
+The first focused run on db96ae2c050f6350cc35e781962aeb4f1d759846 passed. Before
+finalization, the root continued independent eligible proof work within this scope.
+The same relation reviewer confirmed a restricted contradiction in the retained
+consecutive attestation/stage prefix: one shared Q intermediate generation must
+equal both token 1 and token 0 when only top-level generation may differ. The
+successor certificate binds adjacency, responses, guards, typed values and exact
+source/function anchors. It does not assert impossibility for richer envelope
+relations, different action translations or inserted target steps. The original
+successful run and its audit remain retained; no failure is relabeled as success.
