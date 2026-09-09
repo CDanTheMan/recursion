@@ -1143,6 +1143,11 @@
     }
   ],
   "sources": [
+    "docs/v3/construction/cut-source-overnight-20260908/batch-02/A-B-evidence.json",
+    "docs/v3/construction/cut-source-overnight-20260908/batch-02/A-audit.json",
+    "docs/v3/construction/cut-source-overnight-20260908/batch-02/A-findings.md",
+    "docs/v3/construction/cut-source-overnight-20260908/batch-02/B-findings.md",
+    "docs/v3/construction/cut-source-overnight-20260908/batch-02/B-results.json",
     "docs/v3/construction/cut-source-overnight-20260908/batch-02/goal.json",
     "docs/v3/construction/cut-source-overnight-20260908/batch-02/historical-closure.json",
     "docs/v3/construction/cut-source-overnight-20260908/batch-02/manifest.json",
