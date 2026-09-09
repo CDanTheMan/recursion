@@ -1,6 +1,7 @@
 """Fresh enclosing final gate; preserves all historical sources and expired clocks."""
 import importlib.util
 import json
+import gzip
 import os
 from pathlib import Path
 import shutil
@@ -55,10 +56,10 @@ def snapshot(candidate, directory):
         require(raw.replace(b"\r\n", b"\n") == blob.replace(b"\r\n", b"\n"), "exact working/committed source")
         if name in inputs:
             require(admission.digest(blob) == inputs[name] == admission.digest(git("show", admission.BASE + ":" + name)), "immutable predecessor source")
-        target = directory / "source" / (str(i).zfill(4) + ".bin")
+        target = directory / "source" / (str(i).zfill(4) + ".bin.gz")
         target.parent.mkdir(exist_ok=True)
-        target.write_bytes(raw)
-        result[name] = {"git_blob_sha256": admission.digest(blob), "working_sha256": admission.digest(raw), "snapshot_file": target.relative_to(directory).as_posix()}
+        target.write_bytes(gzip.compress(raw, compresslevel=6, mtime=0))
+        result[name] = {"git_blob_sha256": admission.digest(blob), "working_sha256": admission.digest(raw), "snapshot_file": target.relative_to(directory).as_posix(), "snapshot_codec": "gzip"}
     return result
 
 

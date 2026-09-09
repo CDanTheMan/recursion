@@ -25,3 +25,11 @@ arrived. A currently empty backlog permits an earlier capture; a new offer befor
 can change that decision. Initial/refill budget2, dynamic backlog checking, seals and
 unchanged-count idling are explicit premises. Two/drain read dominance is tested only
 at joint completed endpoints. Partial read counts do not establish a winner.
+
+The first admission at9ead065 retained268657788 bytes of raw source snapshots,
+exceeding the268435456-byte artifact limit before any model process was created.
+That failed run remains intact, with receipt SHA-256 f1cbe9e1d82424aebf2bbf1f01acb7bb2e5df3160642b6118670c6d059e72bc6.
+New snapshots use deterministic lossless gzip (mtime0). Working and Git blob hashes
+continue to bind original uncompressed source bytes; snapshot_codec identifies how
+to restore them. This changes storage, not source content, model limits or evidence
+claims. The failed receipt is never treated as an accepted run.

@@ -4,6 +4,7 @@ import datetime as dt
 import hashlib
 import importlib.util
 import json
+import gzip
 import os
 from pathlib import Path
 import shutil
@@ -122,11 +123,11 @@ def main(candidate, packet):
             require(raw.replace(b"\r\n", b"\n") == blob.replace(b"\r\n", b"\n"), "working/committed bytes")
             if name in inputs:
                 require(digest(blob) == inputs[name] == digest(git("show", BASE + ":" + name)), "immutable input")
-            snapshot_name = "source/" + str(index).zfill(4) + ".bin"
+            snapshot_name = "source/" + str(index).zfill(4) + ".bin.gz"
             target = directory / snapshot_name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(raw)
-            receipt["sources"][name] = {"git_blob_sha256": digest(blob), "working_sha256": digest(raw), "snapshot_file": snapshot_name}
+            target.write_bytes(gzip.compress(raw, compresslevel=6, mtime=0))
+            receipt["sources"][name] = {"git_blob_sha256": digest(blob), "working_sha256": digest(raw), "snapshot_file": snapshot_name, "snapshot_codec": "gzip"}
         end, usage = scope(candidate)
         require((end - now()).total_seconds() > 605 and size(directory) < 268435456, "post-snapshot reserve")
         command = [sys.executable, "-X", "utf8", "-B", CODE + "check.py", str(directory / "output"), "--packet", packet]
