@@ -37,9 +37,25 @@ failed/superseded evidence remain frozen. Its prior completion status describes
 that finite slice; it does not establish completion of the reopened work inventory.
 Coverage remains six obligations/27 rows with no new support or formal freeze.
 
-Next: finish sourced contract clarification, obtain independent document review,
-validate and commit the coherent permitted slice. Publication still requires two
-complete final gates and two exact-candidate independent reviews. Do not weaken
-those conditions for documentation, or retry an interrupted activity through an
-alternate model. If a binding boundary prevents final gates, keep local commits
-and publish no completion claim. Lucas handles merging.
+The sourced contract clarification and evidence policy are committed in local slice
+5f20f3f5b8f43ac43d3c4bc52bce7ea4692234a6. A subsequent candidate adds the full validation
+wrapper and this finalization packet. All D1–D3 documents await exact-candidate review;
+Q1–Q6 remain deferred. Gate/review outcomes belong to external candidate receipts.
+
+Full documentation-slice gate:
+`python -X utf8 -B experiments/v3/cut-source-overnight/reopen-01/check_final.py --candidate FULL_HASH`
+Run twice on the identical clean candidate. It verifies983 first-slice external
+references, runs the unchanged first-slice gate and16 older gates in their frozen
+worktrees, then the same25 regressions. This repeats previously approved historical
+checks; it does not execute the interrupted new counterexample work. The unchanged
+OwnedJob helper contains each command with600-second timeout and owned cleanup.
+Shared locks allow one heavy gate and one owned model process. Live parent, PAUSE,
+usage, memory/disk admission, fixed deadline and retained artifact checks apply.
+The wrapper only supports the actual unused reset-ledger state; a future applied
+reset requires its real receipt and revalidation, not silently accepting a counter.
+
+Next: validate and independently review the exact candidate, then publish only if
+both complete gates and two exact reviews succeed. Do not weaken those conditions
+for documentation, or retry interrupted activity through an alternate model. If a
+binding boundary prevents final gates, keep local commits and publish no completion
+claim. A successful documentation PR must still say campaign incomplete. Lucas merges.

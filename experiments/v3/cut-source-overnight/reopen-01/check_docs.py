@@ -50,7 +50,7 @@ def check(candidate=None):
     require(receipt.resolve().is_relative_to(common.resolve()), "receipt containment")
     require(digest(receipt) == amendment["receipt_sha256"], "immutable amendment receipt")
     authority = read(receipt)
-    for key in ("original_started_at", "deadline_utc", "discovery_cutoff_utc", "prior_candidate", "branch", "settings", "maximum_banked_resets", "reset_idempotency_key", "new_metered_spend"):
+    for key in ("original_started_at", "deadline_utc", "discovery_cutoff_utc", "prior_candidate", "prior_completion_sha256", "branch", "settings", "maximum_banked_resets", "reset_idempotency_key", "new_metered_spend"):
         require(amendment[key] == authority[key], "receipt agreement: " + key)
     ledger = read(receipt.parent / "reset-ledger.json")
     require(ledger["maximum_applied"] == 1 and type(ledger["applied_count"]) is int and 0 <= ledger["applied_count"] <= 1, "reset bound")
