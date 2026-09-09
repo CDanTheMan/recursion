@@ -106,3 +106,8 @@ lifetime peak claim. Two identical clean final gates each run15 frozen predecess
 unchanged25regressions and adversarial gate checks, with two independent exact-candidate
 reviews. Final attestations stay under Git common. Normal non-force draft PR targets
 master; Owner alone merges. No historical validator, M1 artifact or control plane changes.
+
+Construction refinement before run02: run01 failed at the first source-append relation
+because the new mapping incorrectly looked for original intent/admission at top level.
+Use the complete frozen original.cut.trace_header fields; record lists remain original.records.
+The failed admitted source/output is retained. No prior passing discovery is claimed.

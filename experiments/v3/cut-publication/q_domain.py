@@ -14,7 +14,7 @@ def raw_cut(name):return canonical(lit.fixture(name))
 def record_ids(name):return tuple(digest(r) for r in lit.fixture(name)['original']['records'])
 def head(name):return digest(lit.fixture(name)['original']['records'])
 def scope(name):
- x=lit.fixture(name);return canonical((x['original']['intent'],x['original']['admission'],x['binding']['body']['reservation']))
+ x=lit.fixture(name);return canonical((x['original']['cut']['trace_header']['intent'],x['original']['cut']['trace_header']['admission'],x['binding']['body']['reservation']))
 def sign(e):return e._replace(signature=hmac.new(TEST_KEY,canonical(tuple(e)[:-1]).encode(),hashlib.sha256).hexdigest())
 def permit(boot,serial):return ('cut-publish','authority','collectorA',('publisher-boot','authority',boot),serial)
 def source_token(serial):return ('cut-source','collectorA','effectA',serial)

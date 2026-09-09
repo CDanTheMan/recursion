@@ -50,7 +50,7 @@ def check(s,a,n,p,u,outcome):
   if not name or s['remote']==0:reason='no-source'
   else:
    current=d.lit.fixture(name)['original'];prior=d.lit.fixture(s['source_name'])['original'] if s['source_name'] else None
-   same_scope=not prior or (current['intent']==prior['intent'] and current['admission']==prior['admission'] and d.lit.fixture(name)['binding']['body']['reservation']==d.lit.fixture(s['source_name'])['binding']['body']['reservation'])
+   same_scope=not prior or (current['cut']['trace_header']['intent']==prior['cut']['trace_header']['intent'] and current['cut']['trace_header']['admission']==prior['cut']['trace_header']['admission'] and d.lit.fixture(name)['binding']['body']['reservation']==d.lit.fixture(s['source_name'])['binding']['body']['reservation'])
    # Compare complete original record bytes, independently of implementation digest-prefix checks.
    prefix_ok=not prior or [json.dumps(r,sort_keys=True,separators=(',',':')) for r in current['records'][:len(prior['records'])]]==[json.dumps(r,sort_keys=True,separators=(',',':')) for r in prior['records']]
    if d.lit.fixture(name)['binding']['body']['reservation']!=list(s['bindings'][0]):reason='foreign-source'

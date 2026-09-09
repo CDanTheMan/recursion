@@ -133,7 +133,7 @@ def controls():
   else:raise ValueError('decoder accepted '+label)
  pairs=[]
  for left,right,expected in [('success','later-start-only',True),('success','conflict',True),('ambiguous','late-receipt',True),('late-receipt','later-start-only',True),('later-start-only','conflict',False)]:
-  a=lit.fixture(left)['original'];b=lit.fixture(right)['original'];actual=b['records'][:len(a['records'])]==a['records'] and a['intent']==b['intent'] and a['admission']==b['admission'];d.require(actual==expected,'original source prefix control');pairs.append(dict(left=left,right=right,prefix=actual,left_head=d.head(left),right_head=d.head(right)))
+  a=lit.fixture(left)['original'];b=lit.fixture(right)['original'];actual=b['records'][:len(a['records'])]==a['records'] and a['cut']['trace_header']['intent']==b['cut']['trace_header']['intent'] and a['cut']['trace_header']['admission']==b['cut']['trace_header']['admission'];d.require(actual==expected,'original source prefix control');pairs.append(dict(left=left,right=right,prefix=actual,left_head=d.head(left),right_head=d.head(right)))
  d.require(d.head('success')==d.head('late-receipt') and d.raw_cut('success')!=d.raw_cut('late-receipt'),'same source head, different full cut')
  encoded=artifact.pack({'text':'x'*600,'again':'x'*600});d.require(artifact.unpack(encoded)=={'text':'x'*600,'again':'x'*600},'lossless text object roundtrip')
  codec=[]
