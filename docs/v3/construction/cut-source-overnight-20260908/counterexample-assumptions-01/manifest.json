@@ -920,8 +920,12 @@
   ],
   "sources": [
     "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/derivations.md",
+    "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/evidence.json",
+    "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/findings.md",
     "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/goal.json",
+    "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/handoff.md",
     "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/manifest.json",
+    "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/results.json",
     "docs/v3/construction/cut-source-overnight-20260908/counterexample-assumptions-01/specification.md",
     "experiments/v3/cut-source-overnight/counterexample-assumptions-01/check.py",
     "experiments/v3/cut-source-overnight/counterexample-assumptions-01/run.py",
