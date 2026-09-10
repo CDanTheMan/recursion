@@ -9,8 +9,12 @@ t, d, r = relation.frozen, relation.d, relation.r
 
 def run(packet):
     baseline = t.run(packet)
-    extra = histories.run()
+    extra_visits = len(d.s.UNITS) * 2 * (len(histories.ACTIONS) + 1)
+    d.require(baseline['state_visits_per_representation'] + extra_visits <= 10000,
+              'reserve all additional visits before history initialization')
+    extra = histories.run(10000 - baseline['state_visits_per_representation'])
     visits = baseline['state_visits_per_representation'] + sum(2 * (len(c['rows']) + 1) for c in extra)
+    d.require(visits == baseline['state_visits_per_representation'] + extra_visits, 'exact charged additional history inventory')
     d.require(visits <= 10000, 'combined source and adapter traversal ceiling')
     summaries, samples = [], []
     for family, cases in (('original-canonical', baseline['cases']), ('explicit-additional-history', extra)):

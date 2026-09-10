@@ -13,14 +13,16 @@ ACTIONS = (
 )
 
 
-def run():
+def run(remaining_visits):
     profile = copy.deepcopy(d.s.PROFILES['delayed-record'])
     profile.update(actions=ACTIONS, requires={action: () if i == 0 else (ACTIONS[i - 1],)
                                              for i, action in enumerate(ACTIONS)})
     d.require(profile['outcomes'] == (1,) and profile['policy'] == 'pending'
               and profile['queue'] == 'source_authority', 'preserved focused profile metadata')
-    cases = []
+    cases, charged = [], 0
     for unit in d.s.UNITS:
+        charged += 2 * (len(ACTIONS) + 1)
+        d.require(charged <= remaining_visits, 'pre-initialization additional history visit admission')
         source, adapter = d.s.initial(unit), d.initial(unit)
         t.sc.initialization(source, unit); t.audit.initialization(adapter, unit)
         st = dict(side='source', initial=copy.deepcopy(source), profile=profile, actions=ACTIONS, events=[])
