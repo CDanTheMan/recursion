@@ -1,0 +1,23 @@
+{
+  "status": "RETAINED_SOURCE_SNAPSHOT_OMISSION_WITH_SUPERSEDED_LOCAL",
+  "failed_audit": {
+    "path": "586136f073be5c420602faa30d3abc1e91331a28/195247879935-audit/receipt.json",
+    "sha256": "e2a9552dff340ec9c06fc3886dceea704d4147413274d6f61481dbf28b911e82",
+    "execution_sha256": "27bb39d09ef246d8540915343e98f70046f2bd556d1b04a265988c6f5d1ea0c6",
+    "log_sha256": "4291c91db002dd9c89eb0b57a2a81482cb74536ec346680520ad7d07da8d4f98",
+    "charge": 0,
+    "owned_active_after_cleanup": 0,
+    "cleanup_errors": []
+  },
+  "superseded_local": {
+    "path": "586136f073be5c420602faa30d3abc1e91331a28/195138550475-local/receipt.json",
+    "sha256": "6b46cf97132221a4ad15380e87f8628432d3e51fe6eff0f502ff0f4e1ad9302d",
+    "charge": 81000,
+    "status": "LOCAL_PACKET_PASS",
+    "accepted_evidence": false,
+    "reason": "All symbolic results remain retained, but one pinned historical source was absent from the enclosing pre-execution snapshot. Full rerun required."
+  },
+  "automatic_approval_rejection": false,
+  "cumulative_charged_states": 3056850,
+  "at": "2026-09-10T19:56:25.434714+00:00"
+}

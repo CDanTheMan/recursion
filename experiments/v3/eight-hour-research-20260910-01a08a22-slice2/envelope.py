@@ -249,7 +249,20 @@ def sources(candidate):
     require(len(inherited) == 394, 'complete immutable Batch07 source closure')
     prior = set(read(ROOT / DOC / 'inherited-sources.json'))
     require(len(prior) == 424 and inherited <= prior, 'all424 immutable prior campaign source paths')
-    inherited = prior
+    pinned = {}
+    for packet in policy(candidate)['allowed_packets']:
+        spec_path = (ROOT / packet_doc(packet) / packet / 'spec.json').resolve()
+        require(spec_path.is_relative_to(ROOT), 'declared packet specification containment')
+        packet_spec = read(spec_path)
+        require(packet_spec['id'] == packet, 'exact declared source-pin packet identity')
+        require(spec_path.read_bytes().replace(b'\r\n', b'\n') == git('show', candidate + ':' + spec_path.relative_to(ROOT).as_posix()).replace(b'\r\n', b'\n'), 'committed packet pin specification')
+        for name, expected in packet_spec.get('source_pins', {}).items():
+            target = (ROOT / name).resolve()
+            require(target.is_relative_to(ROOT) and target.relative_to(ROOT).as_posix() == name, 'canonical contained source pin')
+            require(name not in pinned or pinned[name] == expected, 'consistent cross-packet source pins')
+            require(sha(target.read_bytes()) == expected, 'actual declared source-pin bytes before snapshot')
+            pinned[name] = expected
+    inherited = prior | (set(pinned) - changed)
     require(not inherited & changed, 'successor does not edit any inherited input')
     return inherited, changed
 
