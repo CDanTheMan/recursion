@@ -1,0 +1,49 @@
+{
+  "id": "eight-hour-research-20260910-01a08a22-slice2",
+  "started_at": "2026-09-10T16:03:36Z",
+  "deadline_utc": "2026-09-11T00:03:36Z",
+  "clock_immutable": true,
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "owner_extension": "Alright. You have my extended dynamic approval to run the next 8 hour slice. Please commit and open PRs as needed. Let\u2019s get this done",
+  "scope": "Next bounded source/publication research slice beginning with preserved selected-scale/prefix-sharing drafts, fresh unreduced validation, measured finite expansion; prior handoff safeguards and publication/worker authority remain in force.",
+  "handoff_sha256": "24658c2f372dc1e1d461d98745759ce9a630783e2e4600a113ba41c001fb0e52",
+  "settings": {
+    "model": "gpt-6-astra",
+    "reasoning": "high",
+    "speed": "standard",
+    "change_settings": false
+  },
+  "prior_campaign_completion_sha256": "5ab73ec32c584ca27aed00a19827b05e2be97a25809d94f8d1b95127b082f9c7",
+  "initial_inherited_charge": 2320390,
+  "status": "SOURCE_DESIGN_AND_ADMISSION_REVIEW; no model initialization authorized yet",
+  "new_metered_spend": 0,
+  "reset_credits_used": 0,
+  "merges_authorized": false,
+  "base_commit": "8fd6b4547bef56036c8f065fb534a16714f295b7",
+  "worktree": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion-research-20260910-01a08a22-slice2",
+  "branch": "codex/eight-hour-research-20260910-01a08a22-slice2",
+  "allowed_paths": [
+    "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/",
+    "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/"
+  ],
+  "resolved_write_roots": [
+    "C:\\Users\\Lucas\\Documents\\GitHub\\recursion-research-20260910-01a08a22-slice2\\docs\\v3\\construction\\eight-hour-research-20260910-01a08a22-slice2",
+    "C:\\Users\\Lucas\\Documents\\GitHub\\recursion-research-20260910-01a08a22-slice2\\experiments\\v3\\eight-hour-research-20260910-01a08a22-slice2"
+  ],
+  "external_evidence": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion\\.git\\research-attestations\\eight-hour-research-20260910-01a08a22-slice2",
+  "initial_quota_remaining_percent": 18,
+  "planning_allowance_percent": 17,
+  "workers": [
+    "/root/execution_design",
+    "/root/schedule_design"
+  ],
+  "worker_cap_seconds": 1200,
+  "root_sole_writer": true,
+  "acceptance_gate": "Two exact committed candidate complete83-command gates preserving inherited77 plus selected04 and shared05 checks; two separately owned retained/source audits; two independent same-model final reviews bound to exact PRbody/brief and both gate/audit receipts; fresh publication preflight and actual remote verification; complete campaign cleanup/closeout.",
+  "non_goals": [
+    "Historical source/evidence edits",
+    "Model/settings/auth/cron changes",
+    "Merges/deployment",
+    "Unrestricted refinement/source truth/Q1-Q6/composition/fairness/recovery/runtime integration"
+  ]
+}
