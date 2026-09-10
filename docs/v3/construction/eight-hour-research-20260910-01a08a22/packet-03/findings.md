@@ -14,7 +14,7 @@ The observed census agrees with the independent preregistered counting argument 
 | Append refuses unregistered attempt | 180 |
 | Append succeeds | 60 |
 
-The source-boundary guard precedes delegated Q publication checks: all 450 stale-source refusals avoid a Q invocation, while the 180 successes and 90 pause refusals invoke Q. Quota remains an explicit occurrence in every schedule; its lack of a new guard effect in this already reserved fixed profile is not a general quota or commutativity theorem. Restart appears at each chronological core position in 120 orders per unit, and its causal indices remain distinct from occurrence suffix 22.
+The source-boundary guard precedes delegated Q publication checks: all 450 stale-source refusals avoid a Q invocation, while the 180 successes and 90 pause refusals invoke Q. Quota remains an explicit occurrence in every schedule; its lack of a new guard effect in this already reserved fixed profile is not a general quota or commutativity theorem. Restart appears at each chronological core position in 120 orders per unit. Its causal indices use the actual chronological position: they equal occurrence suffix 22 in 120 orders and differ in 600 orders per unit.
 
 Every declared history has an exact typed replay certificate. Six owned exploration shards, six separately owned retained audits, and one union checker passed for this packet. The union verified complete disjoint coverage; all nine controls per exploration shard and all eight union controls were detected. Both original implementations and independent auditors checked each step. No reduction was used.
 
