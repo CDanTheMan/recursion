@@ -1,0 +1,11 @@
+{
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "maximum_seconds_each": 1200,
+  "writes_allowed": false,
+  "model_test_execution": false,
+  "nested_delegation": false,
+  "packets": [
+    {"id": "schedule-design", "question": "Which smallest explicit finite action-order domain provides discriminating coverage beyond Batch07 without changing reducers, translations, strict comparison or the accepted staged identity relation?", "read_scope": ["CONTROL_PLANE.md", "ANCHOR.md", "docs/v3/construction/cut-source-overnight-20260908/batch-03/", "docs/v3/construction/cut-source-overnight-20260908/batch-06/", "docs/v3/construction/cut-source-overnight-20260908/batch-07/", "experiments/v3/cut-source-overnight/", "experiments/v3/cut-publication/"], "gate": "Return source-referenced finite domains, state accounting, checker/replay requirements, counterexample risks and explicit nonclaims; no execution."},
+    {"id": "execution-design", "question": "How can an additive enclosing runner preserve all 50 historical commands, hashes, state charging and Windows containment while enforcing this campaign's dynamic budget and rolling quota reserve?", "read_scope": ["CONTROL_PLANE.md", "ANCHOR.md", "experiments/v3/cut-source-overnight/", "docs/v3/construction/cut-source-overnight-20260908/", ".git/research-attestations/batch-07-20260910/", ".git/research-handoffs/eight-hour-research-20260910.md"], "gate": "Return a precise gate inventory, safe reusable APIs, inherited accounting and potential admission/audit defects; no execution."}
+  ]
+}

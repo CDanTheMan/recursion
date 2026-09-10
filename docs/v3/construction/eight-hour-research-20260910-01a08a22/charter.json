@@ -1,0 +1,30 @@
+{
+  "id": "eight-hour-research-20260910-01a08a22",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "started_at": "2026-09-10T07:05:20Z",
+  "deadline_utc": "2026-09-10T15:05:20Z",
+  "clock_immutable": true,
+  "base_commit": "f5f0519c2c2357c110a198461bf19c4081c45ad1",
+  "branch": "codex/eight-hour-research-20260910-01a08a22",
+  "worktree": "C:/Users/Lucas/Documents/GitHub/recursion-research-20260910-01a08a22",
+  "allowed_paths": [
+    "docs/v3/construction/eight-hour-research-20260910-01a08a22/",
+    "experiments/v3/eight-hour-research-20260910-01a08a22/"
+  ],
+  "resolved_write_roots": [
+    "C:/Users/Lucas/Documents/GitHub/recursion-research-20260910-01a08a22/docs/v3/construction/eight-hour-research-20260910-01a08a22",
+    "C:/Users/Lucas/Documents/GitHub/recursion-research-20260910-01a08a22/experiments/v3/eight-hour-research-20260910-01a08a22"
+  ],
+  "external_evidence": "C:/Users/Lucas/Documents/GitHub/recursion/.git/research-attestations/eight-hour-research-20260910-01a08a22",
+  "owner_launch": "Read and execute: C:\\Users\\Lucas\\Documents\\GitHub\\recursion\\.git\\research-handoffs\\eight-hour-research-20260910.md\n\nI approve this campaign and its delegated research scope, dynamic\nresearch-state budget, local resource use, and publication authority.\n\nStart the eight-hour clock now. Use my selected GPT-6 Astra High,\nStandard speed; do not change settings.\n\nContinue eligible research across packet completions and PR publication\nuntil eight hours or available quota is exhausted, following the handoff's\nvalidation and closeout requirements. Do not wait for my merges to\ncontinue independent work. I perform all merges.",
+  "settings": {"model": "gpt-6-astra", "reasoning": "high", "speed": "standard", "change_settings": false},
+  "initial_inherited_charge": 756966,
+  "initial_quota_remaining_percent": 37,
+  "new_metered_spend": 0,
+  "reset_credits_used": 0,
+  "limits": {"execution_seconds": 600, "memory_bytes": 2147483648, "output_bytes": 268435456, "minimum_free_ram_bytes_exclusive": 3221225472, "minimum_free_disk_bytes_exclusive": 1073741824, "workers": 4, "total_agents": 10, "worker_seconds": 1200},
+  "worker_policy": "Read-only, same inherited model/settings, no experiments, writes or nested delegation; root is sole writer and integrator.",
+  "acceptance_gate": "Two exact committed candidate complete 50-command inherited gates extended with new checks, two owned retained-receipt/source audits, and two independent same-model final reviews binding both receipts and actual proposed PR body/brief; verify remote publication and closeout.",
+  "non_goals": ["historical semantic or evidence edits", "source truth/Q1-Q6 admission", "whole-path composition", "fairness", "physical recovery", "runtime integration", "product language/store/provider selection", "constitutional or operational changes", "merges", "deployment"],
+  "status": "preflight; no model execution admitted"
+}
