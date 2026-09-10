@@ -235,11 +235,11 @@ def historical():
     return counts
 
 def packet_doc(packet):
-    require(packet in ('packet-01','packet-02','packet-03','packet-04','packet-05'), 'declared campaign packet')
+    require(packet in ('packet-01','packet-02','packet-03','packet-04','packet-05','packet-06'), 'declared campaign packet')
     return PRIOR_DOC if packet in ('packet-01','packet-02','packet-03') else DOC
 
 def packet_code(packet):
-    require(packet in ('packet-01','packet-02','packet-03','packet-04','packet-05'), 'declared campaign packet')
+    require(packet in ('packet-01','packet-02','packet-03','packet-04','packet-05','packet-06'), 'declared campaign packet')
     return PRIOR_CODE if packet in ('packet-01','packet-02','packet-03') else CODE
 
 def sources(candidate):

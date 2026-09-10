@@ -99,6 +99,28 @@ def audit(path):
     for packet in receipt['packets']:
         result = e.read(directory / (packet + '-output') / 'result.json')
         spec = e.read(e.ROOT / e.packet_doc(packet) / packet / 'spec.json')
+        if spec.get('kind') == 'source-guard-combinatorics':
+            symbolic_output = directory / (packet + '-output')
+            e.require({p.relative_to(symbolic_output).as_posix() for p in symbolic_output.rglob('*') if p.is_file()} == {'orders.json.gz','result.json','retained-audit.json'}, 'exact complete symbolic output membership')
+            retained = e.read(symbolic_output / 'retained-audit.json')
+            e.require(result['status'] == 'COMPLETE_CONDITIONAL_SYMBOLIC_GUARD_CLASSIFICATION' and result['model_state_visits'] == result['model_histories_executed'] == 0, 'explicit symbolic-only result')
+            e.require(retained['symbolic_work_units'] == result['symbolic_work_units'] == spec['expected_symbolic_work_units_per_command'] == 40345 and retained['model_state_visits'] == 0, 'actual symbolic accounting')
+            e.require(result['controls'] == spec['required_controls'] and len(result['controls']) == 18, 'all declared symbolic controls')
+            e.require(result['source_pins'] == spec['source_pins'] and result['units_under_hypotheses'] == spec['units_under_hypotheses'] and result['outcomes'] == spec['outcomes'] and result['occurrence_mapping'] == spec['occurrence_mapping'], 'exact source hypotheses and domain metadata')
+            e.require(all(receipt['sources'][name]['working_sha256'] == h for name,h in spec['source_pins'].items()), 'symbolic source hypotheses bind enclosing committed snapshots')
+            import json
+            canonical_hypotheses = (json.dumps(spec['hypotheses'], sort_keys=True, separators=(',', ':')) + '\n').encode()
+            e.require(result['hypothesis_sha256'] == e.sha(canonical_hypotheses), 'source-hypothesis bytes')
+            generated = next(x for x in receipt['commands'] if x['label'] == packet+'-symbolic')
+            inspected = next(x for x in receipt['commands'] if x['label'] == packet+'-symbolic-retained')
+            e.require(e.dt.datetime.fromisoformat(generated['finished_at']) <= e.dt.datetime.fromisoformat(inspected['started_at']), 'fresh generation before owned retained audit')
+            e.require(result['symbolic_orders'] == spec['symbolic_orders'] == 40320 and result['symbolic_work_units'] <= spec['per_command_work_limit'], 'bounded symbolic coverage')
+            e.require(e.sha((directory / (packet + '-output') / 'orders.json.gz').read_bytes()) == result['orders_sha256'] == retained['orders_sha256'], 'actual symbolic artifact binding')
+            e.require(retained['status'] == 'RETAINED_SYMBOLIC_CERTIFICATE_PASS' and retained['result_sha256'] == e.sha((directory / (packet + '-output') / 'result.json').read_bytes()), 'owned retained symbolic summary binding')
+            e.require(result['spec_sha256'] == e.sha((e.ROOT / e.packet_doc(packet) / packet / 'spec.json').read_bytes()) and result['checker_sha256'] == e.sha((e.ROOT / e.CODE / 'guard_order.py').read_bytes()), 'actual symbolic spec/checker binding')
+            accepted = e.ROOT / e.packet_doc(packet) / packet / 'results.json'
+            if accepted.exists(): e.require(e.read(accepted) == result, 'accepted symbolic result equality')
+            continue
         e.require(result['state_visits_per_representation'] == spec['exploration_visits'] <= spec['reservation'], 'checked actual packet visits')
         if packet == 'packet-05':
             audit_prefix_union(directory,spec,result,candidate)

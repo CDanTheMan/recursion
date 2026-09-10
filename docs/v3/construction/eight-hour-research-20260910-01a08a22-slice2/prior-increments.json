@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "increment": "01",
+    "path": "increments/increment-01-completion.json",
+    "sha256": "32e09cacb2d2f69e1577309041547655e401ad5caddd85e7fddb4a1705c240da",
+    "candidate": "1f7ecd08fb81c8a72ab39a043cda16e84f69fbf1",
+    "files": 10145
+  }
+]
