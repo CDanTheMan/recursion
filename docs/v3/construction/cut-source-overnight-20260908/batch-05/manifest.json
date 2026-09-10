@@ -1366,6 +1366,7 @@
     "docs/v3/construction/cut-source-overnight-20260908/batch-05/manifest.json",
     "docs/v3/construction/cut-source-overnight-20260908/batch-05/method-review.md",
     "docs/v3/construction/cut-source-overnight-20260908/batch-05/specification.md",
+    "experiments/v3/cut-source-overnight/batch-05/certificates.py",
     "experiments/v3/cut-source-overnight/batch-05/check.py",
     "experiments/v3/cut-source-overnight/batch-05/full_gate.py",
     "experiments/v3/cut-source-overnight/batch-05/run.py",

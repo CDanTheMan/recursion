@@ -107,3 +107,25 @@ checker controls, including an explicit negative result if the relation fails.
 Success of shared publication prefixes does not prove full visible refinement,
 fairness, source truth, physical recovery, Q1-Q6 or runtime integration. A further
 obstruction does not block independent authorized classification and validation.
+
+## Prospective certificate supplement
+
+The first admitted A/C runs passed. Their original outputs and receipts remain
+retained; the supplement adds no model steps or new schedules. Before executing
+it, two reviewers must approve the exact supplemented candidate.
+
+Reconstruct initialized state chains from their retained patches. Bind the first
+literal decision mismatch in each negative trace to both original events. Check
+source revision facts for publication after append and reconciliation after a new
+attempt, and retain distinct rejection reasons when both states are paused.
+Check actual recollected publication after restart and a retired publication's
+durable receipt returned by retry after restart/revocation, including the subsequent
+conflict rejection. These are selected examples, not general lifecycle theorems.
+
+Compare the pending-success publication prestate with publication after an extra
+attempt/append in both units. Require exactly equal complete Q prestates and target
+actions, equal common S data, changed source revision and unequal literal source
+decisions. This isolates information absent from the fixed translated Q history;
+it does not rule out a separately justified richer target interface or translation.
+Every source-only event remains visible. Source guard anchors and additional
+certificate corruption controls accompany these facts.

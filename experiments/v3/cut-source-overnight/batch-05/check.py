@@ -2,6 +2,7 @@
 import argparse,json,sys
 from pathlib import Path
 import traces
+import certificates
 import q_artifact as codec
 
 parser=argparse.ArgumentParser(description=__doc__)
@@ -30,6 +31,9 @@ def local_modules():
     return loaded
 before_modules=local_modules()
 raw=traces.run(args.packet)
+if args.packet=='C':
+    raw['certificates']=certificates.run(raw)
+    raw['controls']+=raw['certificates']['controls']
 raw['registered_local_modules']=sorted(before_modules|local_modules())
 result=codec.pack(raw)
 (args.output/'result.json').write_text(json.dumps(result,sort_keys=True,separators=(',',':'))+'\n',encoding='utf-8')
