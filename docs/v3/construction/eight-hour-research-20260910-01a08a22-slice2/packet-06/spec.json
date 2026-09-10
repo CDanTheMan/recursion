@@ -1,0 +1,97 @@
+{
+  "id": "packet-06",
+  "kind": "source-guard-combinatorics",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "allowed_paths": [
+    "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/",
+    "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/"
+  ],
+  "core": [
+    "A2",
+    "A3",
+    "A4",
+    "C0",
+    "C1",
+    "C2",
+    "O",
+    "R"
+  ],
+  "symbolic_orders": 40320,
+  "units_under_hypotheses": [
+    "event",
+    "utf8-byte"
+  ],
+  "outcomes": [
+    1
+  ],
+  "model_state_visits": 0,
+  "exploration_visits": 40320,
+  "reservation": 81000,
+  "per_command_work_limit": 40500,
+  "local_admission_seconds": 1200,
+  "hypotheses": [
+    "successful fixed setup leaves valid registration, attempt1, three append records and no pause",
+    "original scale-eight-action-race dependency profile with unchanged fixed successful delivery",
+    "fixed success cut maps attempt1 only",
+    "nonmutant original source and adapter semantics"
+  ],
+  "source_pins": {
+    "experiments/v3/cut-source-overnight/s_domain.py": "bba8c644aa6831c3b741d53938cd752dd5742cf83e9675b56e9cba3af9435c9b",
+    "experiments/v3/cut-source-overnight/s_inclusive.py": "b010d7466970d559af87d79b8638b6b5db752da5a714413dd6441a7288c01315",
+    "experiments/v3/cut-publication/q_inclusive.py": "c4fea696007d168f3c6c3327432394cc3778daf28d3fe7210d55096e963645d2",
+    "experiments/v3/coupled-cut-pause/p_literal.py": "0e2127be865245c47e03b5787ba8d886d13a33eb99f0cb1bc3d11244d826a2be",
+    "experiments/v3/coupled-construction/c_domain.py": "f20ace8ccdff0174828a1f18cbcdfaff4e24562eee0d6a25232bec4829e2aaab",
+    "experiments/v3/cut-source-overnight/s_experiment.py": "dab9c6ce3694c1a2e08606aad7b0981583563894816d1b35c890df27c4c228d0",
+    "experiments/v3/cut-source-overnight/batch-06/guard_a.py": "25378960901a4e8b6b5d7f25158d5dfb27e2325bb0fa16cbb986018376fbd4a6",
+    "experiments/v3/cut-source-overnight/batch-06/guard_b.py": "18fe0112e28eff02c6c9429b7a8a3ed5d1ab9425a6d330dc163934ffe38d2317",
+    "experiments/v3/cut-source-overnight/batch-06/a_inclusive.py": "ada025742204734655eccf3f1b50f845cf1e213dada66b6ee86f30dcedbda0cf",
+    "experiments/v3/cut-source-overnight/batch-06/a_split.py": "cee7e179b1804ee3d555e80290b552c32a89c131420f2f808e43b5ef9d0b15b8"
+  },
+  "acceptance_gate": "Two independent symbolic classifiers agree for every one of the40320 core orders. A separately owned retained audit verifies complete factorial-rank membership, exact closed-form totals and attempt-order subtotals, all declared actual controls, and both finite checked work counters. One exact committed candidate passes two complete gates preserving all50 historical commands and every packet in its prospectively reviewed policy, including both packet06 symbolic jobs: at least85 commands, with the exact ordered inventory independently recomputed by the final audit. Any additional packet requires fresh exact-candidate/spec/policy review and extends both full gates. Two owned final receipt/source audits, two independent same-model final reviews bound to actual publication body/brief, and fresh verified draft publication remain required. This is conditional source classification, not full-history execution or refinement.",
+  "non_goals": [
+    "original reducer/profile/guard changes",
+    "new semantic relation",
+    "complete strict or accepted refinement of original scale profile",
+    "model-history response or journal census for scale profile",
+    "source truth/Q1-Q6",
+    "composition",
+    "fairness",
+    "runtime",
+    "deployment"
+  ],
+  "accounting": "Zero model-state visits; conservatively add a finite81000 symbolic-work reservation to the unchanged cumulative research ledger. Each of two jobs checks40320 order rows plus bounded controls under a checked40500 work counter. This charge is never refunded; inherited gate/model reservations remain unchanged.",
+  "occurrence_mapping": {
+    "A2": "attempt:2@15",
+    "A3": "attempt:3@16",
+    "A4": "attempt:4@17",
+    "C0": "collect:0@12",
+    "C1": "collect:1@13",
+    "C2": "collect:2@14",
+    "O": "collect-open@11",
+    "R": "source-restart@18"
+  },
+  "required_controls": [
+    "missing-occurrence",
+    "duplicate-occurrence",
+    "missing-order",
+    "undercharged-work",
+    "failed-attempt4-changes-revision",
+    "attempt4-needs-successful-attempt3",
+    "restart-ignored",
+    "inventory-before-freshness",
+    "registry-bypass",
+    "capture-after-collection-counted-complete",
+    "altered-aggregate",
+    "duplicate-order",
+    "wrong-outcome",
+    "wrong-unit-domain",
+    "changed-source-pin",
+    "changed-source-path-domain",
+    "changed-occurrence-mapping",
+    "changed-source-hypothesis"
+  ],
+  "expected_symbolic_work_units_per_command": 40345,
+  "campaign": "eight-hour-research-20260910-01a08a22-slice2",
+  "started_at": "2026-09-10T16:03:36Z",
+  "deadline_utc": "2026-09-11T00:03:36Z"
+}

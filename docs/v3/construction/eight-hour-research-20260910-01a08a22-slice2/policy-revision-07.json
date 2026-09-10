@@ -1,0 +1,29 @@
+{
+  "revision": 7,
+  "inherited_charge": 2320390,
+  "ceiling": 4250000,
+  "outstanding_gate_state_reserve": 655520,
+  "quota_reserve_percent": 4,
+  "finalization_reserve_seconds": 10200,
+  "full_gate_admission_seconds": 4800,
+  "allowed_packets": [
+    "packet-01",
+    "packet-02",
+    "packet-03",
+    "packet-04",
+    "packet-05",
+    "packet-06",
+    "packet-08"
+  ],
+  "local_packet_admission_seconds": {
+    "packet-01": 600,
+    "packet-02": 7800,
+    "packet-03": 7800,
+    "packet-04": 600,
+    "packet-05": 3000,
+    "packet-06": 1200,
+    "packet-08": 1200
+  },
+  "owner_authority": "Extended eight-hour owner campaign dynamic approval; no settings or inherited caps changed.",
+  "rationale": "Final candidate reserve from actual qualifying locals: unchanged83 gates3634.905/3438.330s retain4200s baseline; corrected guard pair2.641s receives60s allowance; actual08 pair354.906s receives50percent headroom, rounded upward with the baseline to4800s per complete87 gate. Pair reserve10200s includes600s finalization, with additional wall-clock slack checked at dispatch. Current3168090 mixed charged units plus two327760 gates projects3823610 below4250000. Both failed attempts and superseded local81000 remain charged. All inherited caps, models, settings and deadline unchanged; quota reserve4percent. Packet07 does not fit its independently recorded complete local+final-gate admission and remains unexecuted. Reassess actual first87 gate before dispatching the second; never refund failed work."
+}
