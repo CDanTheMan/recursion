@@ -4,5 +4,11 @@
     "sha256": "2aa8659713aac70e52e71133799f78d24403c53e3332083dd0812a54d311bb27",
     "files": 2928,
     "candidate": "725dc9bf30a3bce9538d4491239858c4166e0a7e"
+  },
+  {
+    "path": "increments/increment-02-completion.json",
+    "sha256": "c7f1466d929b70834a95de9cb45d937a88a5dc78f187a361c598248e208d397d",
+    "files": 18942,
+    "candidate": "41140a28614b016bd7b948b5da86f5905cbc6c0e"
   }
 ]
