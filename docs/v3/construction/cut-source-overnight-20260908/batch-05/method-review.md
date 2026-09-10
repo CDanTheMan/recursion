@@ -22,3 +22,16 @@ added causal-availability checks for incarnation pairs and receipt-container typ
 preservation. Controls exercise those requirements directly. Normalized and recursive
 comparisons are independently structured and share signature/receipt predicates;
 they are not described as independent model implementations.
+
+The initial exact candidate29f75dc5de98a359ade6993896f0c9a0d31c4c38 received
+both prospective approvals before A/C execution. Both runs passed and their
+owned receipt audits passed. A separate auxiliary review corrected cumulative
+ledger validation before local-audit exit; the corrected helper was approved
+before use. This was a prospective source correction, not a runtime failure.
+
+The certificate candidate d3e87eaee1cf5e077d1c65c129b8827c64d38948 received
+both exact prospective approvals before its C run. Review strengthened stale
+guard facts, retained-receipt exceptions, duplicate event effects and the scoped
+schedule-suffix argument. The supplemented C run and owned receipt audit passed.
+Every review verdict and superseded admission reference remains in the cache.
+Final gates and publication ratification still require the exact final candidate.
