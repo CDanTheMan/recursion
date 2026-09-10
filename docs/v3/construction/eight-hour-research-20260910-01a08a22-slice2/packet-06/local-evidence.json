@@ -1,0 +1,23 @@
+{
+  "status": "ACTUAL_LOCAL06_AND_OWNED_AUDIT_PASS",
+  "candidate": "07d3ea597c46a3767aff8f6f5df84c2f378690e3",
+  "receipt": "07d3ea597c46a3767aff8f6f5df84c2f378690e3/195919655572-local/receipt.json",
+  "receipt_sha256": "0be0e5267238c9220a3355946cee63f23b18d7cc5689287cf04262a4d3eaad71",
+  "wall_seconds": 44.698924,
+  "command_seconds": {
+    "packet-06-symbolic": 1.5939999999973224,
+    "packet-06-symbolic-retained": 1.0470000000059372
+  },
+  "maximum_peak_bytes": 60461056,
+  "artifact_bytes": 10130100,
+  "retained_files": 465,
+  "source_snapshots": 455,
+  "result_sha256": "f76fd07605feeac752afe70f10abe98b42dc935b95bb360d7e64ef04aab8e697",
+  "cumulative_charged_states": 3137850,
+  "charge": 81000,
+  "supersedes_unaudited_receipt": "6b46cf97132221a4ad15380e87f8628432d3e51fe6eff0f502ff0f4e1ad9302d",
+  "audit_receipt": "07d3ea597c46a3767aff8f6f5df84c2f378690e3/200023018148-audit/receipt.json",
+  "audit_receipt_sha256": "4c1cd77e79400d36d8684bebb1969c22b9fe0707c4cd9a1a8ee8a3e0ef49be67",
+  "audit_seconds": 42.21800000000803,
+  "audit_wall_seconds": 82.141749
+}

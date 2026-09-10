@@ -43,6 +43,23 @@ def audit_prefix_union(directory,spec,result,candidate):
         environments+=row['environments'];states+=row['shared_visits']
     e.require(environments==60 and states==1964,'complete two-domain audited union')
 
+
+def audit_fresh_complete(directory,spec,result,candidate):
+    folder=directory/'packet-08-output';retained=e.read(folder/'audit.json');provenance=e.read(folder/'audit-provenance.json')
+    e.require(result['status']=='COMPLETE_DECLARED_FRESH_COMPLETE_DOMAIN' and result['packet']=='packet-08' and result['environments']==432 and result['schedules']==216 and result['state_visits_per_representation']==result['reservation']==30240,'complete exact fresh-complete finite domain')
+    e.require(retained['status']=='COMPLETE_RETAINED_FRESH_COMPLETE_AUDIT' and retained['packet']=='packet-08' and retained['environments']==432 and retained['model_reducers_executed'] is False,'actual complete separately owned retained audit')
+    e.require(retained['result_sha256']==e.sha((folder/'result.json').read_bytes()) and retained['checker_sha256']==result['checker_sha256']==e.sha((e.ROOT/e.CODE/'fresh_complete.py').read_bytes()) and result['spec_sha256']==e.sha((e.ROOT/e.packet_doc('packet-08')/'packet-08/spec.json').read_bytes()),'actual result/spec/checker bindings')
+    e.require(retained['certificates']=={r['artifact']:r['artifact_sha256'] for r in result['cases']} and len(retained['certificates'])==432,'complete distinct retained certificate map')
+    e.require({p.relative_to(folder).as_posix() for p in folder.rglob('*') if p.is_file()}=={'result.json','audit.json','audit-provenance.json'}|set(retained['certificates']),'complete exact owned output membership')
+    for name,h in retained['certificates'].items():
+        target=(folder/name).resolve();e.require(target.is_relative_to(folder.resolve()) and e.sha(target.read_bytes())==h,'every actual retained certificate binding')
+    e.require([x['control'] for x in result['controls']]==spec['required_controls'] and all(x['detected'] is True for x in result['controls']),'all declared actual controls')
+    e.require(result['reductions_used'] is False and result['complete_original_profile_coverage'] is False and result['unrestricted_refinement_proved'] is False and result['original_Q_profile_reachability_proved'] is False and result['whole_path_composition_proved'] is False and result['source_truth_established'] is False,'finite unreduced evidence only')
+    label='packet-08';names={'admission.json',label+'-admission.json',label+'-execution.json',label+'.log'};mapping=provenance['generation_owned_bindings']
+    e.require(provenance['candidate']==candidate and provenance['run']==str(directory) and set(mapping)==names and all(e.sha((directory/n).read_bytes())==h for n,h in mapping.items()),'actual same-candidate owned generation provenance')
+    first=e.read(directory/'packet-08-execution.json');second=e.read(directory/'packet-08-retained-execution.json');e.require(e.dt.datetime.fromisoformat(first['finished_at'])<=e.dt.datetime.fromisoformat(second['started_at']),'actual generation before retained audit')
+    sources=e.read(directory/'admission.json')['sources'];e.require(all(sources[name]['working_sha256']==h for name,h in spec['source_pins'].items()),'actual committed source hypotheses')
+
 def audit(path):
     path = path.resolve(); directory = path.parent
     e.require(path.is_relative_to(e.CACHE) and path.name == 'receipt.json', 'campaign receipt containment')
@@ -122,7 +139,9 @@ def audit(path):
             if accepted.exists(): e.require(e.read(accepted) == result, 'accepted symbolic result equality')
             continue
         e.require(result['state_visits_per_representation'] == spec['exploration_visits'] <= spec['reservation'], 'checked actual packet visits')
-        if packet == 'packet-05':
+        if packet == 'packet-08':
+            audit_fresh_complete(directory,spec,result,candidate)
+        elif packet == 'packet-05':
             audit_prefix_union(directory,spec,result,candidate)
         else:
             e.require(result['environments'] == spec['environments'] and result['schedules'] == spec['schedules_per_unit_outcome'], 'complete finite domain')

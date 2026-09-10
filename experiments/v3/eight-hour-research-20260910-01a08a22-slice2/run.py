@@ -84,6 +84,10 @@ def packet_commands(packet, directory):
         e.require(packet == 'packet-06' and spec['model_state_visits'] == 0 and spec['reservation'] == 81000 and spec['per_command_work_limit'] == 40500, 'exact finite symbolic-only admission')
         common = [sys.executable, '-X', 'utf8', '-B', e.CODE + 'guard_order.py', '--spec', str(spec_path), '--output', str(output), '--work-limit', str(spec['per_command_work_limit'])]
         return [dict(label=packet+'-symbolic', root=str(e.ROOT), command=common), dict(label=packet+'-symbolic-retained', root=str(e.ROOT), command=[*common, '--audit'])]
+    if packet == 'packet-08':
+        e.require(spec['reservation']==30240 and spec['environments']==432 and spec['domain']=='scale-eight-action-race','exact finite fresh-complete original history domain')
+        common=[sys.executable,'-X','utf8','-B',e.CODE+'fresh_complete.py','--spec',str(spec_path),'--output',str(output)]
+        return [dict(label=packet,root=str(e.ROOT),command=[*common,'--state-limit','30240']),dict(label=packet+'-retained',root=str(e.ROOT),command=[*common,'--audit'])]
     if packet == 'packet-05':
         e.require(spec['reference_packets'] == ['packet-01','packet-04'] and spec['reference_shared_visits'] == [204,1760] and spec['reservation'] == 1964 and spec['required_controls_by_reference'] == {'packet-01':23,'packet-04':24}, 'exact reviewed small prefix validation definition')
         commands = []
