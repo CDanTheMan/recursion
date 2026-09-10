@@ -1,0 +1,25 @@
+{
+  "revision": 3,
+  "inherited_charge": 2320390,
+  "ceiling": 3000000,
+  "outstanding_gate_state_reserve": 433040,
+  "quota_reserve_percent": 4,
+  "finalization_reserve_seconds": 9000,
+  "full_gate_admission_seconds": 4200,
+  "allowed_packets": [
+    "packet-01",
+    "packet-02",
+    "packet-03",
+    "packet-04",
+    "packet-05"
+  ],
+  "local_packet_admission_seconds": {
+    "packet-01": 600,
+    "packet-02": 7800,
+    "packet-03": 7800,
+    "packet-04": 600,
+    "packet-05": 3000
+  },
+  "owner_authority": "Extended eight-hour owner campaign dynamic approval; no settings or inherited caps changed.",
+  "rationale": "The retained first c96 full attempt passed18 frozen checks and25 regressions then failed predecessor output creation at a260-character Windows path. Preserve its216520 charge and all582 files. Shorter invocation identifiers map every prior successful artifact to at most251 characters; no historical model or command factory change. Observed frozen/regression elapsed was1879.107s to failure, slower than prior. Reserve4200s per complete83-command gate and9000s for two gates plus600s audits/reviews/publication/cleanup. Existing cumulative2542810 plus two216520 reservations projects2975850 below unchanged3m ceiling. Reassess measured first successful gate before second dispatch. Keep4percent rolling quota reserve and inherited600s/2GiB/256MiB job caps. No retry refunds or reuse of earlier candidate passes."
+}

@@ -119,7 +119,7 @@ def run(candidate, mode, packets, target=None):
     if mode == 'local':
         duration = sum(e.policy(candidate)['local_packet_admission_seconds'][packet] for packet in packets)
         e.require(type(duration) is int and duration > 0 and (e.END - e.now()).total_seconds() > e.policy(candidate)['finalization_reserve_seconds'] + duration + 605, 'entire local multi-command packet plus finalization reserve')
-    directory = e.CACHE / candidate / (e.now().strftime('%Y%m%dT%H%M%S%f') + '-' + mode)
+    directory = e.CACHE / candidate / (e.now().strftime('%H%M%S%f') + '-' + mode)
     directory.mkdir(parents=True, exist_ok=False)
     receipt = dict(candidate=candidate, mode=mode, packets=packets, status='PREPARING', started_at=e.now().isoformat(), commands=[],
                    python_executable=sys.executable, python_sha256=e.sha(Path(sys.executable).read_bytes()))
