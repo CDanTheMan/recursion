@@ -102,17 +102,24 @@ def run_history(profile, schedule, unit, outcome, name, counter):
 def audit_case(case):
     ss, aa = t.restore(case['source']), t.restore(case['adapter'])
     pairs, prefixes = [], []
+    t.sc.initialization(ss[0], case['unit']); t.audit.initialization(aa[0], case['unit'])
+    d.require(d.exact(case['source']['profile'], case['adapter']['profile']), 'same original source/adapter profile')
     d.require(case['source']['actions'] == case['adapter']['actions'], 'all visible actions matched')
     for prefix in range(len(ss)):
         if prefix:
             i = prefix - 1
             action, row = case['source']['actions'][i], case['rows'][i]
+            oldpairs = copy.deepcopy(pairs)
+            t.sc.check(ss[i], action, ss[prefix], case['source']['profile'], case['unit'], case['outcome'])
             binding = r.advance(pairs, ss[i], t.core_view(aa[i]), ss[prefix], t.core_view(aa[prefix]), action, action, i, i)
             d.require(d.exact(binding, row['binding']), 'actual chronological causal pair binding')
             d.require(row['source_action'] == row['adapter_action'] == action and row['index'] == i, 'literal chronological event equality')
             call = t.audit.check(aa[i], action, aa[prefix], case['source']['profile'], case['unit'], case['outcome'])
             d.require(call == row['q_invoked'] and d.exact(row['justification'], d.justification(action, call)), 'actual Q invocation and translation retained')
             d.require(t.response(ss[prefix], aa[prefix], action, pairs) == row['responses_related'], 'visible response relation retained')
+            expected_row = t.comparison(ss[i], aa[i], ss[prefix], aa[prefix], oldpairs, pairs, action, i, call)
+            expected_row['binding'] = binding
+            d.require(d.exact(expected_row, row), 'complete independently recomputed comparison row')
         saved = copy.deepcopy(pairs)
         item = relation.compare(case, ss, aa, prefix, pairs)
         identity_audit.check(item, case, ss, aa, prefix, pairs)
@@ -131,14 +138,29 @@ def summarize(case):
         visible_events=len(rows), matching_responses=sum(x['responses_related'] for x in rows),
         matching_journals=sum(not x['differing_journal_fields'] for x in prefixes[1:]),
         identity_poststates=sum(x['staged_rule'] == 'original-object-identity' for x in prefixes[1:]),
-        strict_first_gap=next((i for i, x in enumerate(prefixes) if not x['strict_related']), None),
+        strict_first_gap=next((i for i, x in enumerate(prefixes) if not x['strict_related'] or (i and not rows[i-1]['responses_related'])), None),
         extended_first_gap=next((i for i, x in enumerate(prefixes) if not x['related'] or (i and not rows[i-1]['responses_related'])), None),
-        decisions=[x['patch'].get('decision') for x in case['source']['events']],
+        decisions=[x['source_observation']['decision'] for x in rows],
         original_profile_sha256=d.digest(case['source']['profile']))
 
 def main(spec_path, output, limit):
     spec = json.loads(spec_path.read_text(encoding='utf-8'))
+    manifest = json.loads((ROOT / 'docs/v3/construction/cut-source-overnight-20260908/batch-07/manifest.json').read_text())
+    registered = {x['path'] for x in manifest['inputs']} | set(manifest['sources'])
+    registered |= {'experiments/v3/' + NAME + '/' + x for x in ('check.py', 'artifact.py')}
+    def modules():
+        paths = set()
+        for module in tuple(sys.modules.values()):
+            source = getattr(module, '__file__', None)
+            if source:
+                path = Path(source).resolve()
+                if path.is_relative_to(ROOT) and path.suffix == '.py': paths.add(path.relative_to(ROOT).as_posix())
+        d.require(paths <= registered, 'registered immutable/new local module closure: ' + repr(sorted(paths - registered)))
+        return paths
+    initial_modules = modules()
     profile = domain(spec)
+    d.require(list(d.s.UNITS) == spec['units'] and list(profile['outcomes']) == spec['outcomes']
+              and len(profile['actions']) == spec['actions_per_history'], 'exact declared environments and action depth')
     schedules, count = inventory(profile)
     expected_visits = 2 * (len(profile['actions']) + 1) * count * len(d.s.UNITS) * len(profile['outcomes'])
     d.require(count == spec['schedules_per_unit_outcome'] and expected_visits == spec['exploration_visits'], 'independent DP/analytical domain count')
@@ -193,6 +215,17 @@ def main(spec_path, output, limit):
     damaged = copy.deepcopy(sample)
     damaged['adapter']['q_profile']['actions'] = tuple(reversed(damaged['adapter']['q_profile']['actions']))
     reject('renumbered-Q-occurrence-positions', lambda: audit_case(damaged))
+    synthetic = copy.deepcopy(sample)
+    for x in synthetic['prefixes']: x['strict_related'] = x['related'] = True
+    for x in synthetic['rows']: x['responses_related'] = True
+    synthetic['rows'][0]['responses_related'] = False
+    synthetic_summary = summarize(synthetic)
+    d.require(not synthetic_summary['strict_complete'] and not synthetic_summary['extended_complete']
+              and synthetic_summary['strict_first_gap'] == synthetic_summary['extended_first_gap'] == 1,
+              'response-only failure has its earliest prefix witness')
+    controls.append(dict(control='response-only-witness-selection', detected=True, reason='response-only retained evidence yields prefix 1 for both relations'))
+    if spec['domain'] == 'first-attestation-antichain':
+        d.require(causal_sample is not None and identity_sample is not None, 'required nonvacuous chronological and identity witnesses')
     if causal_sample is not None:
         damaged = copy.deepcopy(causal_sample); damaged['incarnation_pairs'][0]['source_event'] = 19
         reject('occurrence-suffix-used-as-causal-index', lambda: audit_case(damaged))
@@ -211,7 +244,10 @@ def main(spec_path, output, limit):
             ('identity-creates-authority', lambda x: x.update(incarnation_pair_established_by_identity=True))):
             bad = copy.deepcopy(case['prefixes'][prefix]); mutate(bad)
             reject(label, lambda: identity_audit.check(bad, case, ss, aa, prefix, pairs))
+    d.require(len(controls) == len(spec['required_controls'])
+              and {x['control'] for x in controls} == set(spec['required_controls']), 'complete preregistered control inventory')
     result = dict(packet=spec['id'], domain=spec['domain'], schedules=count, environments=len(results),
+        registered_local_modules=sorted(initial_modules | modules()),
         state_visits_per_representation=counter.visits, reservation=limit,
         strict_complete=sum(x['strict_complete'] for x in results), extended_complete=sum(x['extended_complete'] for x in results),
         visible_events=sum(x['visible_events'] for x in results), matching_responses=sum(x['matching_responses'] for x in results),

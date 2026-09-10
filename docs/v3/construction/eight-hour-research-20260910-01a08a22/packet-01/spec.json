@@ -10,6 +10,7 @@
   "outcomes": [1],
   "exploration_visits": 576,
   "reservation": 576,
+  "required_controls": ["omitted-schedule", "duplicate-replaces-schedule", "violated-dependency", "undercharged-initialization", "dropped-visible-event", "changed-action-translation", "refused-or-invoked-Q-mask-change", "renumbered-Q-occurrence-positions", "response-only-witness-selection", "occurrence-suffix-used-as-causal-index", "cross-schedule-identity-proof", "future-stage-origin", "detached-prefix-hash", "identity-creates-authority"],
   "admission": "Two prospective exact-source same-model reviews; reviewed dynamic policy; fresh quota and capacity; shared heavy/model locks; precharge before initialization; 600s/2GiB/256MiB and zero owned children.",
   "acceptance_gate": "Complete independent DP count and unique schedule inventory; both unchanged reducer implementations and auditors per source/adapter step; preserved strict and accepted staged identity comparisons at every prefix; matching or explicitly retained unmatched responses/journals; minimized earliest failing prefixes across complete domain; detected adversarial controls; two 51-command final gates, two owned receipt/source audits and two final reviews.",
   "non_goals": ["original profile or reducer edits", "accepted relation changes", "unrestricted refinement", "original-Q-profile reachability", "source truth or Q1-Q6", "whole-path composition", "fairness", "physical recovery", "runtime integration"],

@@ -1,6 +1,7 @@
 """Owned local checks, complete inherited gates and retained-receipt audits."""
 import argparse
 from pathlib import Path
+import re
 import sys
 import envelope as e
 
@@ -27,14 +28,32 @@ def historical_inventory(directory):
     e.require(len(commands) == 50, 'all 50 Batch07 commands')
     return commands
 
-def packet_command(packet, directory):
-    spec_path = e.ROOT / e.DOC / packet / 'spec.json'
+def packet_spec(packet):
+    e.require(type(packet) is str and re.fullmatch(r'packet-[0-9]{2,3}', packet) is not None, 'simple packet identifier')
+    spec_path = (e.ROOT / e.DOC / packet / 'spec.json').resolve()
+    e.require(spec_path.is_relative_to((e.ROOT / e.DOC).resolve()), 'packet spec containment')
+    candidate = e.git('rev-parse', 'HEAD').decode().strip()
+    name = spec_path.relative_to(e.ROOT).as_posix()
+    e.require(name in e.sources(candidate)[1], 'packet spec bound in candidate snapshot closure')
+    raw = spec_path.read_bytes(); blob = e.git('show', candidate + ':' + name)
+    e.require(raw.replace(b'\r\n', b'\n') == blob.replace(b'\r\n', b'\n'), 'committed packet spec bytes')
     spec = e.read(spec_path)
-    return dict(label=packet, root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'check.py', '--spec', str(spec_path), '--output', str(directory / (packet + '-output')), '--state-limit', str(spec['reservation'])])
+    e.require(spec['id'] == packet and spec['parent_goal'] == 'goal-recursion-v2-execution-fabric', 'packet parent/id')
+    e.require(type(spec['reservation']) is int and spec['reservation'] >= spec['exploration_visits'] > 0, 'finite packet state admission')
+    return spec_path, spec
+
+def packet_command(packet, directory):
+    spec_path, spec = packet_spec(packet)
+    output = (directory / (packet + '-output')).resolve()
+    e.require(output.is_relative_to(directory.resolve()), 'packet output containment')
+    return dict(label=packet, root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'check.py', '--spec', str(spec_path), '--output', str(output), '--state-limit', str(spec['reservation'])])
 
 def run(candidate, mode, packets, target=None):
     final = mode in ('full', 'audit')
     e.capacity(candidate, final)
+    e.require(packets and len(packets) == len(set(packets)) and set(packets) <= set(e.policy(candidate)['allowed_packets']), 'unique prospectively admitted packets')
+    specs = [packet_spec(packet)[1] for packet in packets]
+    if mode == 'full': e.require(packets == e.policy(candidate)['allowed_packets'], 'all admitted packet checks included in final gate')
     if mode == 'full':
         e.require((e.END - e.now()).total_seconds() > 3000, 'observed full-gate and cleanup reserve')
     directory = e.CACHE / candidate / (e.now().strftime('%Y%m%dT%H%M%S%f') + '-' + mode)
@@ -44,7 +63,7 @@ def run(candidate, mode, packets, target=None):
     locks = []
     try:
         locks = e.acquire()
-        states = (83900 if mode == 'full' else 0) + (sum(e.read(e.ROOT / e.DOC / packet / 'spec.json')['reservation'] for packet in packets) if mode != 'audit' else 0)
+        states = (83900 if mode == 'full' else 0) + (sum(spec['reservation'] for spec in specs) if mode != 'audit' else 0)
         receipt['reservation'] = e.charge(candidate, directory, mode, states, final)
         receipt['sources'] = e.snapshot(candidate, directory)
         if mode == 'full': receipt['history'] = e.historical()
@@ -53,7 +72,7 @@ def run(candidate, mode, packets, target=None):
             e.require(target is not None and target.resolve().is_relative_to(e.CACHE), 'owned audit receipt target')
             commands.append(dict(label='audit', root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'audit.py', str(target.resolve()), str(directory / 'audit.json')]))
         else: commands.extend(packet_command(packet, directory) for packet in packets)
-        receipt.update(status='ADMITTED_BEFORE_EXECUTION', expected_commands=commands, capacity=e.capacity(candidate, final))
+        receipt.update(status='ADMITTED_BEFORE_EXECUTION', admitted_at=e.now().isoformat(), expected_commands=commands, capacity=e.capacity(candidate, final))
         e.write(directory / 'admission.json', receipt)
         for command in commands:
             receipt['commands'].append(e.command(candidate, command['command'], Path(command['root']), directory, command['label'], final))
