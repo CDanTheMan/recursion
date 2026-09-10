@@ -62,7 +62,7 @@ def certificate(before,after,action,index):
     if action.split('@')[0]!='source-attest':return None
     ledger,reason,call=guard_audit.expected(d.view(before),action,{})
     item={'index':index,'before_sha256':d.digest(before),'after_sha256':d.digest(after),'ledger_guard_decision':reason,
-          'q_invoked':call,'q_decision':after['core']['decision'] if call else None,'journal_committed':not d.exact(before['journal']['attestation'],after['journal']['attestation'])}
+          'q_invoked':call,'q_decision':after['core']['decision'] if call else None,'journal_changed':not d.exact(before['journal']['attestation'],after['journal']['attestation'])}
     if call:
         own=before['core'];j=before['journal'];name=own['cut_delivery'];f=d.q.lit.fixture(name)
         prior=d.q.record_ids(own['source_name']) if own['source_name'] else ();new=d.q.record_ids(name)
