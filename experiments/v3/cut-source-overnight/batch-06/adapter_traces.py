@@ -30,6 +30,8 @@ def gap_certificate(source,adapter,pairs):
     both=bool(left and right)
     facts=dict(staged_exact_typed=d.exact(left,right),source_signature_valid=bool(left and r.signed(left[0])),
         target_signature_valid=bool(right and r.signed(right[0])),no_established_pairs=not pairs,
+        source_payload_valid=bool(left and left[1]==d.q.raw_cut(left[0].cut)),
+        target_payload_valid=bool(right and right[1]==d.q.raw_cut(right[0].cut)),
         both_sources_unattested=not source['source_name'] and not adapter['core']['source_name'],
         same_live_generation=d.exact(source['source_generation'],adapter['core']['source_generation']),
         own_current_stage_generation=bool(both and d.exact(left[0].source_generation,source['source_generation']) and d.exact(right[0].source_generation,adapter['core']['source_generation'])))
@@ -162,6 +164,8 @@ def run(packet):
         reject('nonidentical-unattested-record-not-certified',lambda:d.require(gap_certificate(left,right,ledger)['identical_valid_unattested_objects'],'actual unbound staged objects must remain identical and valid'))
         left,right=copy.deepcopy(gap[3]),copy.deepcopy(gap[4]);left['staged']=(left['staged'][0]._replace(signature='0'*64),left['staged'][1]);right['core']['staged']=copy.deepcopy(left['staged'])
         reject('identical-forged-unattested-records-not-certified',lambda:d.require(gap_certificate(left,right,ledger)['identical_valid_unattested_objects'],'equal bytes alone do not authenticate either original object'))
+        left,right=copy.deepcopy(gap[3]),copy.deepcopy(gap[4]);left['staged']=(left['staged'][0],left['staged'][1]+'-corrupted');right['core']['staged']=copy.deepcopy(left['staged'])
+        reject('identical-corrupt-staged-payloads-not-certified',lambda:d.require(gap_certificate(left,right,ledger)['identical_valid_unattested_objects'],'each actual retained staged payload must bind its own envelope'))
     return dict(packet=packet,cases=cases,controls=controls,state_visits_per_representation=visits,state_visit_reservation=MAX_VISITS,
         complete_selected_trace_cases=sum(c['complete_selected_trace_correspondence'] for c in cases),
         selected_visible_responses_matched=sum(x['responses_related'] for c in cases for x in c['rows']),
