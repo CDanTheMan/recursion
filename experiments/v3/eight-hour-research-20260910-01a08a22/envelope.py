@@ -87,6 +87,7 @@ def policy(candidate):
     require(len(reviewers) == 2, 'independent same-model reviewers')
     require(p['inherited_charge'] == 756966 and p['ceiling'] >= p['inherited_charge'], 'preserved inherited charge')
     require(p['finalization_reserve_seconds'] >= 4500 and p['quota_reserve_percent'] > 0, 'explicit rolling finalization reserve')
+    require(type(p['full_gate_admission_seconds']) is int and p['full_gate_admission_seconds'] >= 3000 and p['finalization_reserve_seconds'] >= 2 * p['full_gate_admission_seconds'] + 600, 'reviewed complete pair of expanded gates plus finalization')
     return p
 
 def capacity(candidate, final=False):
@@ -145,6 +146,39 @@ def charge(candidate, directory, label, states, final=False):
     with path.open('x', encoding='utf-8') as f: f.write(json.dumps(row, indent=2) + '\n')
     return row
 
+def verify_inherited_seal():
+    SEAL = B7 / 'seal-20260910T064937774849'
+    NAMES = {'admission.json', 'execution.json', 'final-handoff.md', 'morning-brief.md', 'proposed-completion.json', 'stderr.log', 'stdout.log'}
+    manifest = read(ROOT / DOC / 'inherited-seal.json')
+    require({p.name for p in SEAL.iterdir() if p.is_file()} == NAMES == set(manifest['files']), 'all seven inherited seal files')
+    for name, expected in manifest['files'].items():
+        path = (SEAL / name).resolve()
+        require(path.is_relative_to(SEAL) and sha(path.read_bytes()) == expected, 'inherited seal file hash')
+    cpath, rpath, ppath = B7 / 'completion.json', SEAL / 'execution.json', SEAL / 'proposed-completion.json'
+    require(sha(cpath.read_bytes()) == '3afa7e5df84281a609e0bdddc92f92034076c488e28d3b07e127711b108d0ad4', 'approved completion hash')
+    require(sha(rpath.read_bytes()) == '6be72ddb931f5bed2509cb66f886a94f1db952bce40bb973b7f7f95f15f527fd', 'approved seal execution hash')
+    c, r, p = read(cpath), read(rpath), read(ppath)
+    proposal_hash = sha(ppath.read_bytes())
+    require(proposal_hash == c['proposal_sha256'] == r['proposal_sha256'] == 'ef6d042a3d1906303aaa4f951051811d0d25728d2234d597d90c9e18a955e9f7', 'actual proposal bound by both sealed records')
+    expected = dict(p, status='BOUNDED_BATCH07_COMPLETE_DRAFT_PUBLISHED', completed_at=c['completed_at'],
+                    seal_receipt='seal-20260910T064937774849/execution.json', seal_receipt_sha256=sha(rpath.read_bytes()), proposal_sha256=proposal_hash)
+    require(expected == c, 'exact historical seal.py proposal-to-completion transformation')
+    require(r['status'] == 'COMPLETION_SEAL_PASS' and r['exit_code'] == 0 and r['owned_active_after_cleanup'] == 0 and r['cleanup_errors'] == [], 'successful historical owned seal cleanup')
+    require(r['seconds'] < 600 and r['peak_memory_bytes'] <= 2147483648, 'historical seal resource bounds')
+    admitted = read(SEAL / 'admission.json')
+    require(all(r[k] == admitted[k] for k in ('candidate', 'started_at', 'usage')), 'historical admission binding')
+    require(dt.datetime.fromisoformat(r['started_at']) <= dt.datetime.fromisoformat(p['completed_at']) <= dt.datetime.fromisoformat(r['finished_at']) <= dt.datetime.fromisoformat(c['completed_at']), 'historical seal chronology')
+    for name in ('morning-brief.md', 'final-handoff.md'):
+        require((SEAL / name).read_bytes() == (B7 / name).read_bytes() and sha((SEAL / name).read_bytes()) == c['files'][name], 'historical published summary copies')
+    output = read(SEAL / 'stdout.log')
+    require(output['status'] == 'PROVISIONAL_COMPLETION_FILE_MAP_VERIFIED' and output['candidate'] == c['candidate'] and output['proposal_sha256'] == proposal_hash and output['files'] == len(c['files']), 'actual seal stdout binding')
+    require((SEAL / 'stderr.log').read_bytes() == b'', 'empty successful historical seal stderr')
+    return dict(status='SEVEN_FILE_INHERITED_SEAL_PASS', checked_at=now().isoformat(), files=manifest['files'],
+                manifest_sha256=sha((ROOT / DOC / 'inherited-seal.json').read_bytes()), proposal_sha256=proposal_hash,
+                historical_completion_sha256=sha(cpath.read_bytes()), historical_execution_sha256=sha(rpath.read_bytes()),
+                original_51_command_gate_claim=False, model_reducers_executed=False)
+
+
 def historical():
     completion = B7 / 'completion.json'
     require(sha(completion.read_bytes()) == '3afa7e5df84281a609e0bdddc92f92034076c488e28d3b07e127711b108d0ad4', 'sealed Batch07 completion')
@@ -176,6 +210,16 @@ def historical():
     require(sha(seal.read_bytes()) == c['seal_receipt_sha256'] == '6be72ddb931f5bed2509cb66f886a94f1db952bce40bb973b7f7f95f15f527fd', 'separate Batch07 seal')
     require(read(seal)['status'] == 'COMPLETION_SEAL_PASS' and c['source_family_reserved_states'] == 756966, 'completed inherited evidence')
     counts['batch07-completion'] = len(c['files'])
+    counts['batch07-seal-files'] = len(verify_inherited_seal()['files'])
+    for row in read(ROOT / DOC / 'prior-increments.json'):
+        path = (CACHE / row['path']).resolve()
+        require(path.is_relative_to(CACHE) and sha(path.read_bytes()) == row['sha256'], 'prior campaign increment completion binding')
+        prior = read(path)
+        require(prior['status'] == 'BOUNDED_INCREMENT_COMPLETE_DRAFT_PUBLISHED' and prior['candidate'] == row['candidate'] and len(prior['files']) == row['files'], 'completed prior increment and file count')
+        for name, expected in prior['files'].items():
+            target = (CACHE / name).resolve()
+            require(target.is_relative_to(CACHE) and sha(target.read_bytes()) == expected, 'preserved prior campaign evidence')
+        counts[row['path']] = len(prior['files'])
     return counts
 
 def sources(candidate):

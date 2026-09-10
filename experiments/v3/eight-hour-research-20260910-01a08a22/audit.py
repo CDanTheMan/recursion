@@ -13,7 +13,7 @@ def audit(path):
     e.scope(candidate)
     e.require(receipt['status'] in ('LOCAL_PACKET_PASS', 'EXTENDED_HISTORICAL_GATE_PASS') and 'cleanup_error' not in receipt, 'completed subject receipt')
     e.require(admission['status'] == 'ADMITTED_BEFORE_EXECUTION' and admission['commands'] == [], 'actual pre-execution admission receipt')
-    for key in ('candidate', 'mode', 'packets', 'started_at', 'admitted_at', 'python_executable', 'python_sha256', 'sources', 'reservation', 'expected_commands', 'capacity'):
+    for key in ('candidate', 'mode', 'packets', 'started_at', 'admitted_at', 'python_executable', 'python_sha256', 'sources', 'reservation', 'expected_commands', 'capacity', 'finalization_admission'):
         e.require(admission[key] == receipt[key], 'unchanged admitted field: ' + key)
     e.require(receipt['python_executable'] == sys.executable and receipt['python_sha256'] == e.sha(Path(sys.executable).read_bytes()), 'exact interpreter bytes')
     actual = {p.relative_to(directory).as_posix() for p in directory.rglob('*') if p.is_file() and p != path}
@@ -32,7 +32,7 @@ def audit(path):
         if name in inherited: e.require(blob == e.git('show', e.BASE + ':' + name), 'immutable historical input')
     full = receipt['mode'] == 'full'
     expected = runner.historical_inventory(directory) if full else []
-    expected.extend(runner.packet_command(packet, directory) for packet in receipt['packets'])
+    expected.extend(command for packet in receipt['packets'] for command in runner.packet_commands(packet, directory))
     e.require(expected == receipt['expected_commands'] and len(expected) == len(receipt['commands']), 'independent exact ordered command inventory')
     for wanted, actual in zip(expected, receipt['commands']):
         label = wanted['label']

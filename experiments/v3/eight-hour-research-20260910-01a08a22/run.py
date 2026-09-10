@@ -5,6 +5,40 @@ import re
 import sys
 import envelope as e
 
+def finalization_admission(candidate):
+    """Recognize only retained successful exact-candidate gates with owned audits."""
+    def closed(path):
+        receipt = e.read(path); folder = path.parent
+        actual = {p.relative_to(folder).as_posix() for p in folder.rglob('*') if p.is_file() and p != path}
+        e.require(actual == set(receipt['files']), 'complete prior retained receipt membership')
+        for name, expected in receipt['files'].items():
+            target = (folder/name).resolve()
+            e.require(target.is_relative_to(folder.resolve()) and e.sha(target.read_bytes()) == expected, 'unchanged prior retained evidence')
+        return receipt
+    prior = {}
+    for audit_path in sorted((e.CACHE/candidate).glob('*-audit/receipt.json')):
+        row = e.read(audit_path)
+        if row.get('status') != 'OWNED_RECEIPT_AUDIT_PASS': continue
+        check = e.read(audit_path.parent/'audit.json')
+        target = Path(check['receipt']).resolve()
+        if not target.is_relative_to((e.CACHE/candidate).resolve()) or not target.parent.name.endswith('-full'): continue
+        row, gate = closed(audit_path), closed(target)
+        e.require(row['candidate'] == gate['candidate'] == candidate and gate['status']=='EXTENDED_HISTORICAL_GATE_PASS', 'successful prior exact-candidate full gate and audit')
+        e.require(check['status']=='EXACT_RETAINED_RECEIPT_AUDIT_PASS' and check['receipt_sha256']==e.sha(target.read_bytes()) and check['candidate']==candidate, 'owned audit binds this actual prior gate')
+        commands = row['commands']
+        e.require(len(commands)==1 and commands[0]['status']=='PASS' and commands[0]['owned_active_after_cleanup']==0 and commands[0]['cleanup_errors']==[] and commands[0]['candidate']==candidate, 'successful prior owned audit execution')
+        e.require(commands[0]==e.read(audit_path.parent/'audit-execution.json') and str(target) in commands[0]['command'], 'actual prior audit command and execution binding')
+        expected = historical_inventory(target.parent)
+        expected.extend(command for packet in gate['packets'] for command in packet_commands(packet,target.parent))
+        e.require(gate['packets']==e.policy(candidate)['allowed_packets'] and gate['expected_commands']==expected and len(gate['commands'])==len(expected), 'complete expanded prior gate')
+        e.require(all(x['status']=='PASS' and x['owned_active_after_cleanup']==0 and x['cleanup_errors']==[] for x in gate['commands']), 'all prior commands passed and cleaned')
+        prior[str(target)] = dict(gate=str(target),gate_sha256=e.sha(target.read_bytes()),audit=str(audit_path),audit_sha256=e.sha(audit_path.read_bytes()))
+    policy = e.policy(candidate)
+    outstanding = 2 if not prior else 1
+    seconds = outstanding*policy['full_gate_admission_seconds'] + 600
+    e.require((e.END-e.now()).total_seconds()>seconds, 'time for every outstanding exact-candidate gate and finalization')
+    return dict(prior_audited_gates=list(prior.values()),outstanding_gates_including_this=outstanding,reserved_seconds=seconds,checked_at=e.now().isoformat())
+
 def historical_inventory(directory):
     inv = e.read(e.ROOT / 'docs/v3/construction/cut-source-overnight-20260908/validation-inventory.json')
     rows = [dict(commit='8f457c546e4d85fada73913efb900f921eaf6b1a', branch='codex/v3-cut-source-continued-20260909', script='experiments/v3/cut-source-overnight/reopen-01/check_final.py'),
@@ -42,11 +76,20 @@ def packet_spec(packet):
     e.require(type(spec['reservation']) is int and spec['reservation'] >= spec['exploration_visits'] > 0, 'finite packet state admission')
     return spec_path, spec
 
-def packet_command(packet, directory):
+def packet_commands(packet, directory):
     spec_path, spec = packet_spec(packet)
     output = (directory / (packet + '-output')).resolve()
     e.require(output.is_relative_to(directory.resolve()), 'packet output containment')
-    return dict(label=packet, root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'check.py', '--spec', str(spec_path), '--output', str(output), '--state-limit', str(spec['reservation'])])
+    if 'shard_keys' not in spec:
+        return [dict(label=packet, root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'check.py', '--spec', str(spec_path), '--output', str(output), '--state-limit', str(spec['reservation'])])]
+    e.require(len(spec['shard_keys']) == len(set(spec['shard_keys'])) == 6 and spec['visits_per_shard'] * 6 == spec['reservation'], 'finite complete shard partition')
+    commands = []
+    for i, key in enumerate(spec['shard_keys']):
+        commands.append(dict(label=packet + '-shard-' + str(i), root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'sharded.py', '--spec', str(spec_path), '--output', str(output / ('shard-' + str(i))), '--shard', key, '--state-limit', str(spec['visits_per_shard'])]))
+    for i, key in enumerate(spec['shard_keys']):
+        commands.append(dict(label=packet + '-retained-' + str(i), root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'sharded.py', '--spec', str(spec_path), '--output', str(output / ('shard-' + str(i))), '--audit-shard', key]))
+    commands.append(dict(label=packet + '-union', root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'sharded.py', '--spec', str(spec_path), '--output', str(output), '--union']))
+    return commands
 
 def run(candidate, mode, packets, target=None):
     final = mode in ('full', 'audit')
@@ -54,12 +97,15 @@ def run(candidate, mode, packets, target=None):
     e.require(packets and len(packets) == len(set(packets)) and set(packets) <= set(e.policy(candidate)['allowed_packets']), 'unique prospectively admitted packets')
     specs = [packet_spec(packet)[1] for packet in packets]
     if mode == 'full': e.require(packets == e.policy(candidate)['allowed_packets'], 'all admitted packet checks included in final gate')
-    if mode == 'full':
-        e.require((e.END - e.now()).total_seconds() > 3000, 'observed full-gate and cleanup reserve')
+    finalization = finalization_admission(candidate) if mode == 'full' else None
+    if mode == 'local':
+        duration = sum(spec.get('local_admission_seconds', 600) for spec in specs)
+        e.require(type(duration) is int and duration > 0 and (e.END - e.now()).total_seconds() > e.policy(candidate)['finalization_reserve_seconds'] + duration + 605, 'entire local multi-command packet plus finalization reserve')
     directory = e.CACHE / candidate / (e.now().strftime('%Y%m%dT%H%M%S%f') + '-' + mode)
     directory.mkdir(parents=True, exist_ok=False)
     receipt = dict(candidate=candidate, mode=mode, packets=packets, status='PREPARING', started_at=e.now().isoformat(), commands=[],
                    python_executable=sys.executable, python_sha256=e.sha(Path(sys.executable).read_bytes()))
+    receipt['finalization_admission'] = finalization
     locks = []
     try:
         locks = e.acquire()
@@ -71,7 +117,7 @@ def run(candidate, mode, packets, target=None):
         if mode == 'audit':
             e.require(target is not None and target.resolve().is_relative_to(e.CACHE), 'owned audit receipt target')
             commands.append(dict(label='audit', root=str(e.ROOT), command=[sys.executable, '-X', 'utf8', '-B', e.CODE + 'audit.py', str(target.resolve()), str(directory / 'audit.json')]))
-        else: commands.extend(packet_command(packet, directory) for packet in packets)
+        else: commands.extend(command for packet in packets for command in packet_commands(packet, directory))
         receipt.update(status='ADMITTED_BEFORE_EXECUTION', admitted_at=e.now().isoformat(), expected_commands=commands, capacity=e.capacity(candidate, final))
         e.write(directory / 'admission.json', receipt)
         for command in commands:
@@ -81,7 +127,7 @@ def run(candidate, mode, packets, target=None):
                 e.require(e.git('rev-parse', 'HEAD', root=root).decode().strip() == command['source_commit']
                           and not e.git('status', '--porcelain', '--untracked-files=all', root=root).strip(), 'frozen source preserved after command')
         if mode == 'full':
-            e.require(len(receipt['commands']) == 50 + len(packets), 'complete extended historical gate')
+            e.require(len(receipt['commands']) == 50 + sum(len(packet_commands(packet, directory)) for packet in packets), 'complete extended historical gate')
             e.require(e.read(directory / 'output/result.json') == e.read(e.ROOT / e.B7DOC / 'results.json'), 'exact frozen Batch07 result')
             e.require(e.historical() == receipt['history'], 'all historical closure unchanged')
         if mode != 'audit':

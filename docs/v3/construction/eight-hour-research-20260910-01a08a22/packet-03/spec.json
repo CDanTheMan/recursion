@@ -1,0 +1,90 @@
+{
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "allowed_paths": [
+    "docs/v3/construction/eight-hour-research-20260910-01a08a22/",
+    "experiments/v3/eight-hour-research-20260910-01a08a22/"
+  ],
+  "units": [
+    "event",
+    "utf8-byte"
+  ],
+  "outcomes": [
+    1
+  ],
+  "non_goals": [
+    "original profile or reducer edits",
+    "accepted relation changes",
+    "unrestricted refinement",
+    "original-Q-profile reachability",
+    "source truth or Q1-Q6",
+    "whole-path composition",
+    "fairness",
+    "physical recovery",
+    "runtime integration"
+  ],
+  "admission": "Two prospective exact-source same-model reviews; reviewed dynamic policy; fresh quota and capacity; shared heavy/model locks; precharge before initialization; 600s/2GiB/256MiB and zero owned children.",
+  "id": "packet-03",
+  "domain": "publication-source-race",
+  "schedules_per_unit_outcome": 720,
+  "environments": 1440,
+  "actions_per_history": 25,
+  "prefix_actions": 19,
+  "core_actions": [
+    "pub-commit@19",
+    "attempt:2@20",
+    "append:later-start-only:3:normal@21",
+    "source-restart@22",
+    "pause@23",
+    "quota@24"
+  ],
+  "shard_keys": [
+    "pub-commit@19",
+    "attempt:2@20",
+    "append:later-start-only:3:normal@21",
+    "source-restart@22",
+    "pause@23",
+    "quota@24"
+  ],
+  "visits_per_shard": 12480,
+  "exploration_visits": 74880,
+  "reservation": 74880,
+  "required_shard_controls": [
+    "omitted-schedule",
+    "duplicate-replaces-schedule",
+    "violated-dependency",
+    "undercharged-initialization",
+    "dropped-visible-event",
+    "changed-action-translation",
+    "refused-or-invoked-Q-mask-change",
+    "renumbered-Q-occurrence-positions",
+    "response-only-witness-selection"
+  ],
+  "required_union_controls": [
+    "missing-shard",
+    "duplicate-shard",
+    "cross-shard-environment",
+    "altered-non-witness-summary",
+    "cross-environment-certificate",
+    "occurrence-suffix-used-as-restart-index",
+    "stale-source-refusal-changed-to-success",
+    "successful-append-reply-corrupted"
+  ],
+  "prospective_predictions_per_unit_not_results": {
+    "publication_ok": 180,
+    "publication_pause": 90,
+    "publication_stale": 450,
+    "Q_publication_invocations": 270,
+    "attempt_ok": 360,
+    "attempt_pause": 360,
+    "append_stale_incarnation": 360,
+    "append_pause": 120,
+    "append_unregistered": 180,
+    "append_ok": 60,
+    "strict_complete": 720,
+    "accepted_complete": 720,
+    "identity_uses": 0
+  },
+  "partition": "Original profile/actions/requires remain unchanged. Select the first literal core occurrence; six disjoint120-schedule shards exactly cover the independently counted720 schedules per unit/outcome. Original completion-mask occurrence positions remain fixed; chronological trace positions are distinct.",
+  "acceptance_gate": "Six owned finite exploration shards, six separately owned retained shard audits, and one owned union checker per packet. Both original reducer implementations and independent source/adapter auditors at each step; strict and accepted relation at all prefixes; exact typed on-disk replay. Retained shard audits independently reaudit every actual certificate and compare complete summaries/facts; union binds their exact results/certificates and proves all1440 original environments present exactly once. Every declared control needs an actual witness and must be detected. Final exact candidate passes two complete77-command gates retaining all50 Batch07 commands plus packet01 and both thirteen-command race packets, two owned retained-receipt/source audits, two independent same-model final reviews, and fresh verified draft publication.",
+  "local_admission_seconds": 1800
+}
