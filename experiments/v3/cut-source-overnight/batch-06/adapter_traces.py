@@ -24,6 +24,21 @@ def response(source,adapter,action,pairs):
     k=action.split('@')[0]
     return d.exact(source['decision'],adapter['decision']) and (not (k.startswith('append:') or k=='append-lose-reply') or d.exact(source['append_reply'],adapter['journal']['append_reply'])) and (not k.startswith('pub-') or r.field_pair(source,adapter['core'],'publication_reply',pairs))
 
+def gap_certificate(source,adapter,pairs):
+    """Diagnose strict relation gaps without extending it or establishing a pair."""
+    left,right=source['staged'],adapter['core']['staged']
+    both=bool(left and right)
+    facts=dict(staged_exact_typed=d.exact(left,right),source_signature_valid=bool(left and r.signed(left[0])),
+        target_signature_valid=bool(right and r.signed(right[0])),no_established_pairs=not pairs,
+        both_sources_unattested=not source['source_name'] and not adapter['core']['source_name'],
+        same_live_generation=d.exact(source['source_generation'],adapter['core']['source_generation']),
+        own_current_stage_generation=bool(both and d.exact(left[0].source_generation,source['source_generation']) and d.exact(right[0].source_generation,adapter['core']['source_generation'])))
+    return dict(source_sha256=d.digest(source),adapter_sha256=d.digest(adapter),facts=facts,
+        staged_source_generation=left[0].source_generation if left else None,
+        staged_target_generation=right[0].source_generation if right else None,
+        identical_valid_unattested_objects=all(v for k,v in facts.items() if k!='own_current_stage_generation'),
+        acceptance_relation_changed=False,incarnation_pair_established=False)
+
 def comparison(before_s,before_a,after_s,after_a,oldpairs,pairs,action,index,call):
     pre=related(before_s,before_a,oldpairs);post=related(after_s,after_a,pairs)
     semantic=r.report(after_s,core_view(after_a),pairs,action,action)
@@ -86,7 +101,7 @@ def run(packet):
                 source=d.s.initial(unit);adapter=d.initial(unit);sc.initialization(source,unit);audit.initialization(adapter,unit)
                 st=dict(side='source',initial=copy.deepcopy(source),profile=profile,actions=actions,events=[])
                 at=dict(side='adapter',initial=copy.deepcopy(adapter),profile=profile,q_profile=d.subprofile(profile),actions=actions,events=[])
-                rows=[];pairs=[];certs=[]
+                rows=[];pairs=[];certs=[];gaps=[]
                 d.require(not any(related(source,adapter,pairs)),'independently initialized complete state relation')
                 for index,action in enumerate(actions):
                     d.require(set(d.s.ready_actions(source,profile))==sc.enabled(source,profile) and action in sc.enabled(source,profile),'original complete source enabledness')
@@ -101,13 +116,14 @@ def run(packet):
                     d.require(all(p['source_event']<=index and p['target_event']<=index for p in pairs),'causal immutable incarnation ledger')
                     row=comparison(source,adapter,ns,na,oldpairs,pairs,action,index,call);row['binding']=binding
                     rows.append(row)
+                    if not row['state_related']:gaps.append(dict(index=index,**gap_certificate(ns,na,pairs)))
                     cert=certificate(adapter,na,action,index)
                     if cert:certs.append(cert)
                     samples.append((name,source,adapter,ns,na,profile,unit,outcome,action,copy.deepcopy(pairs),oldpairs,call,row))
                     st['events'].append(trace_event(source,ns,action));at['events'].append(trace_event(adapter,na,action,True))
                     source,adapter=ns,na
                 d.require(d.exact(restore(st)[-1],source) and d.exact(restore(at)[-1],adapter),'retained independently replayable histories')
-                cases.append(dict(case=name+'/'+unit+'/'+str(outcome),source=st,adapter=at,rows=rows,incarnation_pairs=pairs,attestation_certificates=certs,
+                cases.append(dict(case=name+'/'+unit+'/'+str(outcome),source=st,adapter=at,rows=rows,incarnation_pairs=pairs,attestation_certificates=certs,state_gap_certificates=gaps,
                     complete_selected_trace_correspondence=all(x['prestate_related'] and x['state_related'] and x['responses_related'] for x in rows),
                     source_events=len(rows),adapter_events=len(rows),q_invocations=len(adapter['invocations']),unmatched_visible_events=0))
     d.require(len(cases)==(104 if packet=='C' else 10),'preregistered selected environment cardinality')
@@ -139,8 +155,19 @@ def run(packet):
     append_sample=next(x for x in samples if x[8].startswith('append:') and x[3]['append_reply'])
     bad=copy.deepcopy(append_sample[4]);bad['journal']['append_reply']=()
     reject('mutated-visible-append-response-relation',lambda:d.require(response(append_sample[3],bad,append_sample[8],append_sample[9]),'exact typed append response relation'))
+    if packet=='C':
+        gap=next(x for x in samples if not x[12]['state_related']);left,right=copy.deepcopy(gap[3]),copy.deepcopy(gap[4]);ledger=gap[9]
+        d.require(gap_certificate(left,right,ledger)['identical_valid_unattested_objects'],'retained diagnostic positive witness')
+        right['core']['staged']=(right['core']['staged'][0]._replace(generation='changed-object'),right['core']['staged'][1])
+        reject('nonidentical-unattested-record-not-certified',lambda:d.require(gap_certificate(left,right,ledger)['identical_valid_unattested_objects'],'actual unbound staged objects must remain identical and valid'))
+        left,right=copy.deepcopy(gap[3]),copy.deepcopy(gap[4]);left['staged']=(left['staged'][0]._replace(signature='0'*64),left['staged'][1]);right['core']['staged']=copy.deepcopy(left['staged'])
+        reject('identical-forged-unattested-records-not-certified',lambda:d.require(gap_certificate(left,right,ledger)['identical_valid_unattested_objects'],'equal bytes alone do not authenticate either original object'))
     return dict(packet=packet,cases=cases,controls=controls,state_visits_per_representation=visits,state_visit_reservation=MAX_VISITS,
         complete_selected_trace_cases=sum(c['complete_selected_trace_correspondence'] for c in cases),
+        selected_visible_responses_matched=sum(x['responses_related'] for c in cases for x in c['rows']),
+        selected_journal_poststates_matched=sum(not x['differing_journal_fields'] for c in cases for x in c['rows']),
+        strict_state_gap_rows=sum(not x['state_related'] for c in cases for x in c['rows']),
+        diagnosed_identical_valid_unattested_gap_rows=sum(x['identical_valid_unattested_objects'] for c in cases for x in c['state_gap_certificates']),
         canonical_traces_are_all_interleavings=False,original_Q_profile_reachability_proved=False,graph_search_performed=False,
         complete_visible_refinement_proved=False,whole_path_composition_proved=False,source_truth_established=False,
         deferred_questions_resolved=[],original_models_changed=False,guard_lineage='Transcribed frozen S guards; own adapter journal and unchanged Q core; bounded contract conformance only.')
