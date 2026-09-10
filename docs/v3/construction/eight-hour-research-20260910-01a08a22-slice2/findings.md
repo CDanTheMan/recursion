@@ -1,0 +1,13 @@
+2026-09-10 — accepted local findings; final publication validation pending
+
+The selected original-scale subset passed all48 histories under the accepted staged-identity relation. Strict comparison remained0/48, with the earliest strict gap at prefix23. All1,632 visible responses and1,632 journal poststates matched;576 poststates used staged identity. Attestation refused with stale-collection in32 histories and incomplete-inventory in16. These are actual observations, matching the preregistered predictions without changing guards or semantics.
+
+Literal-prefix sharing independently regenerated all12 packet01 and48 packet04 certificates. Every typed certificate and deterministic gzip byte sequence matched its fresh same-run unreduced reference. Complete summaries, counts, attestation census and original-order earliest-prefix minima matched. Both separate retained shared audits and the two-domain union passed. All14 inherited reference controls,17 selected controls,23/24 sharing controls and two union controls were detected.
+
+Sharing used1,964 checked source/adapter visits versus3,936 unreduced reference visits, a50.1percent reduction. Its two generation jobs took41.516seconds versus34.266seconds for the reference jobs: no wall-time speedup was observed in this run. Retained shared audits added14.594seconds and the union1.438seconds. These are one-machine observations, not a general performance claim or paired statistical benchmark. Fewer transitions do not remove certificate/audit/ancestor-fingerprint costs.
+
+The complete local invocation ran seven owned commands in130.770seconds, including preparation, with12.852MB output and50.774MB peak job memory. Its separately owned receipt/source audit passed. Every owned child exited and cleanup reported zero survivors. The5,900-state reservation remains charged; cumulative state use is2,326,290 before final gates.
+
+The new subset adds48 histories to the earlier action-order research. Sharing repeats60 reference histories and adds no unique coverage. The original40,320-order scale profile, broader race-prefix sharing, unrestricted refinement, original-Q reachability, source truth/Q1–Q6, composition, fairness, physical recovery and runtime integration remain unproved. Literal ordered prefixes are used; no completion-mask or state-equality reduction is claimed.
+
+Source and result files now require two complete83-command gates on their exact committed candidate, two owned final receipt/source audits and two final independent same-model reviews binding actual PR/brief artifacts. Publication remains pending; external final receipts will record it. Lucas alone merges.

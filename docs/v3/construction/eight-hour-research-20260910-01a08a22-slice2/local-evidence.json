@@ -1,0 +1,49 @@
+{
+  "status": "LOCAL_VALIDATED_FINAL_GATES_PENDING",
+  "local_candidate": "27812eaf276b0deb1f39f4f5196f9a1adf9581aa",
+  "local_measurement": {
+    "candidate": "27812eaf276b0deb1f39f4f5196f9a1adf9581aa",
+    "receipt": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion\\.git\\research-attestations\\eight-hour-research-20260910-01a08a22-slice2\\27812eaf276b0deb1f39f4f5196f9a1adf9581aa\\20260910T162102174525-local\\receipt.json",
+    "receipt_sha256": "2387481769340790830dc4cd9e658e296ae14a7811d850813d22218a145b0245",
+    "command_seconds": {
+      "packet-01": 5.703000000008615,
+      "packet-04": 28.562999999994645,
+      "packet-05-packet-01": 6.75,
+      "packet-05-packet-04": 34.76600000000326,
+      "packet-05-retained-packet-01": 2.5,
+      "packet-05-retained-packet-04": 12.094000000011874,
+      "packet-05-union": 1.4380000000091968
+    },
+    "total_command_seconds": 91.81400000002759,
+    "wall_seconds": 130.769865,
+    "artifact_bytes": 12851952,
+    "peak_job_memory_bytes": 50774016,
+    "owned_survivors": 0,
+    "new_visits": 5900,
+    "reference_generation_seconds": 34.26600000000326,
+    "shared_generation_seconds": 41.51600000000326,
+    "no_walltime_speedup_observed": true
+  },
+  "owned_audit_receipt": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion\\.git\\research-attestations\\eight-hour-research-20260910-01a08a22-slice2\\27812eaf276b0deb1f39f4f5196f9a1adf9581aa\\20260910T162337387331-audit\\receipt.json",
+  "owned_audit_receipt_sha256": "410ba571a37fbf04f13eaee368bd8a1633c80fc775252b1ab510a799fa7b6654",
+  "owned_audit": {
+    "status": "EXACT_RETAINED_RECEIPT_AUDIT_PASS",
+    "candidate": "27812eaf276b0deb1f39f4f5196f9a1adf9581aa",
+    "receipt": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion\\.git\\research-attestations\\eight-hour-research-20260910-01a08a22-slice2\\27812eaf276b0deb1f39f4f5196f9a1adf9581aa\\20260910T162102174525-local\\receipt.json",
+    "receipt_sha256": "2387481769340790830dc4cd9e658e296ae14a7811d850813d22218a145b0245",
+    "commands": 7,
+    "retained_files": 594,
+    "snapshots": 440,
+    "cumulative_reserved_states": 2326290,
+    "model_reducers_executed": false,
+    "historical_gates_rerun": false,
+    "checked_at": "2026-09-10T16:24:48.085500+00:00"
+  },
+  "expected_final_commands": 83,
+  "expected_full_state_reservation": 216520,
+  "expected_final_pair_reservation": 433040,
+  "publication": "pending exactcandidate full gates, audits and final artifact reviews",
+  "new_unique_selected_histories": 48,
+  "shared_histories_repeated_from_references": 60,
+  "historical_sources": "424 unchanged Git blobs; working snapshots explicitly permit CRLF/LF normalization"
+}

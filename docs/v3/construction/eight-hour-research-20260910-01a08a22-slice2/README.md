@@ -18,4 +18,4 @@ Execution commands (from the new worktree; substitute exact committed candidate 
     python -X utf8 -B experiments/v3/eight-hour-research-20260910-01a08a22-slice2/run.py --candidate <commit> --mode full --packets packet-01 packet-02 packet-03 packet-04 packet-05
     python -X utf8 -B experiments/v3/eight-hour-research-20260910-01a08a22-slice2/run.py --candidate <commit> --mode audit --packets packet-01 packet-02 packet-03 packet-04 packet-05 --target <receipt>
 
-Results and publication are pending. This is a preregistered executable candidate, not validated evidence. No unrestricted refinement, original-Q reachability, source truth/Q1–Q6, composition, fairness, physical recovery or runtime guarantee is claimed.
+Local results and their owned audit passed; findings.md and local-evidence.json bind those observations. Final candidate gates and publication are pending. Initial-policy.json retains the original proposal; measured-policy.json records the revised prospective reserve from actual local measurements. No unrestricted refinement, original-Q reachability, source truth/Q1–Q6, composition, fairness, physical recovery or runtime guarantee is claimed.
