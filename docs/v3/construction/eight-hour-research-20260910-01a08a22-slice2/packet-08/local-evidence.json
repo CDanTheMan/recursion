@@ -1,0 +1,22 @@
+{
+  "status": "ACTUAL_LOCAL08_AND_OWNED_AUDIT_PASS",
+  "candidate": "f114bb6dc3ec3e398c4c52e9afeb0aa184305932",
+  "receipt": "f114bb6dc3ec3e398c4c52e9afeb0aa184305932/200548249905-local/receipt.json",
+  "receipt_sha256": "a0cf61c89dea878332f043698f70503d159ddb03ec2bb366a168dd47c954d40f",
+  "wall_seconds": 395.672915,
+  "command_seconds": {
+    "packet-08": 268.51600000000326,
+    "packet-08-retained": 86.38999999999942
+  },
+  "maximum_peak_bytes": 97583104,
+  "artifact_bytes": 20953494,
+  "retained_files": 904,
+  "source_snapshots": 462,
+  "result_sha256": "3d8f96272c5312c9e19b3b7048b60f14b989bdd0061e9aaeb4773483abb55e75",
+  "cumulative_charged_states": 3168090,
+  "charge": 30240,
+  "audit_receipt": "f114bb6dc3ec3e398c4c52e9afeb0aa184305932/201252717803-audit/receipt.json",
+  "audit_receipt_sha256": "1b7e1446eb271a41f14d6b5ee0aec4a0b915779a7088f88497ec571256d625a6",
+  "audit_seconds": 40.0,
+  "audit_wall_seconds": 78.120378
+}

@@ -1,0 +1,26 @@
+{
+  "status": "OPTIONAL_PACKET07_FAILS_MEASURED_TIME_ADMISSION",
+  "at": "2026-09-10T20:16:11.787305+00:00",
+  "reference_measurements": [
+    {
+      "path": "1f7ecd08fb81c8a72ab39a043cda16e84f69fbf1/171531133513-full/receipt.json",
+      "sha256": "378356b54deeda633f69dbbc9c1e8df3d809481aed9dba6f02630a699fc50b4c",
+      "commands": 13,
+      "seconds": 915.2649999999994
+    },
+    {
+      "path": "1f7ecd08fb81c8a72ab39a043cda16e84f69fbf1/181833397391-full/receipt.json",
+      "sha256": "a4ba4dbb92c8b76bb8f0b2a0badcb32f681b71cf1815141c3b61f1002f6a72dd",
+      "commands": 13,
+      "seconds": 935.1540000000095
+    }
+  ],
+  "reference_local_allowance_seconds": 1200,
+  "unmeasured_two07_jobs_seconds": 1200,
+  "measured87_full_allowance_seconds": 4800,
+  "proposed89_full_allowance_seconds": 6000,
+  "required_local_and_two89_gates_seconds": 15605,
+  "remaining_seconds": 13644.212695,
+  "packet07_model_executions": 0,
+  "scope": "Only optional07 is deferred. Existing87 final gates remain mandatory and fit. No runtime speedup is presumed from prefix counts."
+}
