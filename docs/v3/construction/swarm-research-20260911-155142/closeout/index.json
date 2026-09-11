@@ -1,0 +1,42 @@
+{
+  "record": "swarm-research-closeout-index/v1",
+  "observed_utc": "2026-09-11T21:44:01Z",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "evidence_candidate": "48970bdfad68b03f4a51679787b0406484f6b773",
+  "pull_request": "https://github.com/NotSkittlz/recursion/pull/124",
+  "draft": true,
+  "accepted_review_branch_commits": [
+    "7d1cb22403d4a63e28b7628701eef889e2beefcf",
+    "65b0929d45dfd6a55ba20e54d84eca30c4b83a31",
+    "48970bdfad68b03f4a51679787b0406484f6b773"
+  ],
+  "candidate_gate": {
+    "status": "PASS",
+    "receipt_sha256": "43804f948482f9b5dff7116d31246f6e055697ef4d6a88ceda4d0cdbcba9ca86",
+    "source_archive_sha256": "b21dac440c64c60df286915e832827c2a2019746436ea603a1fe3804d8c0bc3a"
+  },
+  "external_audits": {
+    "current_candidate_sha256": "fda4b65ad53d630234a87c8bfedee813d8956cef17028af934325ebd5cc1603a",
+    "wsl_workspace_preservation_sha256": "f83d06562d008ca4c3b5663f37f9480865f872c1dda8683e291a86e74bbb96fb",
+    "wsl_workspace_exact_archive_sha256": "419f29ac8e6fb8255573f7f169b3ab0468fbe072c13223cda50d1c415af0ce0f",
+    "wsl_quiescence_sha256": "f436b9b623431c405484ee25d5c92416a511052ac58d9c22a034867f5608ef0f",
+    "windows_quiescence_sha256": "a3aa5334b5026fc5aabe439219db83129696be9f1dd8dae64545672ee7d6753b"
+  },
+  "native_reservations": {
+    "held": 181,
+    "ceiling": 200,
+    "available": 19,
+    "uncertain_released_or_replayed": 0
+  },
+  "usage": {
+    "checked_utc": "2026-09-11T21:44:01Z",
+    "used_percent": 13,
+    "remaining_percent": 87,
+    "record_sha256": "532efc94ee03a7a289f33b798d8bad77061752984612c039a43e5e89e802bf79",
+    "reset_credits_used": 0,
+    "new_metered_spend": 0
+  },
+  "scientific_execution": false,
+  "scientific_admission": "BLOCKED_NO_EXECUTION_AUTHORIZED",
+  "merge_authority": "Lucas alone"
+}

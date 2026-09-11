@@ -1,0 +1,10 @@
+{
+  "record": "campaign-windows-quiescence-audit/v1",
+  "observed_utc": "2026-09-11T21:47:08.2781940Z",
+  "campaign_id": "research-20260911-155142",
+  "validation_worktree_absent": true,
+  "review_worktree_retained": true,
+  "campaign_validation_registered": false,
+  "matching_live_processes_excluding_audit_ancestry": [],
+  "quiescent": true
+}
