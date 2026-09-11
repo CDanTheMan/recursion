@@ -51,8 +51,9 @@ digest and retrieval time. It does not provide unrestricted live web browsing.
 The lead supplies or expands the corpus for a new research packet. This keeps
 source selection and network authority reviewable.
 
-Native clients share a 24 GiB aggregate cgroup, with 2 GiB per-client ceilings
-and a 16-core aggregate CPU limit. Command cgroups are separate. A 100-worker
+Native Devin workers share a 24 GiB aggregate cgroup, with 2 GiB per-client ceilings
+and a 16-core aggregate CPU limit. Each coordinator has a separate 2 GiB cgroup;
+command cgroups are also separate. A 100-worker
 plan means 100 logical jobs; prior uncertain reservations reduce simultaneous
 new admission. It does not mean 100 simultaneous builds. WSL's configured memory
 ceiling still applies, independently of free Windows RAM.
