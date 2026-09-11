@@ -232,17 +232,18 @@ def collect_filing(export, broker, job, citation_ids, transport):
         request = strict_json((broker.root / str(row['number']) / 'request.json').read_bytes())
         observed.append(encoded({'name': request['name'], 'arguments': request['arguments']}))
     require(sorted(calls) == sorted(observed), 'provider tool calls differ from durable broker receipts')
-    answers = [s['message'] for s in steps if s.get('source') == 'agent' and s.get('message')]
-    require(answers, 'missing final worker answer')
     try:
+        answers = [s['message'] for s in steps if s.get('source') == 'agent' and s.get('message')]
+        require(answers, 'missing final worker answer')
         value = parsed_json(answers[-1])
+        require(value.get('files') == [], 'proposals must come from independently collected broker writes')
+        value['files'] = broker.proposed_files()
+        refs = [f"tool:{r['number']}@{r['sha256']}" for r in broker.receipts]
+        from .contracts import validate_filing
+        validate_filing(value, job, [*citation_ids, *refs])
     except (Refused, ValueError) as exc:
-        # Only qualified transport, model identity and matched tool receipts
-        # permit settling malformed task output as a known completed failure.
+        # Transport, model identity, matched tool receipts, and cleanup have
+        # already been qualified. Any remaining filing defect is therefore a
+        # known completed task failure rather than an uncertain provider hold.
         raise CompletedFailure(f'provider completed; final filing invalid: {exc}') from exc
-    require(value.get('files') == [], 'proposals must come from independently collected broker writes')
-    value['files'] = broker.proposed_files()
-    refs = [f"tool:{r['number']}@{r['sha256']}" for r in broker.receipts]
-    from .contracts import validate_filing
-    validate_filing(value, job, [*citation_ids, *refs])
     return value

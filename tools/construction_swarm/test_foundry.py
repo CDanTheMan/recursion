@@ -192,6 +192,20 @@ class BrokerTests(unittest.TestCase):
         with self.assertRaises(CompletedFailure):
             collect_filing(export, broker, job, [], transport)
 
+        invalid_filing = copy.deepcopy(export)
+        invalid_filing['steps'][0]['message'] = encoded({
+            'job_id': 'worker', 'summary': 'Completed with a bad citation.',
+            'findings': [], 'evidence': ['unbound'], 'dissent': [],
+            'limitations': [], 'files': [],
+        }).decode()
+        with self.assertRaisesRegex(CompletedFailure, 'unbound evidence citation'):
+            collect_filing(invalid_filing, broker, job, [], transport)
+
+        no_answer = copy.deepcopy(export)
+        no_answer['steps'][0]['message'] = ''
+        with self.assertRaisesRegex(CompletedFailure, 'missing final worker answer'):
+            collect_filing(no_answer, broker, job, [], transport)
+
         for name, mutate, expected_error in [
             ('changed-model', lambda e: e['steps'][0].update(model_name='other-model'), 'model changed'),
             ('native-tool', lambda e: e['steps'][0]['tool_calls'].append({
