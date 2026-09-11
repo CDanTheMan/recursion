@@ -224,12 +224,13 @@ def main():
     batch_size = coordinator_batch_size(plan)
     batches = ([args.batch_index] if args.batch_index is not None else
                range((len(report(args.root)['jobs']) + batch_size - 1) // batch_size))
+    failed = False
     for batch in batches:
         result = synthesize(args.root, args.provider, args.runtime, args.credential, batch, args.live_revision)
         print(encoded(result).decode())
         if result['state'] != 'returned':
-            return 2
-    return 0
+            failed = True
+    return 2 if failed else 0
 
 
 if __name__ == '__main__':
