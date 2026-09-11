@@ -1,0 +1,74 @@
+{
+  "job": "implement-controller-v2",
+  "origin_state": "unknown",
+  "filing_acceptance_not_inferred": true,
+  "receipt_sha256": "48ef4a0bb33e59bba153de099139e35168d42f6f357c59fd3ac918e3ef68f489",
+  "packet_sha256": "a41d4e22ca2b7521cd4a9dac11d2c3ba4d08cfa7fd2d89526c4a1a7e961633e2",
+  "origin_error": "Refused: provider tool calls differ from durable broker receipts",
+  "tool_chain": [
+    {
+      "number": 1,
+      "name": "list_files",
+      "request_sha256": "d3175762c10e4d8b15677fed9636ac93dcc3a738c2a3554695cc7d4a5c411ecb",
+      "receipt_sha256": "5bcf04c88ae1839a0806e484986252995a91c4677fbaad32a6fa4259aa494b74"
+    },
+    {
+      "number": 2,
+      "name": "read_file",
+      "request_sha256": "73302bf046d46a69846c91ea740b5d16b04aa8416630516ba445893e9a6f1eb2",
+      "receipt_sha256": "b04e9793edeb1606cc98c3436ea3f6a07405bade1b77a89b56da8f2abaf43608"
+    },
+    {
+      "number": 3,
+      "name": "write_file",
+      "request_sha256": "38e683bb0ba5468f4b9e46793a06831c30bf8e1f40e487535f0db14c1ceeccee",
+      "receipt_sha256": "8ae11cdb17ca77954941b936fef40f3080b89c952c4a55f5f0ea857fb98a33e4"
+    },
+    {
+      "number": 4,
+      "name": "run_command",
+      "request_sha256": "826a50b07bc933be5e90436235e77ae9c5063b84e26db0fccf19e20724a61d11",
+      "receipt_sha256": "f24cb814103bced5f0d858f9ceee61f9fb85e7c73db8b5c63d2f12342299e89f"
+    },
+    {
+      "number": 5,
+      "name": "write_file",
+      "request_sha256": "2b83badb319e37588e272e69a3c735d01f4ead5170ac2e21b2ad72efde14dc53",
+      "receipt_sha256": "a451689b92349a5ccf6921db58c3f840be03410f098ce9d580c47624e005fb4e"
+    },
+    {
+      "number": 6,
+      "name": "run_command",
+      "request_sha256": "49064fb5b1010c2a7a9a8ebdb91697ea2537cc469764221feecaf48b8268db77",
+      "receipt_sha256": "2daf3391ab8598388d5fe51a1d1c1dd527619abf4d129f86a5dd683b87356c69"
+    },
+    {
+      "number": 7,
+      "name": "search",
+      "request_sha256": "ecdeec120c4ac3677444106cc41acf617a0f6d5a984b2de8aa9ec6b60be609d9",
+      "receipt_sha256": "28e0afa16517e95268073e36e6169acf282ce5917ea7a6832feb546f157e06ce"
+    },
+    {
+      "number": 8,
+      "name": "search",
+      "request_sha256": "e1e10d5c77f2f50515e6e63fb53a314acc46b7f75720b33e5e63defddab8a61f",
+      "receipt_sha256": "fc1b6db76550fea56136987cd19b12f0e3a2f48ebb8b0e19132aa8cd305d1d65"
+    },
+    {
+      "number": 9,
+      "name": "search",
+      "request_sha256": "7bacd0ae1a8b85389ed14ee35af2d143fa17fb5788898df181ce9af8609fa090",
+      "receipt_sha256": "a5df74961e9e20310e3cd2241b13a774a7006f9a796a4c17d6de5e3b6a4f0ed6"
+    }
+  ],
+  "files": [
+    {
+      "path": "experiments/v3/swarm-research-20260911-155142/native_controller_v2.py",
+      "sha256": "19ca27c445f37eacdc3100b78a650710087317ffef351bdf88767df41ee5de82",
+      "bytes": 102129,
+      "syntax_valid": true
+    }
+  ],
+  "scientific_execution": false,
+  "reservation_released": false
+}

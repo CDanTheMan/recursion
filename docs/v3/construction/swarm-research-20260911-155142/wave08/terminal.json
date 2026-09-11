@@ -1,0 +1,279 @@
+{
+  "record": "wave08-terminal/v1",
+  "observed_utc": "2026-09-11T20:58:29.462989+00:00",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "run_id": "research-20260911-155142-wave08",
+  "source_commit": "9127da088cc59c3d83af880544ac7fb483fc9682",
+  "plan_sha256": "3f55bbd7971c9254fb127f8e194b01d34070e391300fdd786fb086d8cbdc993b",
+  "states": {
+    "blocked": 2,
+    "returned": 2,
+    "unknown": 3
+  },
+  "jobs": [
+    {
+      "id": "implement-controller-v2",
+      "state": "unknown",
+      "attempts": 1,
+      "filing_sha256": null,
+      "receipt_sha256": "48ef4a0bb33e59bba153de099139e35168d42f6f357c59fd3ac918e3ef68f489",
+      "error": "Refused: provider tool calls differ from durable broker receipts",
+      "started": "2026-09-11T20:00:23.390843+00:00",
+      "ended": "2026-09-11T20:40:44.713722+00:00",
+      "accepted": false
+    },
+    {
+      "id": "implement-publication-gate-cli",
+      "state": "unknown",
+      "attempts": 1,
+      "filing_sha256": null,
+      "receipt_sha256": "301b74a881269019a82ff3a78d13c0bf3cc2e28b1c9c5113240a43f8075667f3",
+      "error": "Refused: foreign/native tool attempted",
+      "started": "2026-09-11T20:00:23.375790+00:00",
+      "ended": "2026-09-11T20:22:31.348620+00:00",
+      "accepted": false
+    },
+    {
+      "id": "repair-budget-plan-v2",
+      "state": "returned",
+      "attempts": 1,
+      "filing_sha256": "5ec66bc3b83e0d136ce6b70b1c7553c552d1ba1d68e18421e1ce49811d85b9a3",
+      "receipt_sha256": "c8e7c9a4de578f1f800f251488f7aee8e418a44fa66ea54161fc488d8126465c",
+      "error": null,
+      "started": "2026-09-11T20:00:23.399678+00:00",
+      "ended": "2026-09-11T20:20:30.010583+00:00",
+      "accepted": false
+    },
+    {
+      "id": "repair-control-entry-v2",
+      "state": "returned",
+      "attempts": 1,
+      "filing_sha256": "e951db17069bc552c8f222f8337f98ae2233cf0a61ee31534668304d70a16703",
+      "receipt_sha256": "ca9220148d824f194c33819a26e60405abbcd6514a7dbd3e97330c9996aff5a1",
+      "error": null,
+      "started": "2026-09-11T20:00:23.382890+00:00",
+      "ended": "2026-09-11T20:07:32.154422+00:00",
+      "accepted": false
+    },
+    {
+      "id": "verify-control-entry-v2",
+      "state": "unknown",
+      "attempts": 1,
+      "filing_sha256": null,
+      "receipt_sha256": "bef15dd53707639351e4bf19bdcf7e4c5b044aea8c40a00e8ee288b04bdfaa57",
+      "error": "Refused: unbound evidence citation",
+      "started": "2026-09-11T20:07:32.165287+00:00",
+      "ended": "2026-09-11T20:18:26.266889+00:00",
+      "accepted": false
+    },
+    {
+      "id": "verify-controller-and-budget-v2",
+      "state": "blocked",
+      "attempts": 0,
+      "filing_sha256": null
+    },
+    {
+      "id": "verify-publication-gate-cli",
+      "state": "blocked",
+      "attempts": 0,
+      "filing_sha256": null
+    }
+  ],
+  "admission": {
+    "slots": 4,
+    "foreign_holds": 178,
+    "claim_sha256": "94343707e1ffd6b6788c6dd9db8ab752f0c8fdc1cffec3040b159f5cf22436e1",
+    "settlement_sha256": "4cdf64f2a7e24bf32a40c04883a71d3e42971ee895dd9113bd6f7269677a4fd2",
+    "settled_held": 3,
+    "campaign_held_after": 181,
+    "shared_ceiling": 200,
+    "available_after": 19,
+    "released_or_replayed": 0
+  },
+  "cleanup": {
+    "native_cleanup_event": {
+      "cleanup_error": null,
+      "memory_peak": 277094400,
+      "path": "/sys/fs/cgroup/recursion-foundry-models",
+      "quiescent": true
+    },
+    "model_cgroup_absent_after": true,
+    "all_terminal": true
+  },
+  "returned_collection": {
+    "jobs": 2,
+    "files": 2,
+    "accepted": false
+  },
+  "recovered_unaccepted": {
+    "jobs": 2,
+    "files": 3,
+    "bytes": 210604,
+    "origins": {
+      "unknown": 2
+    },
+    "syntax_failures": [],
+    "accepted": false
+  },
+  "tool_use_audit_sha256": "0b6151f909ee49d0c36d6ea79192fd53cb50022fe5c59921a50209126026777d",
+  "integration_disposition_sha256": "73239d5cfc05456ec4a97a735bba8a664fd63a3e382ea142b582997d1fe6db9d",
+  "validation": {
+    "publication_receipt_sha256": "ff62a32032e27e66a5ca5fc04b7473dbb94f694b3a0c3cce5e81f640372c428d",
+    "publication_status": "FAIL",
+    "budget_receipt_sha256": "3107790213de179ef0bd3564dd158be824dff331d2fca6228c54fb15eff74286",
+    "budget_status": "ARITHMETIC_CONFIRMED_BUT_PROPOSAL_UNACCEPTED",
+    "budget_grand_total": 7129978
+  },
+  "grok": {
+    "supervision": [
+      {
+        "attempt": "0-cursor-0",
+        "state": "returned",
+        "receipt_sha256": "90b5f6d86a9d605c1635859ef5d976bcda04b38198c8d9d5f29bd3236f382184",
+        "synthesis_sha256": "85f7832da93da7303cc2346b950e78e2a9773f6d0d40ac974f383b0623f4d13c",
+        "local_quiescent": true,
+        "error": null
+      },
+      {
+        "attempt": "1-cursor-0",
+        "state": "returned",
+        "receipt_sha256": "48ed698614b7de4b7d24919e743222374a0dea3afa8be7ec5bf69889b26bd570",
+        "synthesis_sha256": "ec695cad6c6e1a4f73d5c13cb497e9d624e3ebc6eddd3d214519c08176a30b1a",
+        "local_quiescent": true,
+        "error": null
+      },
+      {
+        "attempt": "2-cursor-0",
+        "state": "returned",
+        "receipt_sha256": "34ed3bf95774ab958fbeee7cb19c4d5b4af4400a092f3f56a346c67fc6ca55fa",
+        "synthesis_sha256": "c164501fc0e8a599f4a2bda02facc62d1a333d1dfc1d825117599fb6be2e326e",
+        "local_quiescent": true,
+        "error": null
+      },
+      {
+        "attempt": "3-cursor-0",
+        "state": "returned",
+        "receipt_sha256": "a664672013d3698097577c7a661ba3946855871f655b31aa4c354ef37ab5bc13",
+        "synthesis_sha256": "002b2375e5f4855a2202ae7210d6ada55b235482de669895246c8ee1a4a4c5b2",
+        "local_quiescent": true,
+        "error": null
+      },
+      {
+        "attempt": "4-cursor-0",
+        "state": "returned",
+        "receipt_sha256": "2ce2800581020f4eb73c132314c4037b256a0f56b106814a0d7c6acec1814958",
+        "synthesis_sha256": "7bde1d8e8c05666ee7d9b1609d460d777fefb99086247b9047759a26ee1ed8ac",
+        "local_quiescent": true,
+        "error": null
+      },
+      {
+        "attempt": "5-cursor-0",
+        "state": "returned",
+        "receipt_sha256": "3cbbdbe715ab1c3a980945959775f30235cf44af11c74904f689d0ab2a4dd5d9",
+        "synthesis_sha256": "6533dfec211476c62a4e6b199d7a6ec56aaa1624ac4051b96035f531857619a8",
+        "local_quiescent": true,
+        "error": null
+      },
+      {
+        "attempt": "6-cursor-0",
+        "state": "returned",
+        "receipt_sha256": "b4a8164ac9f87a2097fdd3d2b18ba531d3986ccfc6048909e6a3e8afb63facf3",
+        "synthesis_sha256": "c7cae56c2c81628591752e01fcf2e3d960d58ff02302f398b50481be40fa77bd",
+        "local_quiescent": true,
+        "error": null
+      }
+    ],
+    "proposal_reviews": [
+      {
+        "job": "budget-v2",
+        "state": "returned",
+        "verdict": "reject",
+        "input_sha256": "7926c7f92e4e62ac7abf7d6739b3f5d2fe0d9853452f38416e7d54f2a4fa0d2f",
+        "receipt_sha256": "01f9e2b1aa3db56fefd687a6343b68060af0707129e385a8cbeb8d3b8b71478d",
+        "local_quiescent": true,
+        "error": null,
+        "review_sha256": "a05cf653ae2814bbf6350d035b717689415f2d385ef14dbb5cb9589cfdc3a981"
+      },
+      {
+        "job": "control-entry-v2",
+        "state": "returned",
+        "verdict": "reject",
+        "input_sha256": "6e640acd5b6665a2bf8ab89dd517ecd645c385c01972026d1a957f59c67cb9c7",
+        "receipt_sha256": "cb93e4b86ce2da636be781fb98ae42f352945a11a1a9e573acf79c0f80bdba33",
+        "local_quiescent": true,
+        "error": null,
+        "review_sha256": "9e947d0150b5055e2453e2e80448931cf4c4583a96fc1dfd735a18ee47de78b3"
+      },
+      {
+        "job": "controller-a",
+        "state": "returned",
+        "verdict": "reject",
+        "input_sha256": "8f7cbc64bc9bd8fadfe7226e0e6ef998e1aaacdbe34538dcb4bb72ac0034b536",
+        "receipt_sha256": "acc8b4e3a269eba28497e383f58e07e2d82695f7998c8fc9b5013cbb6279116f",
+        "local_quiescent": true,
+        "error": null,
+        "review_sha256": "8ff5a20359b1f77fb3c1c92f4366870e1906196630ec4ca97ac179a1a919ad2b"
+      },
+      {
+        "job": "controller-b",
+        "state": "returned",
+        "verdict": "reject",
+        "input_sha256": "0723fed7bb12d5527342f04e88a15896547649b1e369b9ed735290285cb793bf",
+        "receipt_sha256": "ef4e7bd991697b29008f90d218e32a6fd730cb8ccdddd0568da9e9ceaf91d1e0",
+        "local_quiescent": true,
+        "error": null,
+        "review_sha256": "ebd18d66a58d683677e2e98a0c0d6ffc3c3388013e96a7fa1ad5271255a28bb3"
+      },
+      {
+        "job": "publication-recovered",
+        "state": "unknown",
+        "verdict": null,
+        "input_sha256": "ca543316b160198fe6bd67f6cd0cd3e709b61dcf2ff86996e62b0c4268fd3d7a",
+        "receipt_sha256": "eb73c84c7b80852a05e6df4f66abbc1eb05b2fbb860e10734f507247ade94ad7",
+        "local_quiescent": null,
+        "error": "OSError: [Errno 7] Argument list too long: '/usr/bin/python3'"
+      },
+      {
+        "job": "publication-recovered-r2",
+        "state": "returned",
+        "verdict": "repair",
+        "input_sha256": "5cf10def645879a0553c795a0746f7d9449cccca3ff65e76bed283c81f7c6b0a",
+        "receipt_sha256": "679349570511f44dc93e43d4470c1f69be6e85c70b706bc056e48489af93f6a8",
+        "local_quiescent": true,
+        "error": null,
+        "review_sha256": "ecbe29b418e4a558c0243d92410ba97d4ead2149e7a35e7ad0b4ea8cf399b990"
+      }
+    ],
+    "terminal_batch": "6-cursor-0",
+    "terminal_synthesis_sha256": "c7cae56c2c81628591752e01fcf2e3d960d58ff02302f398b50481be40fa77bd",
+    "accepted": false
+  },
+  "scientific": {
+    "original_model_or_reducer_execution": 0,
+    "new_scientific_units": 0,
+    "live_ceiling": 5000000,
+    "dynamic_ceiling_admitted": false,
+    "status": "BLOCKED_NO_EXECUTION_AUTHORIZED"
+  },
+  "usage": {
+    "path": "/var/lib/recursion-foundry/campaigns/research-20260911-155142/usage.json",
+    "sha256": "ddb700650052d4efad5400c4235c659950de58f07eda2d79ddfcc73769e06e2d",
+    "value": {
+      "checked_utc": "2026-09-11T20:54:24Z",
+      "binding_windows": [
+        {
+          "name": "codex-primary",
+          "used_percent": 12,
+          "remaining_percent": 88,
+          "resets_at": 1789692198
+        }
+      ],
+      "remaining_percent": 88,
+      "reset_credits_used": 0,
+      "reset_credits_available": 1,
+      "new_metered_spend": 0,
+      "source": "Actual Codex quota tool observation. Usage remains 12%; no Codex subagents are active. Native SWE-2 and Cursor Grok work is outside this Codex usage counter. No reset was redeemed."
+    }
+  },
+  "acceptance": false
+}
