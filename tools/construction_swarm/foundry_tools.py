@@ -154,6 +154,13 @@ class Broker:
             result = {'ok': False, 'error': str(exc), 'uncertain': True, 'observation': exc.observation}
         except (Refused, OSError, ValueError) as exc:
             result = {'ok': False, 'error': str(exc)[:2000]}
+        if len(encoded(result)) > 2 * MAX_BYTES:
+            # UTF-8 -> escaped JSON can expand stdout by 6x. This is a known
+            # output-limit failure, not lost execution/cleanup evidence.
+            raw = encoded(result)
+            put(directory / 'oversize-result.json', raw)
+            result = {'ok': False, 'error': 'encoded tool output exceeds response cap; request smaller output',
+                      'retained_sha256': digest(raw), 'uncertain': result.get('uncertain', False)}
         receipt = {'request_sha256': digest(encoded(request)), 'result': result,
                    'snapshot_sha256': digest(encoded(self.files)), 'accepted': False}
         data = encoded(receipt)
@@ -192,6 +199,8 @@ class Broker:
             require(args['expected_sha256'] == old, 'stale write: read latest file first')
             candidate = {**self.files, target: args['content']}
             require(len(encoded(candidate)) <= 2 * MAX_BYTES, 'workspace size exhausted')
+            require(sum(self.initial.get(p) != content for p, content in candidate.items() if p in self.allowed) <= 30,
+                    'at most 30 changed files can be proposed')
             self.files = candidate
             return {'path': target, 'sha256': digest(args['content'].encode())}
         if name == 'run_command':

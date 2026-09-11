@@ -122,6 +122,23 @@ class BrokerTests(unittest.TestCase):
         with self.assertRaises(Refused):
             native_holds(self.root)
 
+    def test_unicode_output_limit_is_receipted_not_unknown(self):
+        broker = self.broker()
+        broker.files['tools/code.py'] = '\u00e9' * 600000
+        response = broker.call('read_file', {'path': 'tools/code.py'})
+        self.assertFalse(response['ok'])
+        self.assertFalse(broker.uncertain)
+        self.assertTrue((broker.root / '1/oversize-result.json').is_file())
+        self.assertTrue(broker.call('list_files', {})['ok'])
+
+    def test_final_filing_parser_rejects_ambiguous_json(self):
+        from .foundry_output import parsed_json
+        self.assertEqual(parsed_json('Observed gate passed.\n```json\n{"a":1}\n```'), {'a': 1})
+        for text in ['```json\n{"a":1}\n```\n```json\n{"b":2}\n```', '{"a":1,"a":2}',
+                     'Text with no filing', '```json\n{"a":NaN}\n```']:
+            with self.assertRaises(Refused):
+                parsed_json(text)
+
 
 LINUX_SCOPE = sys.platform == 'linux' and Path('/sys/fs/cgroup/cgroup.subtree_control').exists()
 
