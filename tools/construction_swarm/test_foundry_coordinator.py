@@ -51,6 +51,7 @@ class CoordinatorTests(unittest.TestCase):
                                  'local_quiescent': False, 'pipes_closed': True,
                                  'stdout': stdout, 'stderr': b''}
                     with patch('tools.construction_swarm.foundry_coordinator.report', return_value=manifest), \
+                            patch('tools.construction_swarm.foundry_coordinator.reviewed_plan', return_value={'version': 2}), \
                             patch('tools.construction_swarm.foundry_coordinator.client_argv', return_value=['synthetic']), \
                             patch('tools.construction_swarm.foundry_coordinator.process_scope', scope), \
                             patch('tools.construction_swarm.foundry_coordinator.execute_scoped', return_value=transport):

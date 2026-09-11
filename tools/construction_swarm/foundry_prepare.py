@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .contracts import digest, encoded, integer, require, strict_json, validate_plan
+from .foundry_supervision import MAX_SLOTS, MAX_WORKER_SECONDS
 from .foundry_wsl import linux_path
 from .runner import put
 
@@ -18,15 +19,22 @@ def main():
     parser.add_argument('--run-id', required=True)
     parser.add_argument('--authorization', required=True)
     parser.add_argument('--slots', type=int, default=8)
-    parser.add_argument('--minutes', type=int, default=30)
+    parser.add_argument('--minutes', type=int)
+    parser.add_argument('--campaign', help='Explicit reviewed v3 campaign window/quota policy JSON')
+    parser.add_argument('--worker-seconds', type=int)
     parser.add_argument('--sources', help='Optional reviewed source corpus JSON, with content/SHA256/retrieved_utc')
     parser.add_argument('--devin', default='/opt/recursion-foundry/runtime/devin-3000.10.21/bin/devin')
     args = parser.parse_args()
+    args.minutes = args.minutes if args.minutes is not None else (480 if args.campaign else 30)
+    args.worker_seconds = (args.worker_seconds if args.worker_seconds is not None
+                           else (MAX_WORKER_SECONDS if args.campaign else 600))
     require(os.name == 'nt', 'prepare through the Windows admission host')
-    integer(args.slots, 1, 100)
+    integer(args.slots, 1, MAX_SLOTS if args.campaign else 100)
+    integer(args.worker_seconds, 1, MAX_WORKER_SECONDS if args.campaign else 1200)
     integer(args.minutes, 1, 480)
     jobs = strict_json(Path(args.jobs).read_bytes())
-    require(type(jobs) is list and 1 <= len(jobs) <= 100, '1..100 jobs per reviewed campaign')
+    require(type(jobs) is list and 1 <= len(jobs) <= (MAX_SLOTS if args.campaign else 100),
+            'bounded jobs per reviewed campaign')
     commit = subprocess.check_output(['git', '-C', args.repo, 'rev-parse', 'HEAD']).decode().strip()
     sha = subprocess.check_output(['wsl.exe', '-d', 'Ubuntu-24.04', '--', '/usr/bin/sha256sum', args.devin]).decode().split()[0]
     pool = Path(os.environ['LOCALAPPDATA']) / 'recursion-construction/pool'
@@ -41,7 +49,8 @@ def main():
             'authorization': args.authorization, 'source_commit': commit,
             'deadline_utc': (datetime.now(timezone.utc) + timedelta(minutes=args.minutes)).isoformat(),
             'limits': {'model_slots': min(50, args.slots), 'test_slots': 4, 'domain_slots': 8,
-                       'max_dispatches': len(jobs), 'max_attempts': 1, 'timeout_seconds': 600,
+                       'max_dispatches': len(jobs), 'max_attempts': 1,
+                       'timeout_seconds': min(1200, args.worker_seconds),
                        'output_bytes': 8 * 1024**2, 'input_bytes': 2 * 1024**2},
             'route': {'backend': 'devin', 'executable': args.devin, 'sha256': sha, 'model': 'swe-2-max',
                       'capacity_basis': 'Owner-authorized SWE-2 Max; independently verify native models listing before launch.'},
@@ -52,6 +61,16 @@ def main():
                 legacy_roots=sorted(linux_path(other) for other in roots))
     plan['route']['backend'] = 'devin-tools'
     plan['limits']['model_slots'] = args.slots
+    if args.campaign:
+        from .contracts import timestamp
+        from .foundry import validate
+        campaign = strict_json(Path(args.campaign).read_bytes())
+        plan.update(version=3, campaign=campaign)
+        plan['limits']['timeout_seconds'] = args.worker_seconds
+        end = min(timestamp(plan['deadline_utc']), timestamp(campaign['hard_deadline_utc'])
+                  - campaign['closeout_reserve_seconds'])
+        plan['deadline_utc'] = datetime.fromtimestamp(end, timezone.utc).isoformat()
+        validate(plan)
     put(args.output, encoded(plan))
     print('Prepared only. Inspect the plan; initialize and run it through the native WSL admission bridge.')
 

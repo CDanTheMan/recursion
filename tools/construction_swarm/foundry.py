@@ -27,24 +27,40 @@ from .contracts import (
 )
 from .foundry_client import devin_tools, process_scope, workspace_files
 from .foundry_output import CompletedFailure
+from .foundry_supervision import (
+    MAX_WORKER_SECONDS,
+    campaign_live,
+    campaign_monitor,
+    ceiling,
+    validate_campaign,
+)
 from .ledger import Ledger, controller_lock
 from .runner import git, packet_for, put, verified_filing
 
 
 def validate(plan):
     keys(plan, ['version', 'run_id', 'parent_goal', 'authorization', 'source_commit',
-                'deadline_utc', 'limits', 'route', 'jobs', 'credentials', 'sources', 'legacy_roots'])
-    require(plan['version'] == 2, 'native foundry plan version 2 required')
+                'deadline_utc', 'limits', 'route', 'jobs', 'credentials', 'sources', 'legacy_roots']
+         + (['campaign'] if plan.get('version') == 3 else []))
+    require(type(plan['version']) is int and plan['version'] in (2, 3), 'native plan version 2 or 3')
+    if plan['version'] == 3:
+        campaign = validate_campaign(plan['campaign'])
+        require(timestamp(plan['deadline_utc']) <= timestamp(campaign['hard_deadline_utc'])
+                - campaign['closeout_reserve_seconds'], 'plan preserves campaign closeout')
+        integer(plan['limits']['timeout_seconds'], 1, MAX_WORKER_SECONDS)
     require(plan['route']['backend'] == 'devin-tools' and plan['route']['model'] == 'swe-2-max',
             'exact native SWE-2 Max route required')
-    integer(plan['limits']['model_slots'], 1, 100)
+    integer(plan['limits']['model_slots'], 1, ceiling(plan))
     require(plan['limits']['test_slots'] == 4 and plan['limits']['output_bytes'] == 8 * 1024**2,
             'qualified foundry profile requires four global tool slots and 8 MiB client output cap')
-    require(len(plan['jobs']) <= 100, 'at most 100 unreviewed jobs per campaign')
+    require(len(plan['jobs']) <= ceiling(plan), 'bounded unreviewed jobs per campaign')
     # Preserve every existing source, DAG, path, deadline and dispatch validation.
     projected = copy.deepcopy(plan)
     for field in ['credentials', 'sources', 'legacy_roots']:
         del projected[field]
+    if plan['version'] == 3:
+        del projected['campaign']
+        projected['limits']['timeout_seconds'] = min(1200, plan['limits']['timeout_seconds'])
     projected['version'] = 1
     projected['limits']['model_slots'] = min(50, plan['limits']['model_slots'])
     projected['route']['backend'] = 'devin'
@@ -109,18 +125,19 @@ def pool(root, plan):
         for file in claims.glob('*.json'):
             roots.add(strict_json(file.read_bytes())['root'])
         holds = sum(held_at(other) for other in roots - {str(root)})
-        require(holds < 100, 'all provider slots held by uncertain work')
+        require(holds < ceiling(plan), 'all provider slots held by uncertain work')
         claim = claims / (digest(str(root).encode()) + '.json')
         if not claim.exists():
             put(claim, encoded({'root': str(root), 'plan_sha256': digest(encoded(plan))}))
-        yield min(plan['limits']['model_slots'], 100 - holds), holds
+        yield min(plan['limits']['model_slots'], ceiling(plan) - holds), holds
 
 
-def run_one(root, plan, job, number, packet, scope_parent, aborted=lambda: False):
+def run_one(root, plan, job, number, packet, scope_parent, aborted=lambda: False, monitor=None):
     directory = root / 'attempts' / job['id'] / str(number)
     receipt = {'job': job['id'], 'attempt': number, 'started': now(), 'launch_entered': False,
                'packet_sha256': digest(encoded(packet)), 'route': plan['route'], 'accepted': False}
     result_hash = None
+    monitor = monitor or campaign_monitor(plan)
     try:
         directory.mkdir(parents=True)
         put(directory / 'packet.json', encoded(packet))
@@ -129,7 +146,9 @@ def run_one(root, plan, job, number, packet, scope_parent, aborted=lambda: False
         require(Path(plan['credentials']).is_file(), 'credential mount missing')
         workspace_files(packet)  # deterministic dependency conflicts fail before provider launch
         until = time.monotonic() + min(plan['limits']['timeout_seconds'], timestamp(plan['deadline_utc']) - time.time())
-        stop = lambda: aborted() or (root / 'STOP').exists() or time.monotonic() >= until or free_memory() < 4 * 1024**3
+        stop = lambda: (aborted() or (root / 'STOP').exists() or (directory / 'STOP').exists()
+                        or time.monotonic() >= until or not monitor()
+                        or free_memory() < 4 * 1024**3)
         require(not stop(), 'deadline/STOP/resources before launch')
         receipt['launch_entered'] = True
         value, observation = devin_tools(directory, plan['route'], plan['credentials'], packet,
@@ -164,12 +183,14 @@ def run(root, host_claim):
         ledger = Ledger(root)
         try:
             plan = validate(ledger.plan)
+            monitor = campaign_monitor(plan)
             host_claim = Path(host_claim).resolve(strict=True)
             claim = strict_json(host_claim.read_bytes())
             settled = host_claim.with_name(host_claim.stem + '.settled.json')
             require(not settled.exists() and claim['root'] == str(root) and
                     claim['plan_sha256'] == digest(encoded(plan)), 'invalid/settled Windows admission claim')
-            integer(claim['slots'], 1, 100)
+            integer(claim['slots'], 1, ceiling(plan))
+            require(campaign_live(plan), 'campaign deadline/quota/STOP admission')
             ledger.recover()
             require({'memory', 'pids', 'cpu'} <= set(Path('/sys/fs/cgroup/cgroup.subtree_control').read_text().split()), 'cgroup controllers not delegated')
             require(free_memory() >= 8 * 1024**3 and shutil.disk_usage(root).free >= 2 * 1024**3, 'insufficient WSL headroom')
@@ -189,7 +210,8 @@ def run(root, host_claim):
                             rows = {r['id']: r for r in ledger.rows()}
                             active = sum(r['state'] in {'running', 'unknown'} for r in rows.values())
                             for job in plan['jobs']:
-                                if active >= slots or (root / 'STOP').exists() or time.time() >= timestamp(plan['deadline_utc']):
+                                if (active >= slots or (root / 'STOP').exists()
+                                        or time.time() >= timestamp(plan['deadline_utc']) or not monitor()):
                                     break
                                 if rows[job['id']]['state'] != 'queued' or not all(rows[d]['state'] in {'returned', 'accepted'} for d in job['depends_on']):
                                     continue
@@ -203,7 +225,7 @@ def run(root, host_claim):
                                 except Refused:
                                     continue
                                 try:
-                                    future = executor.submit(run_one, root, plan, job, number, packet, group, abort.is_set)
+                                    future = executor.submit(run_one, root, plan, job, number, packet, group, abort.is_set, monitor)
                                     pending[future] = (job['id'], number)
                                     active += 1
                                 except Exception as exc:  # noqa: BLE001 -- enqueue outcome uncertain
