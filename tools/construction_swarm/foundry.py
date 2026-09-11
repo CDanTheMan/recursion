@@ -16,6 +16,7 @@ from .contracts import (
     Refused,
     digest,
     encoded,
+    file_digest,
     integer,
     keys,
     now,
@@ -124,7 +125,7 @@ def run_one(root, plan, job, number, packet, scope_parent, aborted=lambda: False
         directory.mkdir(parents=True)
         put(directory / 'packet.json', encoded(packet))
         executable = Path(plan['route']['executable'])
-        require(digest(executable.read_bytes()) == plan['route']['sha256'], 'executable changed')
+        require(file_digest(executable) == plan['route']['sha256'], 'executable changed')
         require(Path(plan['credentials']).is_file(), 'credential mount missing')
         workspace_files(packet)  # deterministic dependency conflicts fail before provider launch
         until = time.monotonic() + min(plan['limits']['timeout_seconds'], timestamp(plan['deadline_utc']) - time.time())

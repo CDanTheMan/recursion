@@ -21,6 +21,15 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def file_digest(filename) -> str:
+    """Bounded memory even when 100 clients verify a large executable together."""
+    result = hashlib.sha256()
+    with open(filename, 'rb') as stream:
+        while chunk := stream.read(262144):
+            result.update(chunk)
+    return result.hexdigest()
+
+
 def encoded(value) -> bytes:
     return json.dumps(value, sort_keys=True, ensure_ascii=True, allow_nan=False,
                       separators=(",", ":")).encode()

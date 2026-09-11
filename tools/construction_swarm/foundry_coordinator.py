@@ -3,7 +3,7 @@ import argparse
 import time
 from pathlib import Path
 
-from .contracts import digest, encoded, keys, require, strict_json
+from .contracts import digest, encoded, file_digest, keys, require, strict_json
 from .foundry import report
 from .foundry_client import client_argv, execute_scoped, process_scope
 from .foundry_output import parsed_json
@@ -106,7 +106,7 @@ def synthesize(root, provider, runtime, credential, batch_index=0):
             put(config / 'opencode_export.py', script.encode())
             provider_argv = ['/usr/bin/python3', '-I', '/control/opencode_export.py']
         route = {'provider': provider, 'model': MODELS[provider], 'runtime': str(runtime),
-                 'files': {name: digest((runtime / name).read_bytes()) for name in files}}
+                 'files': {name: file_digest(runtime / name) for name in files}}
         put(directory / 'reservation.json', encoded({'route': route, 'packet_sha256': digest(encoded(packet)),
                                                      'dispatches_charged': 1, 'started_unix': time.time()}))
         result = {'state': 'unknown', 'accepted': False, 'route': route}

@@ -109,7 +109,12 @@ def run_command(files, argv, seconds, stop=lambda: False):
                        'os.execv(sys.argv[2],sys.argv[2:])')
             command = ['/usr/bin/python3', '-I', '-c', wrapper, str(group / 'cgroup.procs'),
                        *bwrap_argv(source, entry, seconds, MAX_BYTES)]
-            result = execute(command, source, {}, seconds, MAX_BYTES, stop)
+            try:
+                result = execute(command, source, {}, seconds, MAX_BYTES, stop)
+            except Exception as exc:  # noqa: BLE001 -- retain scope cleanup on every transport failure
+                result = {'exit_code': None, 'reason': 'transport-exception',
+                          'error': f'{type(exc).__name__}: {exc}', 'stdout': b'', 'stderr': b'',
+                          'direct_process_exited': False, 'local_quiescent': False}
         result['isolation'] = observation
         result['local_quiescent'] = observation['quiescent'] and result['direct_process_exited']
         for name in ['stdout', 'stderr']:
@@ -139,6 +144,7 @@ class Broker:
         require(not self.uncertain, 'previous tool outcome uncertain')
         require(self.count < self.max_calls, 'cumulative tool budget exhausted')
         require(name in TOOL_NAMES, 'unknown tool')
+        require(type(args) is dict, 'tool arguments must be a JSON object')
         require(len(encoded(args)) <= MAX_BYTES, 'oversized tool request')
         self.count += 1
         directory = self.root / str(self.count)
