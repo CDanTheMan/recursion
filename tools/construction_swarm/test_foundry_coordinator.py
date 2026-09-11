@@ -6,10 +6,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from .contracts import digest, encoded, strict_json
-from .foundry_coordinator import synthesize
+from .foundry_coordinator import coordinator_batch_size, synthesize
 
 
 class CoordinatorTests(unittest.TestCase):
+    def test_v3_uses_smaller_batches_for_filing_and_progress_evidence(self):
+        self.assertEqual(coordinator_batch_size({'version': 2}), 20)
+        self.assertEqual(coordinator_batch_size({'version': 3}), 8)
+
     def test_synthesis_receipt_requires_empty_scope_and_direct_exit(self):
         manifest = {'run_id': 'synthetic', 'source_commit': '0' * 40, 'jobs': [
             {'id': 'missing', 'state': 'blocked', 'attempts': 0}]}

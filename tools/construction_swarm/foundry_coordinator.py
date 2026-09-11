@@ -17,6 +17,13 @@ from .ledger import Ledger, controller_lock
 from .runner import put
 
 MODELS = {'cursor': 'cursor-grok-4.5-high', 'opencode': 'opencode-go/muse-spark-1.3-contributor'}
+DEFAULT_BATCH_SIZE = 20
+CAMPAIGN_BATCH_SIZE = 8
+
+
+def coordinator_batch_size(plan):
+    """Keep v3 filing/progress packets below the validated 96 KiB envelope."""
+    return CAMPAIGN_BATCH_SIZE if plan['version'] == 3 else DEFAULT_BATCH_SIZE
 
 
 def reviewed_plan(root):
@@ -85,9 +92,10 @@ def synthesize(root, provider, runtime, credential, batch_index=0, live_revision
         lock_root.mkdir(exist_ok=True)
     with controller_lock(lock_root):
         manifest = report(root)
-        require(type(batch_index) is int and 0 <= batch_index < ceiling(plan) // 20,
+        batch_size = coordinator_batch_size(plan)
+        require(type(batch_index) is int and 0 <= batch_index < ceiling(plan) // batch_size,
                 'bounded coordinator batch index')
-        manifest['jobs'] = manifest['jobs'][batch_index * 20:(batch_index + 1) * 20]
+        manifest['jobs'] = manifest['jobs'][batch_index * batch_size:(batch_index + 1) * batch_size]
         require(manifest['jobs'], 'empty coordinator batch')
         packet = packet_for_report(manifest)
         if live:
@@ -208,10 +216,14 @@ def main():
     parser.add_argument('--provider', choices=MODELS, required=True)
     parser.add_argument('--runtime', required=True)
     parser.add_argument('--credential', required=True)
-    parser.add_argument('--batch-index', type=int, help='One batch of up to 20; omit to synthesize all batches')
+    parser.add_argument('--batch-index', type=int,
+                        help='One bounded batch (8 for v3 campaigns, otherwise 20); omit for all')
     parser.add_argument('--live-revision', type=int, help='New immutable live observation revision; advice only')
     args = parser.parse_args()
-    batches = [args.batch_index] if args.batch_index is not None else range((len(report(args.root)['jobs']) + 19) // 20)
+    plan = reviewed_plan(args.root)
+    batch_size = coordinator_batch_size(plan)
+    batches = ([args.batch_index] if args.batch_index is not None else
+               range((len(report(args.root)['jobs']) + batch_size - 1) // batch_size))
     for batch in batches:
         result = synthesize(args.root, args.provider, args.runtime, args.credential, batch, args.live_revision)
         print(encoded(result).decode())
