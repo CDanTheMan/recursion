@@ -54,5 +54,55 @@
     "allowed_paths": [
       "experiments/v3/swarm-research-20260911-155142/boundary_audit.py"
     ]
+  },
+  {
+    "id": "delegated-guard-parity",
+    "domain": "boundary-proof",
+    "kind": "research",
+    "brief": "Source-only follow-up to a RETURNED wave01 filing, now supplying missing exact sources. No inference replay of unknown attempts. Parent goal-recursion-v2-execution-fabric. Use read_file/search/list_files only; no commands/imports/writes/delegation. Ten-minute bound, <=900 words in required JSON filing. Findings/evidence/dissent/limitations are arrays; files=[]. Close the missing source question from q-coupling-audit: compare S delegated-boundary guards with guard_a/guard_b on retained publication, reconcile, stage and source-attest for the ORIGINAL scale profile and the two preregistered boundary classes. State an exact inductive Q-core coupling invariant including source/full done vs actual Q invocation mask and outer vs core decision. Determine which source clauses make it provable conditionally, and find a reachable discriminator if false. Do not claim an execution or use journal-overlaid core generation as evidence. Preserve conditional versus general claim distinctions.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/boundary-01/spec.json",
+      "docs/v3/construction/swarm-research-20260911-155142/inherited/prestage-correspondence-analysis.md",
+      "experiments/v3/cut-source-overnight/s_domain.py",
+      "experiments/v3/cut-source-overnight/s_inclusive.py",
+      "experiments/v3/cut-source-overnight/s_split.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_domain.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_inclusive.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_split.py",
+      "experiments/v3/cut-source-overnight/batch-06/guard_a.py",
+      "experiments/v3/cut-source-overnight/batch-06/guard_b.py",
+      "experiments/v3/cut-source-overnight/batch-06/guard_audit.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_audit.py",
+      "experiments/v3/cut-source-overnight/batch-06/adapter_traces.py",
+      "experiments/v3/cut-publication/q_domain.py",
+      "experiments/v3/cut-publication/q_inclusive.py",
+      "experiments/v3/cut-publication/q_split.py",
+      "experiments/v3/cut-source-overnight/batch-05/semantic.py"
+    ],
+    "depends_on": [],
+    "allowed_paths": []
+  },
+  {
+    "id": "origin-index-discriminator",
+    "domain": "boundary-proof",
+    "kind": "research",
+    "brief": "Source-only follow-up to a RETURNED wave01 filing, now supplying missing exact sources. No inference replay of unknown attempts. Parent goal-recursion-v2-execution-fabric. Use read_file/search/list_files only; no commands/imports/writes/delegation. Ten-minute bound, <=900 words in required JSON filing. Findings/evidence/dissent/limitations are arrays; files=[]. Resolve the possible identity.origin stage-prefix chronological attribution concern raised by trace-proof-audit. Inspect actual original scale action occurrences and all source/adapter staged-field writers. Distinguish whether the proposed defect is reachable in ORIGINAL scale domain, only possible in other existing profiles, or requires hypothetical new actions. Check chronological versus literal suffix indices and actual case/proof binding. Give an exact smallest discriminating test proposal and source anchors. Do not modify identity relation or turn a hypothetical counterexample into a finding.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/boundary-01/spec.json",
+      "experiments/v3/cut-source-overnight/s_domain.py",
+      "experiments/v3/cut-source-overnight/s_inclusive.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_domain.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_inclusive.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_split.py",
+      "experiments/v3/cut-source-overnight/batch-06/guard_a.py",
+      "experiments/v3/cut-source-overnight/batch-06/adapter_traces.py",
+      "experiments/v3/cut-source-overnight/batch-07/identity.py",
+      "experiments/v3/cut-source-overnight/batch-07/identity_audit.py",
+      "experiments/v3/cut-publication/q_domain.py",
+      "experiments/v3/cut-publication/q_inclusive.py",
+      "experiments/v3/cut-publication/q_split.py"
+    ],
+    "depends_on": [],
+    "allowed_paths": []
   }
 ]
