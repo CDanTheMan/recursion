@@ -1,0 +1,54 @@
+{
+  "record": "final-closeout-grok-review-disposition/v1",
+  "review_job": "final-closeout-dbc13b7",
+  "review_sha256": "3b506d0fd17ad32b2aa01be2a949156904e67b88756f1731a510902833c90ebc",
+  "receipt_sha256": "114e1b582ca6a85a23e44db983b5af806e3a9b11f78549bd0342fe970688abde",
+  "verdict": "repair",
+  "accepted": false,
+  "dispositions": [
+    {
+      "finding": "Windows quiescence hash did not match the tracked Git bytes.",
+      "disposition": "accepted",
+      "repair": "The narrative now distinguishes the tracked Git-byte hash 45c66df1 from external observation hashes."
+    },
+    {
+      "finding": "The handoff asserted that the current heads were still 48970bd.",
+      "disposition": "accepted",
+      "repair": "The narrative now layers source/evidence parent 48970bd, first closeout candidate dbc13b7 and the later externally bound final candidate."
+    },
+    {
+      "finding": "The brief centered the superseded 48970bd gate instead of the exact dbc13b7 gate.",
+      "disposition": "accepted",
+      "repair": "The brief and handoff now cite the dbc13b7 receipt, source archive and log hashes."
+    },
+    {
+      "finding": "The dbc13b7 test counts were not derived inside the review packet.",
+      "disposition": "accepted",
+      "repair": "The retained logs were read directly and end with Ran 75 tests and the exact skipped counts; their hashes remain bound to the gate receipt."
+    },
+    {
+      "finding": "The PR usage timestamp was stale.",
+      "disposition": "accepted",
+      "repair": "The PR body is updated to the binding 2026-09-11T21:44:01Z observation."
+    },
+    {
+      "finding": "Cleanup claims preceded the final-gate snapshot.",
+      "disposition": "accepted",
+      "repair": "The dbc13b7 snapshot was removed and re-audited; the external final handoff must repeat this after the post-correction gate."
+    },
+    {
+      "finding": "Future packets could be read as admitted after the deadline.",
+      "disposition": "accepted",
+      "repair": "The handoff now requires a fresh Lucas instruction and forbids executing those packets in this campaign."
+    },
+    {
+      "finding": "The 48970bd audit and dbc13b7 gate roles were blurred.",
+      "disposition": "accepted",
+      "repair": "The narrative assigns each audit and gate to its exact candidate."
+    }
+  ],
+  "lead_state": "REPAIR_APPLIED_PENDING_FINAL_EXACT_GATE_AND_POST_GATE_AUDIT",
+  "scientific_execution": false,
+  "publication_approval": false,
+  "merge_authority": "Lucas alone"
+}
