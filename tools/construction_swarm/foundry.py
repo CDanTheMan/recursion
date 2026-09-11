@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .capacity import free_memory
 from .contracts import (
@@ -65,9 +65,9 @@ def validate(plan):
     projected['limits']['model_slots'] = min(50, plan['limits']['model_slots'])
     projected['route']['backend'] = 'devin'
     validate_plan(projected)
-    require(type(plan['credentials']) is str and Path(plan['credentials']).is_absolute(), 'absolute credential mount required')
+    require(type(plan['credentials']) is str and PurePosixPath(plan['credentials']).is_absolute(), 'absolute credential mount required')
     require(type(plan['legacy_roots']) is list and len(plan['legacy_roots']) <= 1000 and
-            all(type(x) is str and Path(x).is_absolute() for x in plan['legacy_roots']), 'invalid legacy roots')
+            all(type(x) is str and PurePosixPath(x).is_absolute() for x in plan['legacy_roots']), 'invalid legacy roots')
     require(type(plan['sources']) is dict and len(encoded(plan['sources'])) <= 1024**2, 'bounded source corpus required')
     for url, value in plan['sources'].items():
         require(type(url) is str and url.startswith('https://'), 'HTTPS source identity required')
