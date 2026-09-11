@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .contracts import Refused, encoded, strict_json
 from .ledger import Ledger, controller_lock
-from .runner import initialize, manifest, put, run
+from .runner import initialize, manifest, put, reconcile, run
 from .sandbox import stage, test_staged
 
 
@@ -15,10 +15,10 @@ def main():
     init.add_argument('--repo', required=True)
     init.add_argument('--root', required=True)
     init.add_argument('--plan', required=True)
-    for command in ['run', 'status', 'manifest', 'retry', 'accept', 'reject', 'stage', 'test']:
+    for command in ['run', 'status', 'manifest', 'retry', 'accept', 'reject', 'stage', 'test', 'reconcile']:
         cmd = sub.add_parser(command)
         cmd.add_argument('--root', required=True)
-        if command in ['retry', 'accept', 'reject', 'stage']:
+        if command in ['retry', 'accept', 'reject', 'stage', 'reconcile']:
             cmd.add_argument('--job', required=True)
         if command in ['retry', 'accept', 'reject']:
             cmd.add_argument('--reason', required=True)
@@ -58,6 +58,8 @@ def main():
                 put(args.output, encoded(manifest(root, ledger)))
             elif args.command == 'retry':
                 ledger.retry(args.job, args.reason)
+            elif args.command == 'reconcile':
+                reconcile(root, ledger, args.job)
             elif args.command in ['accept', 'reject']:
                 manifest(root, ledger)  # verify collected bytes before adjudication
                 ledger.decision(args.job, args.command == 'accept', args.reason)

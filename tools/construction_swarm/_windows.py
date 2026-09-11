@@ -4,10 +4,10 @@ Creates children suspended, with stdio handle allowlisting and optional at-birth
 membership. The explicit post-create variant exists only as a fault-test comparator.
 """
 import ctypes as C
-from ctypes import wintypes as W
 import os
 import subprocess
 import time
+from ctypes import wintypes as W
 
 if os.name != "nt":
     raise ImportError("Windows-only probe helper")

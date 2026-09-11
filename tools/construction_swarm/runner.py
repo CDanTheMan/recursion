@@ -1,20 +1,28 @@
 """Frozen packets -> bounded model processes -> immutable, untrusted filings."""
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-import json
+import contextlib
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
-import contextlib
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from pathlib import Path
 
-from .contracts import (Refused, digest, encoded, now, require, strict_json,
-                        timestamp, validate_filing, validate_plan)
+from .capacity import admit_host, free_memory, slot_ceiling
+from .contracts import (
+    Refused,
+    digest,
+    encoded,
+    now,
+    require,
+    strict_json,
+    timestamp,
+    validate_filing,
+    validate_plan,
+)
 from .ledger import Ledger, controller_lock
 from .process import execute
-from .capacity import free_memory, slot_ceiling, admit_host
 
 REVIEW_CONFIG = {
     'permissions': {'deny': ['*', 'read', 'edit', 'write', 'grep', 'glob', 'exec',
@@ -159,6 +167,43 @@ def devin_result(export_path):
     return strict_json(answers[-1].encode()), export.get('final_metrics', {})
 
 
+def reconcile(root, ledger, job_id):
+    """Only retained positive terminal evidence can release an uncertain attempt."""
+    rows = {r['id']: r for r in ledger.rows()}
+    require(job_id in rows and rows[job_id]['state'] == 'unknown', 'job is not unknown')
+    row = rows[job_id]
+    plan = ledger.plan
+    require(plan['route']['backend'] == 'devin', 'positive provider receipt required')
+    directory = root / 'attempts' / job_id / str(row['attempts'])
+    receipt_bytes = (directory / 'receipt.json').read_bytes()
+    receipt = strict_json(receipt_bytes)
+    require(receipt.get('local_quiescent') is True, 'local quiescence not established')
+    require(receipt.get('job') == job_id and receipt.get('attempt') == row['attempts'], 'receipt identity')
+    packet_data = (directory / 'packet.json').read_bytes()
+    require(digest(packet_data) == receipt['packet_sha256'], 'packet changed')
+    packet = strict_json(packet_data)
+    job = next(j for j in plan['jobs'] if j['id'] == job_id)
+    require(packet['job'] == job and packet['source_commit'] == plan['source_commit'], 'packet binding')
+    result, usage = devin_result(directory / 'export.json')
+    validate_filing(result, job, packet['citation_ids'])
+    result_data = encoded(result)
+    filing = directory / 'filing.json'
+    if filing.exists():
+        require(filing.read_bytes() == result_data, 'existing filing differs')
+    else:
+        put(filing, result_data)
+    evidence = {'original_receipt_sha256': digest(receipt_bytes),
+                'export_sha256': digest((directory / 'export.json').read_bytes()),
+                'filing_sha256': digest(result_data), 'usage': usage,
+                'basis': 'positive tool-free final response plus observed local quiescence'}
+    target = directory / 'reconciliation.json'
+    if target.exists():
+        require(target.read_bytes() == encoded(evidence), 'reconciliation evidence differs')
+    else:
+        put(target, encoded(evidence))
+    ledger.reconcile_returned(job_id, row['attempts'], digest(result_data), digest(encoded(evidence)))
+
+
 def run_one(root, plan, job, number, packet):
     directory = root / 'attempts' / job['id'] / str(number)
     directory.mkdir(parents=True, exist_ok=False)
@@ -217,7 +262,7 @@ def run_one(root, plan, job, number, packet):
             put(directory / 'filing.json', encoded(value))
             receipt['filing_sha256'] = digest(encoded(value))
             state = 'returned'
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- all worker failures must retain unknown outcome
         receipt['error'] = f'{type(exc).__name__}: {exc}'[:2000]
         # No silent retry, including transport exceptions with uncertain launch.
         state = 'unknown'
@@ -275,7 +320,7 @@ def run(root):
                         job_id, number = pending.pop(future)
                         try:
                             state, receipt, result_hash = future.result()
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001 -- preserve durable reservation
                             state, receipt, result_hash = 'unknown', {'error': str(exc)[:2000]}, None
                         ledger.finish(job_id, number, state, receipt, result_hash)
                         print(f'{job_id} attempt={number} state={state}', flush=True)

@@ -3,18 +3,17 @@
 No provider credential or host mount is exposed. Tests run one at a time while the
 controller owns its lock; test_slots is an upper bound, not a concurrency promise.
 """
-import os
-from pathlib import Path
+import contextlib
 import shutil
 import sys
 import time
 import uuid
-import contextlib
+from pathlib import Path
 
 from .contracts import digest, encoded, path, require
-from .ledger import controller_lock, Ledger
+from .ledger import Ledger, controller_lock
 from .process import execute
-from .runner import read_inputs, verified_filing, put
+from .runner import put, read_inputs, verified_filing
 
 
 def stage(root, ledger, job_id, destination):

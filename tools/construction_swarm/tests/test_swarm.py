@@ -1,20 +1,33 @@
-import copy
-from datetime import datetime, timedelta, timezone
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 
-from tools.construction_swarm.contracts import (Refused, digest, encoded, path,
-                                              strict_json, validate_filing, validate_plan)
+from tools.construction_swarm.capacity import JOB_BYTES, RESERVE_BYTES, slot_ceiling
+from tools.construction_swarm.contracts import (
+    Refused,
+    digest,
+    encoded,
+    path,
+    strict_json,
+    validate_filing,
+    validate_plan,
+)
 from tools.construction_swarm.ledger import Ledger, controller_lock
 from tools.construction_swarm.process import execute
-from tools.construction_swarm.runner import initialize, manifest, packet_for, run
-from tools.construction_swarm.sandbox import isolated_execute
-from tools.construction_swarm.capacity import slot_ceiling, JOB_BYTES, RESERVE_BYTES
+from tools.construction_swarm.runner import (
+    devin_result,
+    initialize,
+    manifest,
+    packet_for,
+    reconcile,
+    run,
+)
+from tools.construction_swarm.sandbox import isolated_execute, stage
 
 
 def plan(count=2):
@@ -96,10 +109,8 @@ class DurableQueue(unittest.TestCase):
         self.temp.cleanup()
 
     def test_os_lock_excludes_second_controller(self):
-        with controller_lock(self.root):
-            with self.assertRaises(Refused):
-                with controller_lock(self.root):
-                    pass
+        with controller_lock(self.root), self.assertRaises(Refused), controller_lock(self.root):
+            pass
 
     def test_domain_reservation_and_duplicate_claim(self):
         self.ledger.reserve('job-0')
@@ -162,9 +173,8 @@ class DurableQueue(unittest.TestCase):
             ledger.close()
 
     def test_expired_deadline(self):
-        with patch('tools.construction_swarm.ledger.time.time', return_value=10**12):
-            with self.assertRaises(Refused):
-                self.ledger.reserve('job-0')
+        with patch('tools.construction_swarm.ledger.time.time', return_value=10**12), self.assertRaises(Refused):
+            self.ledger.reserve('job-0')
 
     def test_status_reads_during_controller_ownership(self):
         with controller_lock(self.root):
@@ -252,6 +262,65 @@ class Integration(unittest.TestCase):
                 manifest(root, ledger)
         finally:
             ledger.close()
+
+    def test_development_stages_without_modifying_checkout(self):
+        p = plan(1)
+        p['source_commit'] = self.commit
+        p['jobs'][0].update(kind='develop', allowed_paths=['experiments/answer.py'])
+        root = self.base / 'run'
+        initialize(self.repo, root, p)
+        run(root)
+        ledger = Ledger(root)
+        try:
+            staged = stage(root, ledger, 'job-0', self.base / 'stage')
+            self.assertEqual((self.base / 'stage/experiments/answer.py').read_text(), 'answer = 42\n')
+            self.assertFalse((self.repo / 'experiments/answer.py').exists())
+            self.assertFalse(staged['accepted'])
+            self.assertEqual(self.git('status', '--porcelain'), b'')
+            with self.assertRaises(Refused):
+                stage(root, ledger, 'job-0', self.base / 'stage')
+        finally:
+            ledger.close()
+
+    def test_positive_reconciliation_retains_original_receipt_and_charge(self):
+        p = plan(1)
+        p['source_commit'] = self.commit
+        p['route'].update(backend='devin', model='swe-2-max')
+        root = self.base / 'run'
+        initialize(self.repo, root, p)
+        ledger = Ledger(root)
+        try:
+            packet = packet_for(root, p, p['jobs'][0], {})
+            ledger.reserve('job-0')
+            original = {'job': 'job-0', 'attempt': 1, 'local_quiescent': True,
+                        'packet_sha256': digest(encoded(packet))}
+            ledger.finish('job-0', 1, 'unknown', original)
+            directory = root / 'attempts/job-0/1'
+            directory.mkdir(parents=True)
+            (directory / 'receipt.json').write_bytes(encoded(original))
+            (directory / 'packet.json').write_bytes(encoded(packet))
+            value = {'job_id': 'job-0', 'summary': 'Synthetic complete response', 'findings': [],
+                     'evidence': [], 'dissent': [], 'limitations': [], 'files': []}
+            export = {'agent': {'model_name': 'SWE-2 Max'},
+                      'steps': [{'source': 'agent', 'message': encoded(value).decode()}]}
+            (directory / 'export.json').write_bytes(encoded(export))
+            reconcile(root, ledger, 'job-0')
+            self.assertEqual(ledger.rows()[0]['state'], 'returned')
+            self.assertEqual((directory / 'receipt.json').read_bytes(), encoded(original))
+            self.assertEqual(ledger.db.execute('SELECT COUNT(*) FROM attempts').fetchone()[0], 1)
+            with self.assertRaises(Refused):
+                reconcile(root, ledger, 'job-0')
+        finally:
+            ledger.close()
+
+    def test_model_substitution_and_tool_calls_refused(self):
+        export_path = self.base / 'export.json'
+        for data in [{'agent': {'model_name': 'SWE-2 High'}, 'steps': []},
+                     {'agent': {'model_name': 'SWE-2 Max'},
+                      'steps': [{'source': 'agent', 'tool_calls': [{'name': 'exec'}]}]}]:
+            export_path.write_bytes(encoded(data))
+            with self.assertRaises(Refused):
+                devin_result(export_path)
 
     def test_source_symlink_refused(self):
         if os.name == 'nt':

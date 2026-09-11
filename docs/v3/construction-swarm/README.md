@@ -115,11 +115,13 @@ the next run marks recorded running jobs unknown and never auto-relaunches them.
 
 Known failed fixture jobs may use `retry --job ID --reason "specific repair"`
 within the original attempt/dispatch/deadline caps. Unknown provider completion
-has no automatic reconciliation or retry in this increment. Preserve the run,
-check actual provider sessions and owned processes, and ask the lead to produce
-a reviewed reconciliation receipt before any manual pool release. Do not delete
-ledger rows, reset budgets, or clear a live lock. A future reconciler is a distinct
-implementation, not permission to treat unknown as zero.
+is never automatically retried. `reconcile --job ID` accepts only retained positive
+evidence: observed local quiescence, a matching packet, the exact requested model,
+and a schema-valid final export with no tool calls. It preserves the original
+unknown receipt and cumulative dispatch charge. Then `run` can continue queued
+work or release the pool if nothing remains. If that evidence is absent, preserve
+the hold and investigate actual provider/process state; there is no force-clear.
+Do not delete ledger rows, reset budgets, or clear a live lock.
 
 ## Proposed code and isolated tests
 
