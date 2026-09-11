@@ -5,6 +5,10 @@ Recursion runtime integration, does not select v3's product language/store, and
 does not operate the portfolio. Lucas owns objectives and merges; the current
 authorized lead supplies packets, reviews results, and integrates changes.
 
+For the native WSL tool-enabled route and Cursor/OpenCode coordinators, use
+[the tool pipeline runbook](TOOL-PIPELINE.md) and [its qualification evidence](TOOL-VALIDATION.md).
+The remainder of this page documents the original version-1 packet adapter.
+
 ## What runs
 
 `python -B -m tools.construction_swarm` provides a durable queue, bounded parallel
