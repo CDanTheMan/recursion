@@ -1,7 +1,7 @@
 [
   {
     "id": "o01-registration-source",
-    "domain": "proof-obligations",
+    "domain": "o01-registration",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Registration completeness, foreign scope and conflict precedence. Determine precise initialization/registration induction premises for original scale setup. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -29,7 +29,7 @@
   },
   {
     "id": "o01-registration-counter",
-    "domain": "adversarial-design",
+    "domain": "o01-registration",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Registration completeness, foreign scope and conflict precedence. Determine precise initialization/registration induction premises for original scale setup. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/registration/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -59,7 +59,7 @@
   },
   {
     "id": "o01-registration-verify",
-    "domain": "independent-verification",
+    "domain": "o01-registration",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Registration completeness, foreign scope and conflict precedence. Determine precise initialization/registration induction premises for original scale setup. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -90,7 +90,7 @@
   },
   {
     "id": "o02-attempt-order-source",
-    "domain": "proof-obligations",
+    "domain": "o02-attempt-order",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Attempt2/3/4 gap, duplicate and pause precedence under all six attempt permutations and restart placements; retain visible refusals. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -118,7 +118,7 @@
   },
   {
     "id": "o02-attempt-order-counter",
-    "domain": "adversarial-design",
+    "domain": "o02-attempt-order",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Attempt2/3/4 gap, duplicate and pause precedence under all six attempt permutations and restart placements; retain visible refusals. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/attempt-order/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -148,7 +148,7 @@
   },
   {
     "id": "o02-attempt-order-verify",
-    "domain": "independent-verification",
+    "domain": "o02-attempt-order",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Attempt2/3/4 gap, duplicate and pause precedence under all six attempt permutations and restart placements; retain visible refusals. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -179,7 +179,7 @@
   },
   {
     "id": "o03-append-identity-source",
-    "domain": "proof-obligations",
+    "domain": "o03-append-identity",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Setup append owner/incarnation/request/body idempotency, first-versus-last receipt lookup and reachable unique-key invariant. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -207,7 +207,7 @@
   },
   {
     "id": "o03-append-identity-counter",
-    "domain": "adversarial-design",
+    "domain": "o03-append-identity",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Setup append owner/incarnation/request/body idempotency, first-versus-last receipt lookup and reachable unique-key invariant. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/append-identity/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -237,7 +237,7 @@
   },
   {
     "id": "o03-append-identity-verify",
-    "domain": "independent-verification",
+    "domain": "o03-append-identity",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Setup append owner/incarnation/request/body idempotency, first-versus-last receipt lookup and reachable unique-key invariant. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -268,7 +268,7 @@
   },
   {
     "id": "o04-append-order-source",
-    "domain": "proof-obligations",
+    "domain": "o04-append-order",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Setup append gap/fork/attempt/scope checks, revision increments, append reply loss/duplicate restoration. Do not expand original actions. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -296,7 +296,7 @@
   },
   {
     "id": "o04-append-order-counter",
-    "domain": "adversarial-design",
+    "domain": "o04-append-order",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Setup append gap/fork/attempt/scope checks, revision increments, append reply loss/duplicate restoration. Do not expand original actions. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/append-order/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -326,7 +326,7 @@
   },
   {
     "id": "o04-append-order-verify",
-    "domain": "independent-verification",
+    "domain": "o04-append-order",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Setup append gap/fork/attempt/scope checks, revision increments, append reply loss/duplicate restoration. Do not expand original actions. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -357,7 +357,7 @@
   },
   {
     "id": "o05-collection-capture-source",
-    "domain": "proof-obligations",
+    "domain": "o05-collection-capture",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: collect-open capture generation/revision/registration/attempts/log length and capture reset; exact stale capture boundary. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -385,7 +385,7 @@
   },
   {
     "id": "o05-collection-capture-counter",
-    "domain": "adversarial-design",
+    "domain": "o05-collection-capture",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: collect-open capture generation/revision/registration/attempts/log length and capture reset; exact stale capture boundary. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/collection-capture/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -415,7 +415,7 @@
   },
   {
     "id": "o05-collection-capture-verify",
-    "domain": "independent-verification",
+    "domain": "o05-collection-capture",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: collect-open capture generation/revision/registration/attempts/log length and capture reset; exact stale capture boundary. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -446,7 +446,7 @@
   },
   {
     "id": "o06-collection-inventory-source",
-    "domain": "proof-obligations",
+    "domain": "o06-collection-inventory",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: collect index lower/upper cut bounds, duplicate collection, typed sorting and complete inventory equality for all core orders. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -474,7 +474,7 @@
   },
   {
     "id": "o06-collection-inventory-counter",
-    "domain": "adversarial-design",
+    "domain": "o06-collection-inventory",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: collect index lower/upper cut bounds, duplicate collection, typed sorting and complete inventory equality for all core orders. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/collection-inventory/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -504,7 +504,7 @@
   },
   {
     "id": "o06-collection-inventory-verify",
-    "domain": "independent-verification",
+    "domain": "o06-collection-inventory",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: collect index lower/upper cut bounds, duplicate collection, typed sorting and complete inventory equality for all core orders. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -535,7 +535,7 @@
   },
   {
     "id": "o07-attestation-registry-source",
-    "domain": "proof-obligations",
+    "domain": "o07-attestation-registry",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Attestation guard ordering: missing capture/cut, current capture, inventory, registry; explain fresh-complete216 orders refusing incomplete registry. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -567,7 +567,7 @@
   },
   {
     "id": "o07-attestation-registry-counter",
-    "domain": "adversarial-design",
+    "domain": "o07-attestation-registry",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Attestation guard ordering: missing capture/cut, current capture, inventory, registry; explain fresh-complete216 orders refusing incomplete registry. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/attestation-registry/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -601,7 +601,7 @@
   },
   {
     "id": "o07-attestation-registry-verify",
-    "domain": "independent-verification",
+    "domain": "o07-attestation-registry",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Attestation guard ordering: missing capture/cut, current capture, inventory, registry; explain fresh-complete216 orders refusing incomplete registry. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -636,7 +636,7 @@
   },
   {
     "id": "o08-refused-q-frame-source",
-    "domain": "proof-obligations",
+    "domain": "o08-refused-q-frame",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Every adapter-guard refusal preserves full actual Q core and invocations while retaining outer decision/done and visible refusal. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -674,7 +674,7 @@
   },
   {
     "id": "o08-refused-q-frame-counter",
-    "domain": "adversarial-design",
+    "domain": "o08-refused-q-frame",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Every adapter-guard refusal preserves full actual Q core and invocations while retaining outer decision/done and visible refusal. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/refused-q-frame/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -714,7 +714,7 @@
   },
   {
     "id": "o08-refused-q-frame-verify",
-    "domain": "independent-verification",
+    "domain": "o08-refused-q-frame",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Every adapter-guard refusal preserves full actual Q core and invocations while retaining outer decision/done and visible refusal. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -755,7 +755,7 @@
   },
   {
     "id": "o09-core-generation-source",
-    "domain": "proof-obligations",
+    "domain": "o09-core-generation",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Actual Q-core source_generation versus shadowing journal generation through fixed setup, core restart, suffix; identify exact coupling invariant. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -793,7 +793,7 @@
   },
   {
     "id": "o09-core-generation-counter",
-    "domain": "adversarial-design",
+    "domain": "o09-core-generation",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Actual Q-core source_generation versus shadowing journal generation through fixed setup, core restart, suffix; identify exact coupling invariant. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/core-generation/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -833,7 +833,7 @@
   },
   {
     "id": "o09-core-generation-verify",
-    "domain": "independent-verification",
+    "domain": "o09-core-generation",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Actual Q-core source_generation versus shadowing journal generation through fixed setup, core restart, suffix; identify exact coupling invariant. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -874,7 +874,7 @@
   },
   {
     "id": "o10-revision-ledger-source",
-    "domain": "proof-obligations",
+    "domain": "o10-revision-ledger",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Every source_revision change and nonchange, monotonicity under setup/attempt actions/restart, and exact adapter journal equality. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -902,7 +902,7 @@
   },
   {
     "id": "o10-revision-ledger-counter",
-    "domain": "adversarial-design",
+    "domain": "o10-revision-ledger",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Every source_revision change and nonchange, monotonicity under setup/attempt actions/restart, and exact adapter journal equality. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/revision-ledger/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -932,7 +932,7 @@
   },
   {
     "id": "o10-revision-ledger-verify",
-    "domain": "independent-verification",
+    "domain": "o10-revision-ledger",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Every source_revision change and nonchange, monotonicity under setup/attempt actions/restart, and exact adapter journal equality. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -963,7 +963,7 @@
   },
   {
     "id": "o11-outer-mask-source",
-    "domain": "proof-obligations",
+    "domain": "o11-outer-mask",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Original outer done-mask coverage across permuted literal actions; distinguish chronological index from occurrence suffix and profile position. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -997,7 +997,7 @@
   },
   {
     "id": "o11-outer-mask-counter",
-    "domain": "adversarial-design",
+    "domain": "o11-outer-mask",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Original outer done-mask coverage across permuted literal actions; distinguish chronological index from occurrence suffix and profile position. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/outer-mask/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1033,7 +1033,7 @@
   },
   {
     "id": "o11-outer-mask-verify",
-    "domain": "independent-verification",
+    "domain": "o11-outer-mask",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Original outer done-mask coverage across permuted literal actions; distinguish chronological index from occurrence suffix and profile position. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1070,7 +1070,7 @@
   },
   {
     "id": "o12-q-mask-source",
-    "domain": "proof-obligations",
+    "domain": "o12-q-mask",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Actual Q invocation list and Q done-mask preserve subprofile positions for delegated calls only, including absent refused source-attest. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1108,7 +1108,7 @@
   },
   {
     "id": "o12-q-mask-counter",
-    "domain": "adversarial-design",
+    "domain": "o12-q-mask",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Actual Q invocation list and Q done-mask preserve subprofile positions for delegated calls only, including absent refused source-attest. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/q-mask/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1148,7 +1148,7 @@
   },
   {
     "id": "o12-q-mask-verify",
-    "domain": "independent-verification",
+    "domain": "o12-q-mask",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Actual Q invocation list and Q done-mask preserve subprofile positions for delegated calls only, including absent refused source-attest. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1189,7 +1189,7 @@
   },
   {
     "id": "o13-outer-response-source",
-    "domain": "proof-obligations",
+    "domain": "o13-outer-response",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Outer decision versus retained core decision, append_reply/publication_reply observations, exact visible response preservation on refused calls. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1227,7 +1227,7 @@
   },
   {
     "id": "o13-outer-response-counter",
-    "domain": "adversarial-design",
+    "domain": "o13-outer-response",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Outer decision versus retained core decision, append_reply/publication_reply observations, exact visible response preservation on refused calls. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/outer-response/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1267,7 +1267,7 @@
   },
   {
     "id": "o13-outer-response-verify",
-    "domain": "independent-verification",
+    "domain": "o13-outer-response",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Outer decision versus retained core decision, append_reply/publication_reply observations, exact visible response preservation on refused calls. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1308,7 +1308,7 @@
   },
   {
     "id": "o14-setup-delivery-source",
-    "domain": "proof-obligations",
+    "domain": "o14-setup-delivery",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Fixed original scale setup and delivery establish Q-core coupling despite different completion masks; enumerate exact hypotheses with no assumed success. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1340,7 +1340,7 @@
   },
   {
     "id": "o14-setup-delivery-counter",
-    "domain": "adversarial-design",
+    "domain": "o14-setup-delivery",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Fixed original scale setup and delivery establish Q-core coupling despite different completion masks; enumerate exact hypotheses with no assumed success. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/setup-delivery/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1374,7 +1374,7 @@
   },
   {
     "id": "o14-setup-delivery-verify",
-    "domain": "independent-verification",
+    "domain": "o14-setup-delivery",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Fixed original scale setup and delivery establish Q-core coupling despite different completion masks; enumerate exact hypotheses with no assumed success. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1409,7 +1409,7 @@
   },
   {
     "id": "o15-stage-identity-source",
-    "domain": "proof-obligations",
+    "domain": "o15-stage-identity",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Stage pass-through can leave identical valid unattested staged objects; prove scope of accepted staged disjunct without inventing pairs/authority. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1447,7 +1447,7 @@
   },
   {
     "id": "o15-stage-identity-counter",
-    "domain": "adversarial-design",
+    "domain": "o15-stage-identity",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Stage pass-through can leave identical valid unattested staged objects; prove scope of accepted staged disjunct without inventing pairs/authority. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/stage-identity/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1487,7 +1487,7 @@
   },
   {
     "id": "o15-stage-identity-verify",
-    "domain": "independent-verification",
+    "domain": "o15-stage-identity",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Stage pass-through can leave identical valid unattested staged objects; prove scope of accepted staged disjunct without inventing pairs/authority. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1528,7 +1528,7 @@
   },
   {
     "id": "o16-stage-origin-source",
-    "domain": "proof-obligations",
+    "domain": "o16-stage-origin",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Chronological origin identification for every actual staged-field writer; distinguish reachable original-scale stage@22 from hypothetical stage-prefixed cases. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1566,7 +1566,7 @@
   },
   {
     "id": "o16-stage-origin-counter",
-    "domain": "adversarial-design",
+    "domain": "o16-stage-origin",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Chronological origin identification for every actual staged-field writer; distinguish reachable original-scale stage@22 from hypothetical stage-prefixed cases. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/stage-origin/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1606,7 +1606,7 @@
   },
   {
     "id": "o16-stage-origin-verify",
-    "domain": "independent-verification",
+    "domain": "o16-stage-origin",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Chronological origin identification for every actual staged-field writer; distinguish reachable original-scale stage@22 from hypothetical stage-prefixed cases. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1647,7 +1647,7 @@
   },
   {
     "id": "o17-staged-source-source",
-    "domain": "proof-obligations",
+    "domain": "o17-staged-source",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Exact staged_source journal capture, persistence, source restart and current-source publication guard; no stage freshness premise added to relation. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1685,7 +1685,7 @@
   },
   {
     "id": "o17-staged-source-counter",
-    "domain": "adversarial-design",
+    "domain": "o17-staged-source",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Exact staged_source journal capture, persistence, source restart and current-source publication guard; no stage freshness premise added to relation. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/staged-source/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1725,7 +1725,7 @@
   },
   {
     "id": "o17-staged-source-verify",
-    "domain": "independent-verification",
+    "domain": "o17-staged-source",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Exact staged_source journal capture, persistence, source restart and current-source publication guard; no stage freshness premise added to relation. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1766,7 +1766,7 @@
   },
   {
     "id": "o18-publication-current-source",
-    "domain": "proof-obligations",
+    "domain": "o18-publication-current",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Fresh publication source-boundary refusal and precedence against Q publication validity/current parent; all original-scale suffix outcomes. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1804,7 +1804,7 @@
   },
   {
     "id": "o18-publication-current-counter",
-    "domain": "adversarial-design",
+    "domain": "o18-publication-current",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Fresh publication source-boundary refusal and precedence against Q publication validity/current parent; all original-scale suffix outcomes. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/publication-current/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1844,7 +1844,7 @@
   },
   {
     "id": "o18-publication-current-verify",
-    "domain": "independent-verification",
+    "domain": "o18-publication-current",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Fresh publication source-boundary refusal and precedence against Q publication validity/current parent; all original-scale suffix outcomes. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -1885,7 +1885,7 @@
   },
   {
     "id": "o19-publication-duplicate-source",
-    "domain": "proof-obligations",
+    "domain": "o19-publication-duplicate",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Retained publication duplicate/retry bypasses and durable receipt/reply correspondence; establish whether original scale can reach this branch. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -1923,7 +1923,7 @@
   },
   {
     "id": "o19-publication-duplicate-counter",
-    "domain": "adversarial-design",
+    "domain": "o19-publication-duplicate",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Retained publication duplicate/retry bypasses and durable receipt/reply correspondence; establish whether original scale can reach this branch. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/publication-duplicate/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -1963,7 +1963,7 @@
   },
   {
     "id": "o19-publication-duplicate-verify",
-    "domain": "independent-verification",
+    "domain": "o19-publication-duplicate",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Retained publication duplicate/retry bypasses and durable receipt/reply correspondence; establish whether original scale can reach this branch. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2004,7 +2004,7 @@
   },
   {
     "id": "o20-selection-authority-source",
-    "domain": "proof-obligations",
+    "domain": "o20-selection-authority",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: selected, publication_revision/store/receipts and selected_source authority: distinguish staged equality from valid selected authority. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2042,7 +2042,7 @@
   },
   {
     "id": "o20-selection-authority-counter",
-    "domain": "adversarial-design",
+    "domain": "o20-selection-authority",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: selected, publication_revision/store/receipts and selected_source authority: distinguish staged equality from valid selected authority. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/selection-authority/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2082,7 +2082,7 @@
   },
   {
     "id": "o20-selection-authority-verify",
-    "domain": "independent-verification",
+    "domain": "o20-selection-authority",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: selected, publication_revision/store/receipts and selected_source authority: distinguish staged equality from valid selected authority. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2123,7 +2123,7 @@
   },
   {
     "id": "o21-reconcile-current-source",
-    "domain": "proof-obligations",
+    "domain": "o21-reconcile-current",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Reconcile selected-source currentness and Q state coupling; exact retained refusal/outer response in original scale suffix. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2161,7 +2161,7 @@
   },
   {
     "id": "o21-reconcile-current-counter",
-    "domain": "adversarial-design",
+    "domain": "o21-reconcile-current",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Reconcile selected-source currentness and Q state coupling; exact retained refusal/outer response in original scale suffix. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/reconcile-current/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2201,7 +2201,7 @@
   },
   {
     "id": "o21-reconcile-current-verify",
-    "domain": "independent-verification",
+    "domain": "o21-reconcile-current",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Reconcile selected-source currentness and Q state coupling; exact retained refusal/outer response in original scale suffix. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2242,7 +2242,7 @@
   },
   {
     "id": "o22-reader-lineage-source",
-    "domain": "proof-obligations",
+    "domain": "o22-reader-lineage",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Actual original scale reader request/pin/copy/wait/release/install suffix fields and frozen Q guards preserve typed lineage; mark unreachable variants. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2280,7 +2280,7 @@
   },
   {
     "id": "o22-reader-lineage-counter",
-    "domain": "adversarial-design",
+    "domain": "o22-reader-lineage",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Actual original scale reader request/pin/copy/wait/release/install suffix fields and frozen Q guards preserve typed lineage; mark unreachable variants. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/reader-lineage/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2320,7 +2320,7 @@
   },
   {
     "id": "o22-reader-lineage-verify",
-    "domain": "independent-verification",
+    "domain": "o22-reader-lineage",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Actual original scale reader request/pin/copy/wait/release/install suffix fields and frozen Q guards preserve typed lineage; mark unreachable variants. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2361,7 +2361,7 @@
   },
   {
     "id": "o23-trace-patches-source",
-    "domain": "proof-obligations",
+    "domain": "o23-trace-patches",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Typed full-state restoration from patches, complete events, omitted fields, tuple/list loss, hash versus typed equality and chronological event binding. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2395,7 +2395,7 @@
   },
   {
     "id": "o23-trace-patches-counter",
-    "domain": "adversarial-design",
+    "domain": "o23-trace-patches",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Typed full-state restoration from patches, complete events, omitted fields, tuple/list loss, hash versus typed equality and chronological event binding. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/trace-patches/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2431,7 +2431,7 @@
   },
   {
     "id": "o23-trace-patches-verify",
-    "domain": "independent-verification",
+    "domain": "o23-trace-patches",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Typed full-state restoration from patches, complete events, omitted fields, tuple/list loss, hash versus typed equality and chronological event binding. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2468,7 +2468,7 @@
   },
   {
     "id": "o24-incarnation-pairs-source",
-    "domain": "proof-obligations",
+    "domain": "o24-incarnation-pairs",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Causal incarnation pair ledger advancement, prefix binding and source-action translation; staged disjunct must not authorize pair creation. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2506,7 +2506,7 @@
   },
   {
     "id": "o24-incarnation-pairs-counter",
-    "domain": "adversarial-design",
+    "domain": "o24-incarnation-pairs",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Causal incarnation pair ledger advancement, prefix binding and source-action translation; staged disjunct must not authorize pair creation. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/incarnation-pairs/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2546,7 +2546,7 @@
   },
   {
     "id": "o24-incarnation-pairs-verify",
-    "domain": "independent-verification",
+    "domain": "o24-incarnation-pairs",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Causal incarnation pair ledger advancement, prefix binding and source-action translation; staged disjunct must not authorize pair creation. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2587,7 +2587,7 @@
   },
   {
     "id": "o25-field-completeness-source",
-    "domain": "proof-obligations",
+    "domain": "o25-field-completeness",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Exhaustive common Q field inventory, AUTH/FLOW/VIEW minus done/decision and separate source journal extras; detect dropped-field comparisons. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2625,7 +2625,7 @@
   },
   {
     "id": "o25-field-completeness-counter",
-    "domain": "adversarial-design",
+    "domain": "o25-field-completeness",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Exhaustive common Q field inventory, AUTH/FLOW/VIEW minus done/decision and separate source journal extras; detect dropped-field comparisons. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/field-completeness/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2665,7 +2665,7 @@
   },
   {
     "id": "o25-field-completeness-verify",
-    "domain": "independent-verification",
+    "domain": "o25-field-completeness",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Exhaustive common Q field inventory, AUTH/FLOW/VIEW minus done/decision and separate source journal extras; detect dropped-field comparisons. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2706,7 +2706,7 @@
   },
   {
     "id": "o26-relation-disjunction-source",
-    "domain": "proof-obligations",
+    "domain": "o26-relation-disjunction",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Accepted strict-or-staged relation and all non-narrowing obligations; distinguish exact type/provenance from empty-name/pair/currentness observations. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2735,7 +2735,7 @@
   },
   {
     "id": "o26-relation-disjunction-counter",
-    "domain": "adversarial-design",
+    "domain": "o26-relation-disjunction",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Accepted strict-or-staged relation and all non-narrowing obligations; distinguish exact type/provenance from empty-name/pair/currentness observations. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/relation-disjunction/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2766,7 +2766,7 @@
   },
   {
     "id": "o26-relation-disjunction-verify",
-    "domain": "independent-verification",
+    "domain": "o26-relation-disjunction",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Accepted strict-or-staged relation and all non-narrowing obligations; distinguish exact type/provenance from empty-name/pair/currentness observations. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2798,7 +2798,7 @@
   },
   {
     "id": "o27-certificate-binding-source",
-    "domain": "proof-obligations",
+    "domain": "o27-certificate-binding",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Case/unit/outcome/global-index/literal schedule/source hashes and deterministic typed gzip serialization; detect cross-case proof and stale artifact reuse. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2825,7 +2825,7 @@
   },
   {
     "id": "o27-certificate-binding-counter",
-    "domain": "adversarial-design",
+    "domain": "o27-certificate-binding",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Case/unit/outcome/global-index/literal schedule/source hashes and deterministic typed gzip serialization; detect cross-case proof and stale artifact reuse. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/certificate-binding/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2854,7 +2854,7 @@
   },
   {
     "id": "o27-certificate-binding-verify",
-    "domain": "independent-verification",
+    "domain": "o27-certificate-binding",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Case/unit/outcome/global-index/literal schedule/source hashes and deterministic typed gzip serialization; detect cross-case proof and stale artifact reuse. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2884,7 +2884,7 @@
   },
   {
     "id": "o28-control-adequacy-source",
-    "domain": "proof-obligations",
+    "domain": "o28-control-adequacy",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Discriminating negative controls must target actual causal fault, retain witness, and not pass vacuously; audit inherited source/trace control design. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2911,7 +2911,7 @@
   },
   {
     "id": "o28-control-adequacy-counter",
-    "domain": "adversarial-design",
+    "domain": "o28-control-adequacy",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Discriminating negative controls must target actual causal fault, retain witness, and not pass vacuously; audit inherited source/trace control design. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/control-adequacy/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -2940,7 +2940,7 @@
   },
   {
     "id": "o28-control-adequacy-verify",
-    "domain": "independent-verification",
+    "domain": "o28-control-adequacy",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Discriminating negative controls must target actual causal fault, retain witness, and not pass vacuously; audit inherited source/trace control design. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -2970,7 +2970,7 @@
   },
   {
     "id": "o29-domain-membership-source",
-    "domain": "proof-obligations",
+    "domain": "o29-domain-membership",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Independent boundary384 membership, disjointness from packet04+08, original40320 lexicographic global rank and finite checked inventory arithmetic. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -2993,7 +2993,7 @@
   },
   {
     "id": "o29-domain-membership-counter",
-    "domain": "adversarial-design",
+    "domain": "o29-domain-membership",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Independent boundary384 membership, disjointness from packet04+08, original40320 lexicographic global rank and finite checked inventory arithmetic. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/domain-membership/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -3018,7 +3018,7 @@
   },
   {
     "id": "o29-domain-membership-verify",
-    "domain": "independent-verification",
+    "domain": "o29-domain-membership",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Independent boundary384 membership, disjointness from packet04+08, original40320 lexicographic global rank and finite checked inventory arithmetic. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -3044,7 +3044,7 @@
   },
   {
     "id": "o30-guard-prediction-source",
-    "domain": "proof-obligations",
+    "domain": "o30-guard-prediction",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Conditional40320 first-refusing guard classification versus actual complete histories; count hypotheses and classify prediction mismatches as evidence. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -3074,7 +3074,7 @@
   },
   {
     "id": "o30-guard-prediction-counter",
-    "domain": "adversarial-design",
+    "domain": "o30-guard-prediction",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Conditional40320 first-refusing guard classification versus actual complete histories; count hypotheses and classify prediction mismatches as evidence. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/guard-prediction/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -3106,7 +3106,7 @@
   },
   {
     "id": "o30-guard-prediction-verify",
-    "domain": "independent-verification",
+    "domain": "o30-guard-prediction",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Conditional40320 first-refusing guard classification versus actual complete histories; count hypotheses and classify prediction mismatches as evidence. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -3139,7 +3139,7 @@
   },
   {
     "id": "o31-q-frame-determinism-source",
-    "domain": "proof-obligations",
+    "domain": "o31-q-frame-determinism",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Pure Q transition dependence on done/decision, generation, incoming staged content and immutable profiles; source-level frame lemma for fixed setup/core/suffix. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -3177,7 +3177,7 @@
   },
   {
     "id": "o31-q-frame-determinism-counter",
-    "domain": "adversarial-design",
+    "domain": "o31-q-frame-determinism",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Pure Q transition dependence on done/decision, generation, incoming staged content and immutable profiles; source-level frame lemma for fixed setup/core/suffix. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/q-frame-determinism/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -3217,7 +3217,7 @@
   },
   {
     "id": "o31-q-frame-determinism-verify",
-    "domain": "independent-verification",
+    "domain": "o31-q-frame-determinism",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Pure Q transition dependence on done/decision, generation, incoming staged content and immutable profiles; source-level frame lemma for fixed setup/core/suffix. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
@@ -3258,7 +3258,7 @@
   },
   {
     "id": "o32-merge-soundness-source",
-    "domain": "proof-obligations",
+    "domain": "o32-merge-soundness",
     "kind": "research",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently derive a source-backed proof obligation and exact conditional invariant for: Strongest defensible bounded state-merge cache beyond literal prefixes. Exact key/mutation premises, separate history/proof regeneration and small unreduced falsifiers; no performance claim. Provide falsifiable clauses and source anchors, enumerate missing premises, and propose the smallest decisive check. Do not read another worker proposal. files=[].",
     "inputs": [
@@ -3286,7 +3286,7 @@
   },
   {
     "id": "o32-merge-soundness-counter",
-    "domain": "adversarial-design",
+    "domain": "o32-merge-soundness",
     "kind": "develop",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Independently search source for a counterexample or weakest premise for: Strongest defensible bounded state-merge cache beyond literal prefixes. Exact key/mutation premises, separate history/proof regeneration and small unreduced falsifiers; no performance claim. Write exactly docs/v3/construction/swarm-research-20260911-155142/obligations/merge-soundness/test-proposal.json using write_file, with a compact JSON object containing obligation, question, source_anchors(array), actual_original_actions(array), finite_domain, proposed_model_visit_reservation(integer), discriminating_controls(array of {mutation,witness,expected_detection}), unproved_claims(array), execution_status=\"NOT_EXECUTED\". A negative test proposal is useful even if no reachable counterexample exists. Reserve exact finite work analytically, including initialization and controls; do not execute. Do not fabricate witness bytes. Keep proposed file under12KiB.",
     "inputs": [
@@ -3316,7 +3316,7 @@
   },
   {
     "id": "o32-merge-soundness-verify",
-    "domain": "independent-verification",
+    "domain": "o32-merge-soundness",
     "kind": "review",
     "brief": "Approved source/publication research campaign, parent goal-recursion-v2-execution-fabric. This is a source/proposal packet, not a model execution. NO run_command, imports, reducer execution, network retrieval, historical writes or nested delegation. Use only supplied sources through foundry tools. Keep final filing <=650words; exact evidence refs; arrays for findings/evidence/dissent/limitations. Do not generalize a conditional lemma into a theorem. Distinguish actual original scale reachability, source inference, hypothetical malformed states and proposed tests. Review the two independent dependency filings and actual proposed JSON bytes against original sources for: Strongest defensible bounded state-merge cache beyond literal prefixes. Exact key/mutation premises, separate history/proof regeneration and small unreduced falsifiers; no performance claim. Validate proposed finite budget, original action reachability, precise invariant, negative-control discrimination and unsupported claims. Return a decisive ACCEPT_FOR_METHOD_REVIEW / NEEDS_CORRECTION / INCOMPLETE_SOURCE recommendation with exact corrections and dissent. This is not execution approval or scientific acceptance. files=[].",
     "inputs": [
