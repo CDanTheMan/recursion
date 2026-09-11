@@ -348,6 +348,13 @@ class Integration(unittest.TestCase):
             launch.assert_not_called()
             with self.assertRaises(Refused):
                 stage(root / '..' / 'run', ledger, 'job-0', root / 'nested')
+            if sys.platform == 'linux':
+                result = run_staged_test(root, staged, 'experiments/answer.py')
+                self.assertEqual(result['exit_code'], 0)
+                self.assertTrue(result['local_quiescent'])
+                self.assertEqual(result['stage_sha256'], digest(encoded(staged)))
+                self.assertFalse(result['empirical_acceptance'])
+                self.assertEqual(len(list((root / 'tests').glob('*/receipt.json'))), 1)
             self.assertEqual(self.git('status', '--porcelain'), b'')
             with self.assertRaises(Refused):
                 stage(root, ledger, 'job-0', self.base / 'stage')
