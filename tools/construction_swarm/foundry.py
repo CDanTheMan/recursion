@@ -23,6 +23,7 @@ from .contracts import (
     require,
     strict_json,
     timestamp,
+    validate_allowed_tools,
     validate_plan,
 )
 from .foundry_client import devin_tools, process_scope, workspace_files
@@ -48,6 +49,11 @@ def validate(plan):
         require(timestamp(plan['deadline_utc']) <= timestamp(campaign['hard_deadline_utc'])
                 - campaign['closeout_reserve_seconds'], 'plan preserves campaign closeout')
         integer(plan['limits']['timeout_seconds'], 1, MAX_WORKER_SECONDS)
+        for job in plan['jobs']:
+            require(set(job) == {'id', 'domain', 'kind', 'brief', 'inputs', 'depends_on',
+                                 'allowed_paths', 'allowed_tools'},
+                    'native v3 jobs require exact allowed_tools')
+            validate_allowed_tools(job)
     require(plan['route']['backend'] == 'devin-tools' and plan['route']['model'] == 'swe-2-max',
             'exact native SWE-2 Max route required')
     integer(plan['limits']['model_slots'], 1, ceiling(plan))
@@ -61,6 +67,8 @@ def validate(plan):
     if plan['version'] == 3:
         del projected['campaign']
         projected['limits']['timeout_seconds'] = min(1200, plan['limits']['timeout_seconds'])
+        for job in projected['jobs']:
+            del job['allowed_tools']
     projected['version'] = 1
     projected['limits']['model_slots'] = min(50, plan['limits']['model_slots'])
     projected['route']['backend'] = 'devin'

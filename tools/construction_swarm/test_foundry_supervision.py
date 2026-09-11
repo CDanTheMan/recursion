@@ -26,6 +26,11 @@ def native_plan(version=3):
                        timeout_seconds=28800 if version == 3 else 1200)
     p['deadline_utc'] = '2026-09-11T21:01:42Z'
     if version == 3:
+        for job in p['jobs']:
+            job['allowed_tools'] = ['list_files', 'read_file', 'search', 'run_command',
+                                    'fetch_source']
+            if job['kind'] == 'develop':
+                job['allowed_tools'].append('write_file')
         p['campaign'] = {'start_utc': '2026-09-11T15:51:42Z',
                         'hard_deadline_utc': '2026-09-11T23:51:42Z',
                         'closeout_reserve_seconds': 10200,
@@ -165,6 +170,56 @@ class SupervisionTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(Refused): validate(p)
         self.assertEqual(ceiling(native_plan()), 200)
         self.assertEqual(ceiling(native_plan(2)), 100)
+
+    def test_v3_requires_machine_enforced_job_tool_policy(self):
+        for mutation in ('missing', 'duplicate', 'unknown', 'write-research', 'writable-without-write'):
+            p = native_plan()
+            job = p['jobs'][0]
+            if mutation == 'missing':
+                del job['allowed_tools']
+            if mutation == 'duplicate':
+                job['allowed_tools'].append(job['allowed_tools'][0])
+            if mutation == 'unknown':
+                job['allowed_tools'].append('native_exec')
+            if mutation == 'write-research':
+                job['allowed_tools'].append('write_file')
+            if mutation == 'writable-without-write':
+                job.update(kind='develop', allowed_paths=['tools/output.py'])
+                job['allowed_tools'] = [name for name in job['allowed_tools']
+                                        if name != 'write_file']
+            with self.subTest(mutation=mutation), self.assertRaises(Refused):
+                validate(p)
+        tool_free = native_plan()
+        tool_free['jobs'][0]['allowed_tools'] = []
+        validate(tool_free)
+        validate(native_plan(2))
+        v2_with_policy = native_plan(2)
+        v2_with_policy['jobs'][0]['allowed_tools'] = []
+        with self.assertRaises(Refused):
+            validate(v2_with_policy)
+
+    def test_campaign_preparation_strips_then_restores_only_v3_tool_policy(self):
+        from .foundry_prepare import version_one_jobs
+        jobs = native_plan()['jobs']
+        projected = version_one_jobs(jobs, campaign=True)
+        self.assertTrue(all('allowed_tools' not in job for job in projected))
+        self.assertTrue(all('allowed_tools' in job for job in jobs))
+        self.assertEqual(version_one_jobs(jobs, campaign=False), jobs)
+
+    def test_v3_packet_binds_plan_version_to_worker_tool_policy(self):
+        from .foundry_client import worker_allowed_tools
+        from .runner import packet_for
+        p = native_plan()
+        job = p['jobs'][0]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs = {'README.md': {'content': 'frozen', 'sha256': digest(b'frozen')}}
+            data = encoded(inputs)
+            (root/'inputs.json').write_bytes(data)
+            (root/'inputs.sha256').write_text(digest(data))
+            packet = packet_for(root, p, job, {})
+        self.assertEqual(packet['plan_version'], 3)
+        self.assertEqual(worker_allowed_tools(packet), tuple(job['allowed_tools']))
 
     def test_quota_stop_and_reserve_override_long_worker_window(self):
         from .contracts import timestamp

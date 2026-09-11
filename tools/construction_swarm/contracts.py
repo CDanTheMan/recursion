@@ -12,6 +12,9 @@ class Refused(ValueError):
     pass
 
 
+JOB_TOOLS = ('list_files', 'read_file', 'search', 'write_file', 'run_command', 'fetch_source')
+
+
 def require(value, reason):
     if not value:
         raise Refused(reason)
@@ -156,6 +159,21 @@ def validate_plan(plan):
         require(ready, "dependency cycle or missing job")
         done |= ready
     return plan
+
+
+def validate_allowed_tools(job):
+    """Validate the explicit native-v3 tool surface for one job."""
+    value = job.get('allowed_tools')
+    require(type(value) is list and len(value) <= len(JOB_TOOLS) and
+            all(type(name) is str for name in value) and len(value) == len(set(value)),
+            'explicit unique allowed_tools required')
+    require(set(value) <= set(JOB_TOOLS), 'unknown allowed_tools entry')
+    require(not job['allowed_paths'] or 'write_file' in value,
+            'writable job must allow write_file')
+    require('write_file' not in value or
+            (job['kind'] == 'develop' and bool(job['allowed_paths'])),
+            'write_file requires a development job with allowed paths')
+    return tuple(name for name in JOB_TOOLS if name in value)
 
 
 def validate_filing(value, job, input_refs):

@@ -58,8 +58,23 @@ plan means 100 logical jobs; prior uncertain reservations reduce simultaneous
 new admission. It does not mean 100 simultaneous builds. WSL's configured memory
 ceiling still applies, independently of free Windows RAM.
 
-Prepare a bounded campaign from committed input files. Each job uses the existing
-`id`, `domain`, `kind`, `brief`, `inputs`, `depends_on`, and `allowed_paths` schema.
+Prepare a bounded campaign from committed input files. A v3 job uses `id`,
+`domain`, `kind`, `brief`, `inputs`, `depends_on`, `allowed_paths`, and the
+required `allowed_tools` list. The list may be empty and is an explicit subset of `list_files`,
+`read_file`, `search`, `write_file`, `run_command`, and `fetch_source`.
+Writable jobs must be development jobs, must name exact writable paths, and must
+include `write_file`. Brief prose is not a tool policy. Existing v2 plans keep
+their prior full tool surface; v3 plans without `allowed_tools` refuse during
+preparation or initialization before provider launch.
+
+The MCP `tools/list` response exposes only the job's list. The broker also checks
+every call and writes a denial receipt for any disallowed foundry tool. Denials
+consume the job's bounded tool-call budget. A worker
+that calls a disallowed tool becomes a known completed failure only after model,
+transport, export-to-receipt correspondence, and cleanup all qualify. Native
+tools, model drift, missing calls, and uncertain cleanup retain their stricter
+unknown treatment.
+
 Keep packets small enough to review; split large architectural questions into
 specific falsifiable claims and known-answer gates.
 
@@ -126,3 +141,13 @@ Linux tests include actual isolation, cancellation, detached descendant cleanup
 and 100 jobs sharing four command slots. Provider qualification and measured
 limits are recorded separately in `TOOL-VALIDATION.md`; synthetic and live model
 results must not be conflated with a long research campaign.
+
+For high-volume Devin work, run the focused unit tests, Ruff, plan validation,
+and tool-policy checks before any provider call. Then run one small pinned Devin
+probe and require exact SWE-2 Max identity, foundry-only tool calls, complete
+broker correspondence, normal exit, and quiescent cleanup before opening a large
+wave. The CLI deny list is permission presentation; Bubblewrap and cgroups supply
+OS containment, while the export and broker receipts determine evidence
+qualification. Run the complete Windows/WSL gate against the exact committed
+candidate before review-branch publication. Coordinator advice remains advisory
+and cannot replace tests, independent review, or owner merge authority.

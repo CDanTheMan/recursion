@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from .contracts import (
+    JOB_TOOLS,
     Refused,
     digest,
     encoded,
@@ -22,7 +23,7 @@ from .process import execute
 from .runner import put
 from .sandbox import bwrap_argv
 
-TOOL_NAMES = ('list_files', 'read_file', 'search', 'write_file', 'run_command', 'fetch_source')
+TOOL_NAMES = JOB_TOOLS
 MAX_BYTES = 1024 * 1024
 
 
@@ -125,11 +126,14 @@ def run_command(files, argv, seconds, stop=lambda: False):
 
 
 class Broker:
-    def __init__(self, root, files, allowed_paths, sources, max_calls=64, seconds=60, stop=lambda: False):
+    def __init__(self, root, files, allowed_paths, sources, max_calls=64, seconds=60,
+                 stop=lambda: False, allowed_tools=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=False)
         self.files = dict(files)
         self.allowed = set(allowed_paths)
+        self.allowed_tools = frozenset(TOOL_NAMES if allowed_tools is None else allowed_tools)
+        require(self.allowed_tools <= set(TOOL_NAMES), 'unknown allowed tool')
         self.sources = sources  # Frozen, already fetched source bytes, no model-selected network access.
         self.max_calls = max_calls
         self.seconds = seconds
@@ -152,14 +156,17 @@ class Broker:
         request = {'name': name, 'arguments': args, 'number': self.count,
                    'snapshot_sha256': digest(encoded(self.files))}
         put(directory / 'request.json', encoded(request))
-        self.uncertain = True
-        try:
-            value = self._dispatch(name, args)
-            result = {'ok': True, 'value': value}
-        except ToolUncertain as exc:
-            result = {'ok': False, 'error': str(exc), 'uncertain': True, 'observation': exc.observation}
-        except (Refused, OSError, ValueError) as exc:
-            result = {'ok': False, 'error': str(exc)[:2000]}
+        if name not in self.allowed_tools:
+            result = {'ok': False, 'error': 'tool not permitted for this job'}
+        else:
+            self.uncertain = True
+            try:
+                value = self._dispatch(name, args)
+                result = {'ok': True, 'value': value}
+            except ToolUncertain as exc:
+                result = {'ok': False, 'error': str(exc), 'uncertain': True, 'observation': exc.observation}
+            except (Refused, OSError, ValueError) as exc:
+                result = {'ok': False, 'error': str(exc)[:2000]}
         if len(encoded(result)) > 2 * MAX_BYTES:
             # UTF-8 -> escaped JSON can expand stdout by 6x. This is a known
             # output-limit failure, not lost execution/cleanup evidence.
@@ -224,7 +231,9 @@ class Broker:
                 if name in self.allowed and self.initial.get(name) != content]
 
 
-def definitions():
+def definitions(allowed_tools=None):
+    allowed = set(TOOL_NAMES if allowed_tools is None else allowed_tools)
+    require(allowed <= set(TOOL_NAMES), 'unknown allowed tool')
     properties = {
         'list_files': {}, 'read_file': {'path': {'type': 'string'}},
         'search': {'text': {'type': 'string'}},
@@ -244,7 +253,7 @@ def definitions():
     }
     return [{'name': name, 'description': descriptions[name], 'inputSchema': {
         'type': 'object', 'properties': properties[name], 'required': list(properties[name]),
-        'additionalProperties': False}} for name in TOOL_NAMES]
+        'additionalProperties': False}} for name in TOOL_NAMES if name in allowed]
 
 
 def serve_connection(connection, broker):
@@ -263,7 +272,7 @@ def serve_connection(connection, broker):
             elif method == 'ping':
                 response['result'] = {}
             elif method == 'tools/list':
-                response['result'] = {'tools': definitions()}
+                response['result'] = {'tools': definitions(broker.allowed_tools)}
             elif method == 'tools/call':
                 try:
                     params = message['params']

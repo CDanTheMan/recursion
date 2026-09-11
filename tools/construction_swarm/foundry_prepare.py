@@ -1,5 +1,6 @@
 """Prepare a reviewable native WSL plan; no inference or worker launch."""
 import argparse
+import copy
 import os
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,15 @@ from .contracts import digest, encoded, integer, require, strict_json, validate_
 from .foundry_supervision import MAX_SLOTS, MAX_WORKER_SECONDS
 from .foundry_wsl import linux_path
 from .runner import put
+
+
+def version_one_jobs(jobs, campaign):
+    """Project v3-only tool policy out for the shared v1 contract check."""
+    projected = copy.deepcopy(jobs)
+    if campaign:
+        for job in projected:
+            job.pop('allowed_tools', None)
+    return projected
 
 
 def main():
@@ -54,7 +64,7 @@ def main():
                        'output_bytes': 8 * 1024**2, 'input_bytes': 2 * 1024**2},
             'route': {'backend': 'devin', 'executable': args.devin, 'sha256': sha, 'model': 'swe-2-max',
                       'capacity_basis': 'Owner-authorized SWE-2 Max; independently verify native models listing before launch.'},
-            'jobs': jobs}
+            'jobs': version_one_jobs(jobs, args.campaign)}
     validate_plan(plan)
     plan.update(version=2, credentials=linux_path(Path(os.environ['APPDATA']) / 'devin/credentials.toml'),
                 sources=strict_json(Path(args.sources).read_bytes()) if args.sources else {},
@@ -65,7 +75,7 @@ def main():
         from .contracts import timestamp
         from .foundry import validate
         campaign = strict_json(Path(args.campaign).read_bytes())
-        plan.update(version=3, campaign=campaign)
+        plan.update(version=3, campaign=campaign, jobs=jobs)
         plan['limits']['timeout_seconds'] = args.worker_seconds
         end = min(timestamp(plan['deadline_utc']), timestamp(campaign['hard_deadline_utc'])
                   - campaign['closeout_reserve_seconds'])
