@@ -66,6 +66,8 @@ def provider_pool(root, plan):
                 held += sum(r['state'] in {'running', 'unknown'} for r in ledger.rows())
             finally:
                 ledger.close()
+        from .foundry_wsl import native_holds
+        held += native_holds(pool)
         require(held + plan['limits']['model_slots'] <= 50, 'shared pool slots held by uncertain work')
         claim = claims / (digest(str(root).encode()) + '.json')
         if not claim.exists():

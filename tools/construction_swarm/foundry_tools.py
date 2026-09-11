@@ -58,7 +58,8 @@ def tool_scope(stop, seconds):
             break
         if group is None:
             time.sleep(.05)
-    observation = {'path': str(group), 'quiescent': False, 'cleanup_error': None}
+    observation = {'path': str(group), 'quiescent': False, 'cleanup_error': None,
+                   'started_unix': time.time()}
     try:
         group.mkdir()
         for name, value in [('memory.max', '2147483648'), ('memory.swap.max', '0'),
@@ -74,10 +75,12 @@ def tool_scope(stop, seconds):
             while 'populated 1' in (group / 'cgroup.events').read_text() and time.monotonic() < until:
                 time.sleep(.025)
             require('populated 0' in (group / 'cgroup.events').read_text(), 'tool descendants remain')
+            observation['memory_peak'] = int((group / 'memory.peak').read_text())
             group.rmdir()
             observation['quiescent'] = True
         except (OSError, Refused) as exc:
             observation['cleanup_error'] = str(exc)
+        observation['ended_unix'] = time.time()
         stack.close()
 
 

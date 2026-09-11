@@ -25,6 +25,7 @@ from .contracts import (
     validate_plan,
 )
 from .foundry_client import devin_tools, process_scope
+from .foundry_output import CompletedFailure
 from .ledger import Ledger, controller_lock
 from .runner import git, packet_for, put, verified_filing
 
@@ -135,10 +136,16 @@ def run_one(root, plan, job, number, packet, scope_parent, aborted=lambda: False
         put(directory / 'filing.json', encoded(value))
         result_hash = digest(encoded(value))
         state = 'returned'
+    except CompletedFailure as exc:
+        receipt['error'] = str(exc)[:2000]
+        state = 'failed'
     except Exception as exc:  # noqa: BLE001 -- unknown never silently retries
         receipt['error'] = f'{type(exc).__name__}: {exc}'[:2000]
         state = 'unknown' if receipt['launch_entered'] else 'failed'
     receipt.update(state=state, ended=now(), filing_sha256=result_hash)
+    transport = directory / 'transport.json'
+    if transport.is_file():
+        receipt['transport_sha256'] = digest(transport.read_bytes())
     try:
         put(directory / 'receipt.json', encoded(receipt))
     except OSError as exc:
@@ -147,7 +154,7 @@ def run_one(root, plan, job, number, packet, scope_parent, aborted=lambda: False
     return state, receipt, result_hash
 
 
-def run(root):
+def run(root, host_claim):
     require(sys.platform == 'linux', 'all foundry processes require Linux/WSL')
     root = Path(root).resolve(strict=True)
     require(not str(root).startswith('/mnt/'), 'native WSL run state required')
@@ -155,11 +162,18 @@ def run(root):
         ledger = Ledger(root)
         try:
             plan = validate(ledger.plan)
+            host_claim = Path(host_claim).resolve(strict=True)
+            claim = strict_json(host_claim.read_bytes())
+            settled = host_claim.with_name(host_claim.stem + '.settled.json')
+            require(not settled.exists() and claim['root'] == str(root) and
+                    claim['plan_sha256'] == digest(encoded(plan)), 'invalid/settled Windows admission claim')
+            integer(claim['slots'], 1, 100)
             ledger.recover()
             require({'memory', 'pids', 'cpu'} <= set(Path('/sys/fs/cgroup/cgroup.subtree_control').read_text().split()), 'cgroup controllers not delegated')
             require(free_memory() >= 8 * 1024**3 and shutil.disk_usage(root).free >= 2 * 1024**3, 'insufficient WSL headroom')
             require(not Path('/sys/fs/cgroup/recursion-foundry-models').exists(), 'unreconciled model cgroup')
             with pool(root, plan) as (slots, holds), process_scope('/sys/fs/cgroup', 'recursion-foundry-models', 24 * 1024**3, 8192) as (group, observation):
+                slots = min(slots, claim['slots'])
                 (group / 'cgroup.subtree_control').write_text('+memory +pids +cpu')
                 (group / 'cpu.max').write_text('1600000 100000')
                 with ledger.db:
@@ -211,6 +225,9 @@ def run(root):
             with ledger.db:
                 ledger.event('native-cleanup', observation)
             require(observation['quiescent'], 'aggregate model cleanup uncertain')
+            put(settled, encoded({'claim_sha256': digest(host_claim.read_bytes()),
+                                 'held': sum(r['state'] in {'unknown', 'running'} for r in ledger.rows()),
+                                 'native_run': str(root)}))
             return ledger.rows()
         finally:
             ledger.close()
@@ -252,12 +269,15 @@ def main():
     init.add_argument('--plan', required=True)
     init.add_argument('--root', required=True)
     for command in ['run', 'report']:
-        sub.add_parser(command).add_argument('--root', required=True)
+        command_parser = sub.add_parser(command)
+        command_parser.add_argument('--root', required=True)
+        if command == 'run':
+            command_parser.add_argument('--host-claim', required=True)
     args = parser.parse_args()
     if args.command == 'init':
         initialize(args.repo, args.root, strict_json(Path(args.plan).read_bytes()))
     elif args.command == 'run':
-        rows = run(args.root)
+        rows = run(args.root, args.host_claim)
         return 0 if all(r['state'] in {'returned', 'accepted'} for r in rows) else 2
     else:
         print(encoded(report(args.root)).decode())

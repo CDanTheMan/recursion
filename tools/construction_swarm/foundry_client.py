@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 
 from .contracts import Refused, digest, encoded, require, strict_json
+from .foundry_output import CompletedFailure, parsed_json
 from .foundry_tools import TOOL_NAMES, Broker, serve_connection
 from .process import execute
 from .runner import put
@@ -188,10 +189,12 @@ def devin_tools(directory, route, credential, packet, sources, scope_parent, sec
     steps = export.get('steps', [])
     answers = [s['message'] for s in steps if s.get('source') == 'agent' and s.get('message')]
     require(answers, 'missing final worker answer')
-    answer = answers[-1].strip()
-    if answer.startswith('```json\n') and answer.endswith('\n```'):
-        answer = answer[8:-4]
-    value = strict_json(answer.encode())
+    try:
+        value = parsed_json(answers[-1])
+    except (Refused, ValueError) as exc:
+        # A positive normal native CLI exit plus exact-model export and broker
+        # quiescence settles transport; malformed task output is a failed job.
+        raise CompletedFailure(f'provider completed; final filing invalid: {exc}') from exc
     calls = []
     for step in steps:
         if step.get('source') == 'agent':
