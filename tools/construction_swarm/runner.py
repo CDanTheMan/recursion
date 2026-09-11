@@ -55,6 +55,12 @@ def provider_pool(root, plan):
             roots.add(strict_json(file.read_bytes())['root'])
         held = 0
         for prior_root in roots - {str(root)}:
+            closure = claims / (digest(prior_root.encode()) + '.closed.json')
+            if closure.exists():
+                closed = strict_json(closure.read_bytes())
+                require(closed.get('root') == prior_root and closed.get('held') == 0,
+                        'invalid retained pool completion')
+                continue
             ledger = Ledger.readonly(prior_root)
             try:
                 held += sum(r['state'] in {'running', 'unknown'} for r in ledger.rows())
@@ -64,7 +70,20 @@ def provider_pool(root, plan):
         claim = claims / (digest(str(root).encode()) + '.json')
         if not claim.exists():
             put(claim, encoded({'root': str(root), 'run_id': plan['run_id']}))
-        yield held
+        try:
+            yield held
+        finally:
+            ledger = Ledger.readonly(root)
+            try:
+                rows = ledger.rows()
+                if all(r['state'] in {'returned', 'accepted', 'rejected'} for r in rows):
+                    closure = claims / (digest(str(root).encode()) + '.closed.json')
+                    if not closure.exists():
+                        put(closure, encoded({'root': str(root), 'held': 0,
+                                             'dispatches_charged': sum(r['attempts'] for r in rows),
+                                             'plan_sha256': digest(encoded(ledger.plan))}))
+            finally:
+                ledger.close()
 
 
 def put(path, data):
@@ -183,6 +202,8 @@ def reconcile(root, ledger, job_id):
     receipt_bytes = (directory / 'receipt.json').read_bytes()
     receipt = strict_json(receipt_bytes)
     require(receipt.get('local_quiescent') is True, 'local quiescence not established')
+    require(receipt.get('exit_code') == 0 and 'reason' in receipt and receipt['reason'] is None,
+            'normal CLI completion required; partial exports cannot settle timeout/cancellation')
     require(receipt.get('job') == job_id and receipt.get('attempt') == row['attempts'], 'receipt identity')
     packet_data = (directory / 'packet.json').read_bytes()
     require(digest(packet_data) == receipt['packet_sha256'], 'packet changed')
@@ -252,7 +273,7 @@ def run_one(root, plan, job, number, packet):
         put(directory / 'stdout.txt', result.pop('stdout'))
         put(directory / 'stderr.txt', result.pop('stderr'))
         receipt.update(result)
-        if result['reason'] or not result['local_quiescent']:
+        if result['reason'] or (route['backend'] == 'devin' and not result['local_quiescent']):
             # A killed client is not evidence of remote provider termination.
             state = 'unknown'
         elif result['exit_code'] != 0:
@@ -313,13 +334,22 @@ def run(root):
                                 admit_host(root)
                             except Refused:
                                 continue
-                        packet = packet_for(root, plan, job, rows)
+                        try:
+                            packet = packet_for(root, plan, job, rows)
+                        except Exception as exc:  # noqa: BLE001 -- isolate admission errors; settle other jobs
+                            ledger.block(job['id'], f'packet refused: {type(exc).__name__}: {exc}')
+                            continue
                         try:
                             number = ledger.reserve(job['id'])
                         except Refused:
                             continue
                         pending[executor.submit(run_one, root, plan, job, number, packet)] = (job['id'], number)
                     if not pending:
+                        for row in ledger.rows():
+                            if row['state'] == 'queued':
+                                ledger.block(row['id'], 'Not admitted: dependency, deadline, STOP, '
+                                             'dispatch budget or host/pool capacity. Inspect plan/status; '
+                                             'no process launched for this refusal.')
                         break
                     finished, _ = wait(pending, timeout=.25, return_when=FIRST_COMPLETED)
                     for future in finished:
@@ -340,6 +370,18 @@ def manifest(root, ledger):
     entries = []
     for row in rows:
         item = {k: row[k] for k in ['id', 'state', 'attempts', 'result_hash']}
+        if row['state'] == 'blocked':
+            for event in ledger.db.execute("SELECT detail FROM events WHERE event='blocked' ORDER BY seq DESC"):
+                detail = strict_json(event[0].encode())
+                if detail['job'] == row['id']:
+                    item['blocker'] = detail['reason']
+                    break
+        attempt = ledger.db.execute('SELECT receipt FROM attempts WHERE job=? AND number=?',
+                                    (row['id'], row['attempts'])).fetchone()
+        if attempt and attempt[0]:
+            receipt = strict_json(attempt[0].encode())
+            item['observation'] = {k: receipt.get(k) for k in
+                                   ['reason', 'error', 'exit_code', 'local_quiescent', 'usage']}
         if row['result_hash']:
             item['filing'] = verified_filing(root, row)
         entries.append(item)

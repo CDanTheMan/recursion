@@ -12,7 +12,7 @@ dispatch, pinned Git inputs, separate attempts, dependency-based synthesis,
 proposed-file staging, and Linux sandbox tests. It uses only Python's standard
 library. Run it from the repository root on Python 3.11 or newer.
 
-The qualified adapter is **Windows Devin CLI 3000.10.21, SWE-2 Max**, with all
+The implemented and smoke-tested adapter is **Windows Devin CLI 3000.10.21, SWE-2 Max**, with all
 model tools denied and native subagents disabled in a fresh per-attempt config.
 The worker receives a complete source packet in its prompt and returns JSON.
 It can reason, review, and propose complete code files. It cannot inspect your
@@ -88,6 +88,9 @@ unknown reservations across runs. A separately scoped campaign may use remaining
 capacity only when its requested slots plus prior unknown/running reservations
 fit the shared fifty-slot ceiling and measured host headroom. Prior dispatch
 charges and unknown evidence remain intact; there is no automatic retry.
+Fully returned/accepted/rejected campaigns retain a compact zero-hold completion
+record, allowing their run directories to be archived. Unknown or retryable runs
+must retain their ledger; missing evidence prevents admission.
 This coordinates this tool's live runs only, not other applications,
 accounts or machines. `model_slots` is a ceiling, never a promise of host capacity.
 The dispatcher limits live slots by observed initial free RAM minus a 3 GiB reserve,
@@ -117,12 +120,16 @@ that remote inference stopped; such attempts become `unknown`, retaining slots
 and pool ownership. Deadlines have the same semantics. After a controller crash,
 the next run marks recorded running jobs unknown and never auto-relaunches them.
 
-Known failed fixture jobs may use `retry --job ID --reason "specific repair"`
+Jobs that cannot be admitted become `blocked`, with a reason in the manifest.
+Known failed fixture jobs and blocked jobs may use `retry --job ID --reason "specific repair"`
 within the original attempt/dispatch/deadline caps. Unknown provider completion
 is never automatically retried. `reconcile --job ID` accepts only retained positive
-evidence: observed local quiescence, a matching packet, the exact requested model,
-and a schema-valid final export with no tool calls. It preserves the original
-unknown receipt and cumulative dispatch charge. Then `run` can continue queued
+evidence: normal zero-exit CLI completion without timeout/cancellation, observed
+local quiescence, a matching packet, the exact requested model, and a schema-valid
+export with no tool calls. A partial export from an interrupted client never suffices.
+It preserves the original
+unknown receipt and cumulative dispatch charge. Explicitly retry any blocked
+dependents whose prerequisites are now satisfied. Then `run` can continue queued
 work or release the pool if nothing remains. If that evidence is absent, preserve
 the hold and investigate actual provider/process state; there is no force-clear.
 Do not delete ledger rows, reset budgets, or clear a live lock.
@@ -134,6 +141,8 @@ python -B -m tools.construction_swarm stage --root D:/RecursionSwarm/run-001 --j
 ```
 
 Staging exports only the job's frozen input files plus validated proposed files.
+The controller registers the exact stage manifest and verifies its current filing
+binding before testing; a caller-authored manifest cannot authorize a source mount.
 It creates a fresh directory; it never applies a patch to an existing checkout.
 Review the proposed file diff, including its tests. A generated test is not an
 independent acceptance oracle. Do not select an unreviewed test as the sole gate.
@@ -149,7 +158,10 @@ Test containment: read-only source/system binds, no host home/drives/credentials
 isolated network and PID namespace, dropped capabilities, two 64 MiB temporary
 filesystems, 2 GiB aggregate memory/no swap, 64 processes, two CPU cores, bounded
 wall time/output, and verified empty cgroup cleanup. Tests are serialized, separate
-from model dispatch. A missing gate dependency fails visibly; there is no network
+from model dispatch, through a per-Linux-user test lock across run roots. Cleanup
+failure retains its scope observation and prevents another test while any owned
+test cgroup remains. Generic POSIX process-group termination alone is never
+reported as tree-quiescence evidence. A missing gate dependency fails visibly; there is no network
 installation inside the sandbox. This is a local test boundary, not protection
 against kernel exploits or a complete multi-host scheduling platform.
 

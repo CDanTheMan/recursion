@@ -168,13 +168,20 @@ class Ledger:
         require(type(reason) is str and len(reason) >= 10, 'retry reason required')
         with self.db:
             row = self.db.execute('SELECT state,attempts FROM jobs WHERE id=?', (job_id,)).fetchone()
-            require(row and row['state'] == 'failed', 'only known failed jobs can retry; unknown stays held')
+            require(row and row['state'] in {'failed', 'blocked'}, 'only failed/blocked jobs can retry; unknown stays held')
             require(row['attempts'] < self.plan['limits']['max_attempts'], 'attempt budget exhausted')
             dependents = [json.loads(r['spec']) for r in self.rows()
-                          if r['state'] != 'queued' and job_id in json.loads(r['spec'])['depends_on']]
+                          if r['attempts'] > 0 and job_id in json.loads(r['spec'])['depends_on']]
             require(not dependents, 'dependent evidence already dispatched')
             self.db.execute("UPDATE jobs SET state='queued' WHERE id=?", (job_id,))
             self.event('retry-authorized', {'job': job_id, 'reason': reason})
+
+    def block(self, job_id, reason):
+        with self.db:
+            row = self.db.execute('SELECT state FROM jobs WHERE id=?', (job_id,)).fetchone()
+            require(row and row['state'] == 'queued', 'only queued jobs can be blocked')
+            self.db.execute("UPDATE jobs SET state='blocked' WHERE id=?", (job_id,))
+            self.event('blocked', {'job': job_id, 'reason': reason[:2000]})
 
     def decision(self, job_id, accepted, reason):
         require(type(reason) is str and len(reason) >= 10, 'independent review reference required')

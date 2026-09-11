@@ -1,3 +1,4 @@
+import contextlib
 import os
 import subprocess
 import sys
@@ -24,10 +25,12 @@ from tools.construction_swarm.runner import (
     initialize,
     manifest,
     packet_for,
+    provider_pool,
     reconcile,
     run,
 )
 from tools.construction_swarm.sandbox import isolated_execute, stage
+from tools.construction_swarm.sandbox import test_staged as run_staged_test
 
 
 def plan(count=2):
@@ -252,6 +255,67 @@ class Integration(unittest.TestCase):
         finally:
             ledger.close()
 
+    def test_bad_packet_does_not_strand_other_dispatches(self):
+        root, _ = self.make_run()
+        def selective_packet(root, p, job, rows):
+            if job['id'] == 'job-1':
+                raise Refused('oversized dependency packet')
+            return packet_for(root, p, job, rows)
+        with patch('tools.construction_swarm.runner.packet_for', side_effect=selective_packet):
+            rows = run(root)
+        self.assertEqual([r['state'] for r in rows], ['returned', 'blocked'])
+        self.assertEqual([r['attempts'] for r in rows], [1, 0])
+        ledger = Ledger(root)
+        try:
+            self.assertIn('oversized', manifest(root, ledger)['jobs'][1]['blocker'])
+        finally:
+            ledger.close()
+
+    def test_rejected_dependency_is_explicitly_blocked(self):
+        p = plan(2)
+        p['source_commit'] = self.commit
+        p['jobs'][1]['depends_on'] = ['job-0']
+        root = self.base / 'run'
+        initialize(self.repo, root, p)
+        ledger = Ledger(root)
+        try:
+            ledger.reserve('job-0')
+            ledger.finish('job-0', 1, 'returned', {})
+            ledger.decision('job-0', False, 'Independent rejection with evidence')
+        finally:
+            ledger.close()
+        rows = run(root)
+        self.assertEqual([r['state'] for r in rows], ['rejected', 'blocked'])
+        self.assertEqual(rows[1]['attempts'], 0)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows provider pool')
+    def test_pool_retains_unknown_and_archives_completed_history(self):
+        root, p = self.make_run(1)
+        live = dict(p, route=dict(p['route'], backend='devin', model='swe-2-max'))
+        ledger = Ledger(root)
+        try:
+            ledger.reserve('job-0')
+            ledger.finish('job-0', 1, 'unknown', {})
+        finally:
+            ledger.close()
+        other = self.base / 'other'
+        initialize(self.repo, other, p)
+        with patch.dict(os.environ, {'LOCALAPPDATA': str(self.base / 'appdata')}):
+            with provider_pool(root, live) as held:
+                self.assertEqual(held, 0)
+            wide = dict(live, limits=dict(live['limits'], model_slots=50))
+            with self.assertRaises(Refused), provider_pool(other, wide):
+                pass
+            with provider_pool(other, live) as held:
+                self.assertEqual(held, 1)
+                run(other)
+            # A closed campaign's local database may be archived; unknown root stays.
+            (other / 'ledger.sqlite').rename(other / 'ledger.archived')
+            third = self.base / 'third'
+            initialize(self.repo, third, p)
+            with provider_pool(third, live) as held:
+                self.assertEqual(held, 1)
+
     def test_filing_tamper_refuses_synthesis(self):
         root, _ = self.make_run()
         run(root)
@@ -276,6 +340,14 @@ class Integration(unittest.TestCase):
             self.assertEqual((self.base / 'stage/experiments/answer.py').read_text(), 'answer = 42\n')
             self.assertFalse((self.repo / 'experiments/answer.py').exists())
             self.assertFalse(staged['accepted'])
+            registered = root / 'stages' / (digest(encoded(staged)) + '.json')
+            self.assertEqual(registered.read_bytes(), encoded(staged))
+            forged = dict(staged, destination=str(root))
+            with self.assertRaises(Refused), patch('tools.construction_swarm.sandbox.isolated_execute') as launch:
+                run_staged_test(root, forged, 'experiments/answer.py')
+            launch.assert_not_called()
+            with self.assertRaises(Refused):
+                stage(root / '..' / 'run', ledger, 'job-0', root / 'nested')
             self.assertEqual(self.git('status', '--porcelain'), b'')
             with self.assertRaises(Refused):
                 stage(root, ledger, 'job-0', self.base / 'stage')
@@ -293,6 +365,7 @@ class Integration(unittest.TestCase):
             packet = packet_for(root, p, p['jobs'][0], {})
             ledger.reserve('job-0')
             original = {'job': 'job-0', 'attempt': 1, 'local_quiescent': True,
+                        'exit_code': 0, 'reason': None,
                         'packet_sha256': digest(encoded(packet))}
             ledger.finish('job-0', 1, 'unknown', original)
             directory = root / 'attempts/job-0/1'
@@ -304,6 +377,11 @@ class Integration(unittest.TestCase):
             export = {'agent': {'model_name': 'SWE-2 Max'},
                       'steps': [{'source': 'agent', 'message': encoded(value).decode()}]}
             (directory / 'export.json').write_bytes(encoded(export))
+            interrupted = dict(original, reason='timeout', exit_code=125)
+            (directory / 'receipt.json').write_bytes(encoded(interrupted))
+            with self.assertRaises(Refused):
+                reconcile(root, ledger, 'job-0')
+            (directory / 'receipt.json').write_bytes(encoded(original))
             reconcile(root, ledger, 'job-0')
             self.assertEqual(ledger.rows()[0]['state'], 'returned')
             self.assertEqual((directory / 'receipt.json').read_bytes(), encoded(original))
@@ -344,14 +422,31 @@ class ProcessTests(unittest.TestCase):
                 result = execute([sys.executable, '-c', script], tmp, dict(os.environ), timeout, 2048)
                 self.assertEqual(result['reason'], reason)
                 self.assertLessEqual(len(result['stdout']) + len(result['stderr']), 2048)
-                self.assertTrue(result['local_quiescent'])
+                self.assertEqual(result['local_quiescent'], os.name == 'nt')
+                self.assertTrue(result['direct_process_exited'])
 
     def test_stop_kills_child(self):
         with tempfile.TemporaryDirectory() as tmp:
             script = 'import subprocess,sys,time; subprocess.Popen([sys.executable,"-c","import time;time.sleep(30)"]); time.sleep(30)'
             result = execute([sys.executable, '-c', script], tmp, dict(os.environ), .3, 2048)
-            self.assertTrue(result['local_quiescent'])
+            self.assertEqual(result['local_quiescent'], os.name == 'nt')
+            self.assertTrue(result['direct_process_exited'])
             self.assertEqual(result['reason'], 'timeout')
+
+    def test_cleanup_failure_retains_transport_and_scope_evidence(self):
+        @contextlib.contextmanager
+        def scope():
+            yield {'path': '/unused-owned-scope', 'quiescent': False, 'cleanup_error': 'injected rmdir failure'}
+        transport = {'stdout': b'evidence', 'stderr': b'', 'exit_code': 0,
+                     'reason': None, 'direct_process_exited': True}
+        with patch('tools.construction_swarm.sandbox.bwrap_argv', return_value=['/unused']), \
+             patch('tools.construction_swarm.sandbox.test_cgroup', scope), \
+             patch('tools.construction_swarm.sandbox.execute', return_value=transport):
+            result = isolated_execute('.', 'probe.py', 1, 1024)
+        self.assertEqual(result['stdout'], b'evidence')
+        self.assertFalse(result['local_quiescent'])
+        self.assertEqual(result['reason'], 'cgroup-cleanup-unknown')
+        self.assertIn('rmdir', result['cgroup_observation']['cleanup_error'])
 
     @unittest.skipUnless(sys.platform == 'linux', 'Linux sandbox test')
     def test_real_bubblewrap_isolation(self):

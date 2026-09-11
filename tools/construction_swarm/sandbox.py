@@ -6,17 +6,20 @@ controller owns its lock; test_slots is an upper bound, not a concurrency promis
 import contextlib
 import shutil
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
 
-from .contracts import digest, encoded, path, require
+from .contracts import Refused, digest, encoded, path, require
 from .ledger import Ledger, controller_lock
 from .process import execute
 from .runner import put, read_inputs, verified_filing
 
 
 def stage(root, ledger, job_id, destination):
+    root = Path(root).resolve(strict=True)
+    require(root == ledger.root, 'controller root mismatch')
     rows = {row['id']: row for row in ledger.rows()}
     require(job_id in rows and rows[job_id]['state'] in {'returned', 'accepted'}, 'no returned proposal')
     row = rows[job_id]
@@ -38,8 +41,12 @@ def stage(root, ledger, job_id, destination):
         data = content.encode()
         put(target, data)
         records[name] = digest(data)
-    return {'job': job_id, 'filing_sha256': row['result_hash'], 'files': records,
-            'accepted': False, 'destination': str(destination.resolve())}
+    result = {'job': job_id, 'filing_sha256': row['result_hash'], 'files': records,
+              'accepted': False, 'destination': str(destination.resolve())}
+    registry = root / 'stages'
+    registry.mkdir(exist_ok=True)
+    put(registry / (digest(encoded(result)) + '.json'), encoded(result))
+    return result
 
 
 def bwrap_argv(source, entry, timeout, output_bytes):
@@ -73,40 +80,65 @@ def bwrap_argv(source, entry, timeout, output_bytes):
 def test_cgroup():
     """Own a new cgroup only; never enable controllers or alter another scope."""
     require(sys.platform == 'linux', 'Linux cgroup required')
+    import os
+    pool = Path(tempfile.gettempdir()) / f'recursion-construction-tests-{os.getuid()}'
+    pool.mkdir(exist_ok=True)
+    with controller_lock(pool), _test_cgroup_scope() as observation:
+        yield observation
+
+
+@contextlib.contextmanager
+def _test_cgroup_scope():
     base = Path('/sys/fs/cgroup')
     require({'memory', 'pids', 'cpu'} <= set((base / 'cgroup.subtree_control').read_text().split()),
             'memory/pids/cpu controllers must already be delegated')
+    require(not any(base.glob('recursion-construction-*')), 'unreconciled test cgroup exists; no new test admitted')
     group = base / ('recursion-construction-' + uuid.uuid4().hex)
     group.mkdir()
+    observation = {'path': str(group), 'quiescent': False, 'cleanup_error': None}
     try:
         for name, value in [('memory.max', '2147483648'), ('memory.swap.max', '0'),
                             ('pids.max', '64'), ('cpu.max', '200000 100000')]:
             (group / name).write_text(value)
             require((group / name).read_text().strip() == value, f'{name} not enforced')
         require((group / 'cgroup.kill').exists(), 'cgroup.kill required')
-        yield group
+        yield observation
     finally:
-        if (group / 'cgroup.kill').exists():
-            (group / 'cgroup.kill').write_text('1')
-        until = time.monotonic() + 5
-        while time.monotonic() < until and 'populated 1' in (group / 'cgroup.events').read_text():
-            time.sleep(.025)
-        require('populated 0' in (group / 'cgroup.events').read_text(), 'owned cgroup not quiescent')
-        group.rmdir()
+        try:
+            if (group / 'cgroup.kill').exists():
+                (group / 'cgroup.kill').write_text('1')
+            until = time.monotonic() + 5
+            while time.monotonic() < until and 'populated 1' in (group / 'cgroup.events').read_text():
+                time.sleep(.025)
+            require('populated 0' in (group / 'cgroup.events').read_text(), 'owned cgroup not quiescent')
+            group.rmdir()
+            observation['quiescent'] = True
+        except (OSError, Refused) as exc:
+            observation['cleanup_error'] = str(exc)
 
 
 def isolated_execute(source, entry, seconds, output_limit, stop=lambda: False):
     argv = bwrap_argv(source, entry, seconds, output_limit)
-    with test_cgroup() as group:
+    with test_cgroup() as observation:
+        group = Path(observation['path'])
         # Trusted launcher joins its scope before any proposed code can execute.
         wrapper = ('import os,sys; from pathlib import Path; '
                    'Path(sys.argv[1]).write_text(str(os.getpid())); '
                    'os.execv(sys.argv[2],sys.argv[2:])')
         launched = ['/usr/bin/python3', '-I', '-c', wrapper, str(group / 'cgroup.procs'), *argv]
-        result = execute(launched, source, {}, seconds, output_limit, stop)
+        try:
+            result = execute(launched, source, {}, seconds, output_limit, stop)
+        except Exception as exc:  # noqa: BLE001 -- retain cleanup observation and failed launch evidence
+            result = {'stdout': b'', 'stderr': b'', 'exit_code': None,
+                      'reason': 'transport-exception', 'error': f'{type(exc).__name__}: {exc}',
+                      'direct_process_exited': False, 'local_quiescent': False}
         result['cgroup'] = {'memory_bytes': 2147483648, 'pids': 64, 'cpu_cores': 2,
                             'swap_bytes': 0, 'tmpfs_bytes_each': 67108864}
-    result['cgroup_quiescent'] = True
+    result['cgroup_observation'] = observation
+    result['cgroup_quiescent'] = observation['quiescent']
+    result['local_quiescent'] = observation['quiescent'] and result['direct_process_exited']
+    if not observation['quiescent']:
+        result['reason'] = 'cgroup-cleanup-unknown'
     return result
 
 
@@ -116,7 +148,15 @@ def test_staged(root, staging_manifest, entry):
         ledger = Ledger(root)
         try:
             plan = ledger.plan
+            registered = root / 'stages' / (digest(encoded(staging_manifest)) + '.json')
+            require(registered.is_file() and registered.read_bytes() == encoded(staging_manifest),
+                    'unregistered staging manifest')
+            row = next((r for r in ledger.rows() if r['id'] == staging_manifest['job']), None)
+            require(row and row['state'] in {'returned', 'accepted'} and
+                    row['result_hash'] == staging_manifest['filing_sha256'], 'stage/filing binding mismatch')
+            verified_filing(root, row)
             source = Path(staging_manifest['destination']).resolve(strict=True)
+            require(not source.is_relative_to(root), 'test source exposes controller state')
             expected = staging_manifest['files']
             actual = {}
             for file in source.rglob('*'):

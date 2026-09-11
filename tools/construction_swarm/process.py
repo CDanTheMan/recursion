@@ -43,6 +43,9 @@ def execute(argv, cwd, env, timeout, output_limit, stop=lambda: False):
     begin = time.monotonic()
     reason = None
     quiescent = False
+    readers_done = False
+    code = None
+    cleanup_error = None
     try:
         while proc.poll() is None:
             if stop():
@@ -75,9 +78,10 @@ def execute(argv, cwd, env, timeout, output_limit, stop=lambda: False):
             for thread in threads:
                 thread.join(5)
             readers_done = not any(t.is_alive() for t in threads)
-            if not job:
-                quiescent = readers_done
             code = proc.poll()
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            cleanup_error = f'{type(exc).__name__}: {exc}'
+            quiescent = False
         finally:
             if job:
                 try:
@@ -85,9 +89,17 @@ def execute(argv, cwd, env, timeout, output_limit, stop=lambda: False):
                 finally:
                     proc.close()
             else:
-                proc.stdout.close()
-                proc.stderr.close()
+                # A detached descendant may retain a pipe. Closing a BufferedReader
+                # held by its drain thread can block indefinitely; cgroup cleanup
+                # kills sandbox descendants and lets these daemon readers finish.
+                for stream, thread in zip((proc.stdout, proc.stderr), threads):
+                    if not thread.is_alive():
+                        stream.close()
+    if cleanup_error:
+        reason = 'cleanup-unknown'
     return {'exit_code': code, 'reason': reason or ('output-limit' if overflow.is_set() else None),
+            'cleanup_error': cleanup_error,
             'local_quiescent': quiescent and readers_done,
+            'direct_process_exited': code is not None, 'pipes_closed': readers_done,
             'elapsed_seconds': time.monotonic() - begin,
             'stdout': bytes(buffers[0]), 'stderr': bytes(buffers[1])}
