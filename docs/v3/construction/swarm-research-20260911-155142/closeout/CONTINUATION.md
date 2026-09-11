@@ -18,6 +18,7 @@ Observed 2026-09-11 after the 2026-09-11T21:01:42Z worker-admission deadline and
 - Draft PR: https://github.com/NotSkittlz/recursion/pull/124.
 - Source/evidence parent before closeout documents: `48970bdfad68b03f4a51679787b0406484f6b773`.
 - First closeout-document candidate: `dbc13b70a9f31ed8350ff76827fcd1831082f0ca`. At its audit observation, local head, remote head and PR head were all exactly `dbc13b7`; the worktree was clean.
+- Post-review closeout candidate: `0d963c8d807128200c8ba75e67959059a7d841e7`. At its settlement observation, local head, remote head and PR head were all exactly `0d963c8`; its gate and post-gate cleanup had completed.
 - This corrective closeout commit's self hash and its later exact gate must be bound in the external `.git/research-handoffs/` record.
 - PR title: `Add supervised native swarm execution and worker policy gates`.
 - GitHub reported zero status-check rollups and zero review objects. Internal candidate-bound receipts are the validation evidence.
@@ -28,17 +29,18 @@ Observed 2026-09-11 after the 2026-09-11T21:01:42Z worker-admission deadline and
 2. `65b0929d45dfd6a55ba20e54d84eca30c4b83a31` — native-v3 jobs require an explicit `allowed_tools` list. The same policy binds plan validation, packet identity, Devin permission presentation, MCP discovery, broker dispatch receipts and filing qualification. Valid v2 jobs preserve the legacy full surface.
 3. `48970bdfad68b03f4a51679787b0406484f6b773` — retains the two gates, three Grok designs, six repair reviews, one pre-execution unknown review and the final committed-source Grok review.
 
-The exact `dbc13b7` closeout checkpoint passed:
+The exact `0d963c8` post-review closeout checkpoint passed:
 
-- Windows unit suite: 75 tests, 7 platform skips; log SHA-256 `cce456b31c189c51a762ed0da45b671314517e2076ef95c725ec1bfeb7c7f6a9`.
+- Windows unit suite: 75 tests, 7 platform skips; log SHA-256 `0caccba41d0476cf5768a5b8ed1de31d4a985f154e98f61997f6cf6833cf470f`.
 - Windows Ruff: pass; log SHA-256 `82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18`.
 - Complete diff check: pass; empty-log SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
-- Native WSL unit suite: 75 tests, 1 platform skip; log SHA-256 `d9053e91f55cff0e74d673c1702ba8ce0abbed99b649525d574e0542306870bb`.
+- Native WSL unit suite: 75 tests, 1 platform skip; log SHA-256 `4cff43556148ddd7e19234e33dd4b66ad1e08b2295c9a777dd293bfba6671ffa`.
 - WSL source-only scientific-module compilation: pass; empty-log SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
-- Receipt SHA-256: `926ae3110b52ce43e92bfc5570c8dabf5953a0ec4ccb773946aaa52a13b53d7c`.
-- Source archive SHA-256: `95c5e03fea1e629fad120c0906ecb7f0fc39493eddc5fae6038d2a124004bab7`.
+- Receipt SHA-256: `71d36380f1db342233c22d534aeb3ea6ac010fd7988dfdc991a30b5c534ef14c`.
+- Source archive SHA-256: `5c3a9b0da7f84ed6c881b82a8d129fb1b1c20a2782e2d954989805878a2f892a`.
+- Diff baseline: `235aaa7e76095ee18460d9b7ba7a6a8bad1005ac`, the merge commit for PR #123 and an ancestor of every campaign candidate. The complete diff check spans that accepted campaign baseline through `0d963c8`.
 
-Parent audit SHA-256 `fda4b65ad53d630234a87c8bfedee813d8956cef17028af934325ebd5cc1603a` verifies `48970bd`, its gate and that `65b0929..48970bd` adds only workflow-repair evidence. External audit SHA-256 `134f0bf0c2e1858b2a747fcb982eec7bed898d58230b1b1a1c77b36104f2d0bc` separately verifies `dbc13b7`, its gate, exact local/remote/PR heads and that `48970bd..dbc13b7` adds only closeout evidence. The source-review SHA-256 `4f574815fefbb85428ab98d1bba205484a25595423a91fc42f6c141b62b231fa` is bound to the committed harness sources; its verdict is `candidate_for_lead_review` and remains advisory.
+Audit SHA-256 `fda4b65ad53d630234a87c8bfedee813d8956cef17028af934325ebd5cc1603a` verifies `48970bd`; `134f0bf0c2e1858b2a747fcb982eec7bed898d58230b1b1a1c77b36104f2d0bc` verifies `dbc13b7`; and `8ed8264c752b1693ab4ceef495c6947da881dd329fe383df9a96921a3bea8856` verifies `0d963c8`, its exact gate, log-derived test counts and PR binding. The source-review SHA-256 `4f574815fefbb85428ab98d1bba205484a25595423a91fc42f6c141b62b231fa` is bound to the committed harness sources; its verdict is `candidate_for_lead_review` and remains advisory.
 
 ## Retained failures and reservations
 
@@ -67,7 +69,7 @@ Parent audit SHA-256 `fda4b65ad53d630234a87c8bfedee813d8956cef17028af934325ebd5c
 - The dirty primary WSL workspace's 41 file bodies were archived exactly before cleanup: SHA-256 `419f29ac8e6fb8255573f7f169b3ab0468fbe072c13223cda50d1c415af0ce0f`. Every file exists in the review head with identical textual lines; two differ only in byte-level line termination. Preservation-audit SHA-256: `f83d06562d008ca4c3b5663f37f9480865f872c1dda8683e291a86e74bbb96fb`.
 - Tracked pre-`dbc13b7` WSL quiescence audit Git-byte SHA-256: `f436b9b623431c405484ee25d5c92416a511052ac58d9c22a034867f5608ef0f`; zero matching processes, zero campaign cgroups, retained JSON parse failures zero.
 - Tracked pre-`dbc13b7` Windows quiescence audit Git-byte SHA-256: `45c66df1163eea9852eb8ba38a83f9a46d56ac86b130a50fe52e74841e2ea136`; zero matching processes and the validation worktree is absent/unregistered.
-- After the `dbc13b7` gate, its checkpoint was removed. External post-gate WSL and Windows re-audit SHA-256 values are `73971322f8cb51a05519e4a53cb712ca26460f0ca26820810f24a0630289e479` and `029c29276c9b0896e4d1c5d784244a45c1f100e665aac316056688f7c8ba4465`. A final gate after this correction creates another temporary checkpoint; remove it and record a new external re-audit.
+- After the `0d963c8` gate, its checkpoint was removed. External post-gate WSL and Windows re-audit SHA-256 values are `b5bf058c3925544d520eca0a8784a9c5c0591d72a37320b3ad00a0a7cf60a6d2` and `79e63eb5497ecee4144c6fb150691087eb9e12e261fefa1c4840ecd026a268b3`. A final gate after this correction creates another temporary checkpoint; remove it and record a new external re-audit.
 
 ## Resource state
 
