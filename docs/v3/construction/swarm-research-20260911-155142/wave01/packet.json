@@ -1,0 +1,33 @@
+{
+  "parent": "goal-recursion-v2-execution-fabric",
+  "source_commit": "235aaa7e76095ee18460d9b7ba7a6a8bad1005ac",
+  "question": "Resolve next source/publication proof gap and exact heavy-gate portability requirements",
+  "finite_domain": {
+    "jobs": 4,
+    "model_state_executions": 0,
+    "symbolic_enumerations": 0,
+    "max_seconds_per_job": 600
+  },
+  "allowed_paths": [],
+  "acceptance_gate": "foundry native collection verifies exact model, transport, evidence bindings, filing schema and cgroup quiescence; explicit Grok synthesis covers all four filing refs; Astra checks critical original sources before admitting any implementation",
+  "non_goals": [
+    "semantic changes",
+    "original reducer/guard/profile edits",
+    "formal freeze",
+    "source truth/Q1-Q6",
+    "whole-path composition",
+    "fairness",
+    "physical recovery",
+    "runtime integration",
+    "language/store/framework/provider selection",
+    "config/auth/autonomy/cron edits",
+    "merge",
+    "deployment",
+    "reset or capacity purchase"
+  ],
+  "budget": {
+    "research_units": 0,
+    "provider_dispatches": 4,
+    "unknowns_not_refunded": true
+  }
+}
