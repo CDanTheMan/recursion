@@ -1,0 +1,173 @@
+{
+  "record": "wave06-live-revision-00",
+  "observed_utc": "2026-09-11T18:16:48Z",
+  "run_id": "research-20260911-155142-wave06",
+  "source_commit": "d78f8c9773bf84cf14816f3ee89bed3f21bb870f",
+  "plan_sha256": "a1a91055828ecaf03d87892a74e8f9bbf8a8c19c5f86ccd10bc852af16fc7d37",
+  "initial_width": 48,
+  "worker_states": {
+    "unknown": 3,
+    "running": 45,
+    "queued": 30
+  },
+  "nonrunning_worker_receipts": [
+    {
+      "job": "controls-o02",
+      "state": "unknown",
+      "error": "Refused: native Linux client did not complete normally",
+      "receipt_sha256": "44646e2b86fdb8f0f6c07cd3247e1122e33a0cb9ddfee57be86ca38b65eee115",
+      "transport_sha256": "508152e73c37f3079c2a553c273a21dd29961f02c0259230309a17249a1542b4"
+    },
+    {
+      "job": "controls-o17",
+      "state": "unknown",
+      "error": "Refused: foreign/native tool attempted",
+      "receipt_sha256": "76ca116d30a19a9db08cc54d95481707b4fd48e17b7add878b754b0b36b49394",
+      "transport_sha256": "9d4fc68ad9647292d13899534ce289a33acde12d2c5d5499619f2a125843abf1"
+    },
+    {
+      "job": "controls-o23",
+      "state": "unknown",
+      "error": "Refused: foreign/native tool attempted",
+      "receipt_sha256": "cfb54dd7d42ba98dec343d92e1b5fe23a068c6bb62a2e1259cb8afecbbdb448f",
+      "transport_sha256": "ab6c0518fb30a6ba6dd69457b91b1d81f098d7712c6c8896cc3fd1004284ba76"
+    }
+  ],
+  "accounting": {
+    "held_before_wave06": 131,
+    "wave06_reservations": 48,
+    "currently_held_including_running": 179,
+    "persistent_unknown_if_running_workers_settle": 134,
+    "unheld_slots": 21,
+    "shared_ceiling": 200,
+    "reservation_releases": 0
+  },
+  "coordinator": {
+    "provider": "cursor",
+    "model": "cursor-grok-4.5-high",
+    "display_identity_required": "Cursor Grok 4.5 High",
+    "speed": "NON-FAST",
+    "runtime": "/opt/recursion-foundry/runtime/cursor-2026.08.25/dist-package",
+    "live_revision": 0,
+    "batch_size": 8,
+    "batches": [
+      {
+        "batch": 0,
+        "state": "unknown",
+        "synthesis_sha256": null,
+        "error": "Refused: invalid JSON: Expecting value: line 1 column 1987 (char 1986)",
+        "receipt_sha256": "6c6ebf5bee1fbc7409a04d872700a123c0ab754628183bcfbd60ae0afe38cbc5",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 1,
+        "state": "returned",
+        "synthesis_sha256": "4cc50ad93b9d1bf44b650c1b9b61ad58d5a7fc421b5edb97200259160115ba90",
+        "error": null,
+        "receipt_sha256": "15af023514a3656062a1d7d1ceab65eb9b4261645c5b1533ea2ef9139d11a733",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 2,
+        "state": "returned",
+        "synthesis_sha256": "97a4d510337bbfa5b7a7fddbcab0549d25e1d0a11d5118c0ea53a949dad6db06",
+        "error": null,
+        "receipt_sha256": "11efc724324d317c5194b1055c018e5a53149d430cd362d2c700dadcb7719492",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 3,
+        "state": "returned",
+        "synthesis_sha256": "506aa5a84cbd0e3b55be9f792edc166dd679e8052d89429a20cbe189d7d3b152",
+        "error": null,
+        "receipt_sha256": "3018af3fe3f1f2409bee053e43382c71c1f738056ce2a0be552f62bfe719ca48",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 4,
+        "state": "unknown",
+        "synthesis_sha256": null,
+        "error": "Refused: coordinator did not complete normally",
+        "receipt_sha256": "dd742c0e7bb82087370013159280023c93c17c2ea31cff72aaedf1f0b9fa5e55",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 5,
+        "state": "returned",
+        "synthesis_sha256": "1fe18fb0464b9e4718a20561a66099a64a2cf0d5bf1e6f5c9fe5d0e780aaf2cf",
+        "error": null,
+        "receipt_sha256": "27f1b49aaa3be36f7b277f8535f1ed17202fcc4444461d84e50bca568929d89e",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 6,
+        "state": "returned",
+        "synthesis_sha256": "093a09c375e1c5ff1b63dca8e260158326ad5228c9ae2a93fa58228c820bc507",
+        "error": null,
+        "receipt_sha256": "5790aa1f783aa086ba4d6ceed43349c977df2d980c7b9fddcd921d098d1ffa2b",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 7,
+        "state": "returned",
+        "synthesis_sha256": "368fd48ca99da8c4556d6f9031b6c50632b9946792c867d3b64db507be625bfa",
+        "error": null,
+        "receipt_sha256": "4a64578c389f0a9b8a91e267ced079b75b5a96c0799d9317d88fdf02a98dcf18",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 8,
+        "state": "returned",
+        "synthesis_sha256": "a9da52fcf2d940ff9380f038388a068121060a013f85127ce0a6170f9d0e8d8d",
+        "error": null,
+        "receipt_sha256": "0e07532db88d542bc52e6df0ec2cff4cded34aefce00d36c374b8dc7158221b9",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 9,
+        "state": "returned",
+        "synthesis_sha256": "92cbc5b045cfcbe0a244a41e6ab5d9834ea3c6c4576ec0e6084f150fb349095a",
+        "error": null,
+        "receipt_sha256": "5d900cd8c047828ab56cd71a21d4c2088ec9b839aa394c7cb37426821bef17a7",
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      }
+    ],
+    "states": {
+      "unknown": 2,
+      "returned": 8
+    },
+    "unknowns_preserved_no_replay": true
+  },
+  "resources": {
+    "cgroup": "/sys/fs/cgroup/recursion-foundry-models",
+    "memory_current": 2867757056,
+    "memory_peak": 2937376768,
+    "pids_current": 1080,
+    "pids_peak": 1318,
+    "memory_events": {
+      "low": "0",
+      "high": "0",
+      "max": "0",
+      "oom": "0",
+      "oom_kill": "0",
+      "oom_group_kill": "0"
+    }
+  },
+  "framework_followup": {
+    "commit": "4ad9648b0780cc43863416b54b4382d624f53380",
+    "change": "Future coordinator CLI runs continue independent batches after retaining a failed batch.",
+    "active_runtime_mutated": false
+  },
+  "scientific_execution": 0,
+  "accepted": false
+}
