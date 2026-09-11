@@ -35,31 +35,36 @@ REVIEW_CONFIG = {
 
 @contextlib.contextmanager
 def provider_pool(root, plan):
-    """One live construction campaign per Windows user, including unresolved holds."""
+    """Serialize campaigns and retain other campaigns' uncertain reservations."""
     if plan['route']['backend'] == 'fixture':
-        yield
+        yield 0
         return
     require(os.name == 'nt', 'unqualified live host')
     pool = Path(os.environ['LOCALAPPDATA']) / 'recursion-construction' / 'pool'
     pool.mkdir(parents=True, exist_ok=True)
     with controller_lock(pool):
+        claims = pool / 'claims'
+        claims.mkdir(exist_ok=True)
         active = pool / 'active.json'
+        roots = set()
         if active.exists():
+            # Preserve the first implementation's ownership record as history.
             prior = strict_json(active.read_bytes())
-            require(prior['root'] == str(root),
-                    'another campaign owns provider pool; reconcile its unknown outcomes first')
-        else:
-            put(active, encoded({'root': str(root), 'run_id': plan['run_id']}))
-        try:
-            yield
-        finally:
-            ledger = Ledger.readonly(root)
+            roots.add(prior['root'])
+        for file in claims.glob('*.json'):
+            roots.add(strict_json(file.read_bytes())['root'])
+        held = 0
+        for prior_root in roots - {str(root)}:
+            ledger = Ledger.readonly(prior_root)
             try:
-                held = any(r['state'] in {'running', 'unknown'} for r in ledger.rows())
+                held += sum(r['state'] in {'running', 'unknown'} for r in ledger.rows())
             finally:
                 ledger.close()
-            if not held:
-                active.unlink()
+        require(held + plan['limits']['model_slots'] <= 50, 'shared pool slots held by uncertain work')
+        claim = claims / (digest(str(root).encode()) + '.json')
+        if not claim.exists():
+            put(claim, encoded({'root': str(root), 'run_id': plan['run_id']}))
+        yield held
 
 
 def put(path, data):
@@ -278,15 +283,16 @@ def run(root):
         admitted_plan = validate_plan(initial.plan)
     finally:
         initial.close()
-    with provider_pool(root, admitted_plan), controller_lock(root):
+    with provider_pool(root, admitted_plan) as foreign_holds, controller_lock(root):
         ledger = Ledger(root)
         try:
             plan = validate_plan(ledger.plan)
             ledger.recover()
-            host_slots = (slot_ceiling(free_memory()) if plan['route']['backend'] == 'devin'
+            host_slots = (max(0, slot_ceiling(free_memory()) - foreign_holds) if plan['route']['backend'] == 'devin'
                           else plan['limits']['model_slots'])
             with ledger.db:
                 ledger.event('host-admission', {'slot_ceiling': host_slots,
+                                              'foreign_unknown_reservations': foreign_holds,
                                               'model_slots_requested': plan['limits']['model_slots']})
             with ThreadPoolExecutor(max_workers=plan['limits']['model_slots']) as executor:
                 pending = {}

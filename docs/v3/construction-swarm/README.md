@@ -83,8 +83,12 @@ the observed Free label is not an unlimited-usage guarantee. `capacity_basis`
 records the operator's evidence; it is not a provider quota API or proof.
 
 Live runs serialize through a per-Windows-user provider-pool lock in
-`%LOCALAPPDATA%/recursion-construction/pool`. An unresolved campaign retains pool
-ownership. This coordinates this tool's live runs only, not other applications,
+`%LOCALAPPDATA%/recursion-construction/pool`. Durable campaign registrations retain
+unknown reservations across runs. A separately scoped campaign may use remaining
+capacity only when its requested slots plus prior unknown/running reservations
+fit the shared fifty-slot ceiling and measured host headroom. Prior dispatch
+charges and unknown evidence remain intact; there is no automatic retry.
+This coordinates this tool's live runs only, not other applications,
 accounts or machines. `model_slots` is a ceiling, never a promise of host capacity.
 The dispatcher limits live slots by observed initial free RAM minus a 3 GiB reserve,
 charging 2 GiB per admitted slot; it rechecks at least 5 GiB free RAM and 1 GiB
