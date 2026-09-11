@@ -1,0 +1,47 @@
+{
+  "id": "boundary-01",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "source_commit": "bfbb97a469b514d66e8d949cd52273d42b42b908",
+  "status": "DEVELOPMENT_ONLY_NOT_YET_ADMITTED_FOR_EXECUTION",
+  "allowed_paths": [
+    "experiments/v3/swarm-research-20260911-155142/boundary.py",
+    "experiments/v3/swarm-research-20260911-155142/boundary_audit.py"
+  ],
+  "domain": "scale-eight-action-race",
+  "unchanged_profile": true,
+  "fixed_prefix_length": 11,
+  "core_length": 8,
+  "fixed_suffix_start": 19,
+  "units": [
+    "event",
+    "utf8-byte"
+  ],
+  "outcomes": [
+    1
+  ],
+  "subclasses": {
+    "fresh-incomplete": "C0;perm(A2,A3,A4,R);O;perm(C1,C2)",
+    "stale-complete": "O;perm(A2,A3,A4,R);perm(C0,C1,C2)"
+  },
+  "analytic_orders_per_unit": 192,
+  "analytic_histories": 384,
+  "analytic_unreduced_representation_visits": 26880,
+  "new_executions_allowed": 0,
+  "initial_measurement_proposal": {
+    "histories": 4,
+    "representation_visit_limit": 280,
+    "seconds": 60,
+    "stdout_limit": 1048576,
+    "scratch_mount_bytes_each": 67108864
+  },
+  "non_goals": [
+    "source/model/guard/profile/accepted-relation changes",
+    "state quotienting",
+    "new Q reachability claim",
+    "all-order refinement",
+    "full87 gate equivalence",
+    "historical evidence writes"
+  ],
+  "gate_before_execution": "Exact committed code, closed input manifest, finite source/symbolic/model budget preregistration and two independent prospective method approvals. Then execute tiny native sandbox measurement and independent retained artifact audit. Increase shard size only from measured evidence.",
+  "gate_for_local_research_result": "Independent exact finite domain+indices; original reducers and complete audit_case on every typed full history; all per-prefix Q-core/journal/invocation/mask facts; compressed certificate export; independent retained replay and discriminating corruptions. Distinguish local results from blocked87-command final gate."
+}
