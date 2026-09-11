@@ -199,6 +199,8 @@ def reconcile(root, ledger, job_id):
     plan = ledger.plan
     require(plan['route']['backend'] == 'devin', 'positive provider receipt required')
     directory = root / 'attempts' / job_id / str(row['attempts'])
+    require((directory / 'receipt.json').is_file(),
+            'terminal receipt missing; unknown reservation retained; inspect ledger observation')
     receipt_bytes = (directory / 'receipt.json').read_bytes()
     receipt = strict_json(receipt_bytes)
     require(receipt.get('local_quiescent') is True, 'local quiescence not established')
@@ -232,15 +234,16 @@ def reconcile(root, ledger, job_id):
 
 def run_one(root, plan, job, number, packet):
     directory = root / 'attempts' / job['id'] / str(number)
-    directory.mkdir(parents=True, exist_ok=False)
-    put(directory / 'packet.json', encoded(packet))
-    put(directory / 'prompt.md', prompt(packet).encode())
-    put(directory / 'config.json', encoded(REVIEW_CONFIG))
     route = plan['route']
     receipt = {'job': job['id'], 'attempt': number, 'started': now(),
                'packet_sha256': digest(encoded(packet)), 'route': route,
-               'usage': None, 'evidence_class': route['backend'], 'accepted': False}
+               'usage': None, 'evidence_class': route['backend'], 'accepted': False,
+               'launch_entered': False}
     try:
+        directory.mkdir(parents=True, exist_ok=False)
+        put(directory / 'packet.json', encoded(packet))
+        put(directory / 'prompt.md', prompt(packet).encode())
+        put(directory / 'config.json', encoded(REVIEW_CONFIG))
         executable = Path(route['executable']).resolve(strict=True)
         require(digest(executable.read_bytes()) == route['sha256'], 'provider executable changed')
         if route['backend'] == 'devin':
@@ -269,6 +272,7 @@ def run_one(root, plan, job, number, packet):
             export = directory / 'export.json'
             return ((root / 'STOP').exists() or
                     (export.exists() and export.stat().st_size > 16 * 1024 * 1024))
+        receipt['launch_entered'] = True
         result = execute(argv, directory, env, timeout, plan['limits']['output_bytes'], stop=stop)
         put(directory / 'stdout.txt', result.pop('stdout'))
         put(directory / 'stderr.txt', result.pop('stderr'))
@@ -288,12 +292,19 @@ def run_one(root, plan, job, number, packet):
             put(directory / 'filing.json', encoded(value))
             receipt['filing_sha256'] = digest(encoded(value))
             state = 'returned'
-    except Exception as exc:  # noqa: BLE001 -- all worker failures must retain unknown outcome
+    except Exception as exc:  # noqa: BLE001 -- retain failures, conservatively after possible launch
         receipt['error'] = f'{type(exc).__name__}: {exc}'[:2000]
         # No silent retry, including transport exceptions with uncertain launch.
-        state = 'unknown'
+        state = 'unknown' if receipt['launch_entered'] else 'failed'
     receipt.update(state=state, ended=now())
-    put(directory / 'receipt.json', encoded(receipt))
+    try:
+        put(directory / 'receipt.json', encoded(receipt))
+    except OSError as exc:
+        # The ledger can still retain the observation when the attempt directory
+        # is unavailable. Never treat missing external terminal evidence as return.
+        receipt['receipt_write_error'] = f'{type(exc).__name__}: {exc}'[:2000]
+        state = 'unknown' if receipt['launch_entered'] else 'failed'
+        receipt['state'] = state
     return state, receipt, receipt.get('filing_sha256')
 
 
@@ -343,7 +354,14 @@ def run(root):
                             number = ledger.reserve(job['id'])
                         except Refused:
                             continue
-                        pending[executor.submit(run_one, root, plan, job, number, packet)] = (job['id'], number)
+                        try:
+                            future = executor.submit(run_one, root, plan, job, number, packet)
+                        except Exception as exc:  # noqa: BLE001 -- submission may enqueue before failing
+                            ledger.finish(job['id'], number, 'unknown',
+                                          {'error': str(exc)[:2000], 'reason': 'submission-uncertain',
+                                           'packet_sha256': digest(encoded(packet))})
+                            continue
+                        pending[future] = (job['id'], number)
                     if not pending:
                         for row in ledger.rows():
                             if row['state'] == 'queued':
@@ -365,7 +383,7 @@ def run(root):
             ledger.close()
 
 
-def manifest(root, ledger):
+def manifest(root, ledger, *, diagnostic=False):
     rows = ledger.rows()
     entries = []
     for row in rows:
@@ -381,9 +399,15 @@ def manifest(root, ledger):
         if attempt and attempt[0]:
             receipt = strict_json(attempt[0].encode())
             item['observation'] = {k: receipt.get(k) for k in
-                                   ['reason', 'error', 'exit_code', 'local_quiescent', 'usage']}
+                                   ['reason', 'error', 'exit_code', 'local_quiescent', 'usage',
+                                    'launch_entered', 'receipt_write_error']}
         if row['result_hash']:
-            item['filing'] = verified_filing(root, row)
+            try:
+                item['filing'] = verified_filing(root, row)
+            except (Refused, OSError) as exc:
+                if not diagnostic:
+                    raise
+                item['artifact_error'] = f'{type(exc).__name__}: {exc}'[:2000]
         entries.append(item)
     return {'plan_sha256': digest(encoded(ledger.plan)), 'jobs': entries,
             'empirical_pass': False, 'meaning': 'collected evidence, including failures and unknowns'}

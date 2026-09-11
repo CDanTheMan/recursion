@@ -324,8 +324,38 @@ class Integration(unittest.TestCase):
         try:
             with self.assertRaises(Refused):
                 manifest(root, ledger)
+            report = manifest(root, ledger, diagnostic=True)
+            self.assertEqual(len(report['jobs']), 2)
+            self.assertIn('artifact_error', report['jobs'][0])
+            self.assertIn('filing', report['jobs'][1])
         finally:
             ledger.close()
+
+    def test_prelaunch_io_failure_retains_db_receipt_without_unknown_hold(self):
+        root, _ = self.make_run()
+        with patch('tools.construction_swarm.runner.put', side_effect=OSError('injected directory failure')), \
+             patch('tools.construction_swarm.runner.execute') as launch:
+            rows = run(root)
+        launch.assert_not_called()
+        self.assertEqual([r['state'] for r in rows], ['failed', 'failed'])
+        self.assertEqual([r['attempts'] for r in rows], [1, 1])
+        ledger = Ledger(root)
+        try:
+            for item in manifest(root, ledger)['jobs']:
+                self.assertFalse(item['observation']['launch_entered'])
+                self.assertIn('injected', item['observation']['receipt_write_error'])
+            ledger.retry('job-0', 'Explicitly retry after repairing storage')
+            self.assertEqual(ledger.rows()[0]['attempts'], 1)
+        finally:
+            ledger.close()
+
+    def test_uncertain_executor_submission_is_settled(self):
+        root, _ = self.make_run()
+        with patch('tools.construction_swarm.runner.ThreadPoolExecutor.submit',
+                   side_effect=RuntimeError('injected submission failure')):
+            rows = run(root)
+        self.assertEqual([r['state'] for r in rows], ['unknown', 'unknown'])
+        self.assertEqual([r['attempts'] for r in rows], [1, 1])
 
     def test_development_stages_without_modifying_checkout(self):
         p = plan(1)
@@ -377,6 +407,8 @@ class Integration(unittest.TestCase):
             ledger.finish('job-0', 1, 'unknown', original)
             directory = root / 'attempts/job-0/1'
             directory.mkdir(parents=True)
+            with self.assertRaisesRegex(Refused, 'terminal receipt missing'):
+                reconcile(root, ledger, 'job-0')
             (directory / 'receipt.json').write_bytes(encoded(original))
             (directory / 'packet.json').write_bytes(encoded(packet))
             value = {'job_id': 'job-0', 'summary': 'Synthetic complete response', 'findings': [],

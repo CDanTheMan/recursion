@@ -45,7 +45,7 @@ def main():
     if args.command == 'status':
         ledger = Ledger.readonly(root)
         try:
-            print(json.dumps(manifest(root, ledger), indent=2))
+            print(json.dumps(manifest(root, ledger, diagnostic=True), indent=2))
         finally:
             ledger.close()
         return 0
@@ -55,7 +55,7 @@ def main():
             if args.command == 'status':
                 print(json.dumps(manifest(root, ledger), indent=2))
             elif args.command == 'manifest':
-                put(args.output, encoded(manifest(root, ledger)))
+                put(args.output, encoded(manifest(root, ledger, diagnostic=True)))
             elif args.command == 'retry':
                 ledger.retry(args.job, args.reason)
             elif args.command == 'reconcile':

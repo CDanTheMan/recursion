@@ -114,14 +114,18 @@ New-Item D:/RecursionSwarm/run-001/STOP -ItemType File
 python -B -m tools.construction_swarm manifest --root D:/RecursionSwarm/run-001 --output D:/run-001-manifest.json
 ```
 
-Status uses a read-only SQLite snapshot while the dispatcher is active. STOP
+Status uses a read-only SQLite snapshot while the dispatcher is active. Status
+and manifest reports retain every job's status even when one filing is damaged;
+that entry has an `artifact_error`, and its content is withheld. Independent
+accept/reject still requires strict verification. STOP
 prevents admission and cancels active local clients. Cancellation does not prove
 that remote inference stopped; such attempts become `unknown`, retaining slots
 and pool ownership. Deadlines have the same semantics. After a controller crash,
 the next run marks recorded running jobs unknown and never auto-relaunches them.
 
 Jobs that cannot be admitted become `blocked`, with a reason in the manifest.
-Known failed fixture jobs and blocked jobs may use `retry --job ID --reason "specific repair"`
+Known failures before launch, failed fixture jobs and blocked jobs may use
+`retry --job ID --reason "specific repair"`
 within the original attempt/dispatch/deadline caps. Unknown provider completion
 is never automatically retried. `reconcile --job ID` accepts only retained positive
 evidence: normal zero-exit CLI completion without timeout/cancellation, observed
@@ -133,6 +137,10 @@ dependents whose prerequisites are now satisfied. Then `run` can continue queued
 work or release the pool if nothing remains. If that evidence is absent, preserve
 the hold and investigate actual provider/process state; there is no force-clear.
 Do not delete ledger rows, reset budgets, or clear a live lock.
+Failures before entering the transport record `launch_entered: false` and remain
+charged but do not retain a live slot. If writing the external receipt fails, the
+ledger retains the error and packet identity. Crashes and uncertain submissions
+still hold capacity; missing terminal evidence is not proof of non-execution.
 
 ## Proposed code and isolated tests
 
