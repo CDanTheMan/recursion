@@ -114,9 +114,11 @@ def audit_inventory(frozen, symbolic_limit=40512, expected_producer_limit=40512)
     of the 192 permutation-product candidates.  Explores no new S/adapter
     history; inherited planning fixture construction is accounted by the wrapper; rejects a changed whole-inventory digest and any provenance drift.
     """
+    require(type(symbolic_limit) is int and symbolic_limit == 40512,
+            'exact independent auditor symbolic reservation')
     require(type(frozen) is dict and frozenset(frozen) == FROZEN_KEYS,
             'exact frozen inventory provenance keys')
-    require(type(expected_producer_limit) is int and expected_producer_limit >=40512,
+    require(type(expected_producer_limit) is int and expected_producer_limit == 40512,
             'exact externally admitted producer reservation required')
     symbolic = Symbolic(symbolic_limit)
     before = d.digest(d.s.PROFILES)

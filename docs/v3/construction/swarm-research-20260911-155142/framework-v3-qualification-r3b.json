@@ -1,0 +1,30 @@
+{
+  "candidate": "dc6e8d02a2ae371f22e054ca4bea3e21163f5f85",
+  "change": "Use eight-record batches for v3 live and terminal coordinator synthesis so accumulated filings and progress remain inside the validated 96 KiB packet bound.",
+  "windows": {
+    "tests": 69,
+    "passed": 62,
+    "skipped": 7,
+    "result": "PASS"
+  },
+  "wsl": {
+    "tests": 69,
+    "passed": 68,
+    "skipped": 1,
+    "result": "PASS",
+    "receipt_sha256": "0780ea9994f76f3615e40193b7d63a3e4904727730972e2ed5f06b5c07d95898"
+  },
+  "frozen_runtime": {
+    "path": "/opt/recursion-foundry/source-v3-20260911-155142-r3b",
+    "files": 28,
+    "manifest_sha256": "b6dab5d5d9a9dae2db40e51df50440b1d73fc7a15410fbd8605268bd5a002ecd"
+  },
+  "superseded_evidence": {
+    "path": "framework-v3-qualification-r3",
+    "receipt_sha256": "9e7d5d2a825435fa056e5abd5da0b480cd48a74ae4eb6eb99dd3fb75d10c3b7d",
+    "reason": "Tests passed, but the native worktree HEAD still named 76fb85c while its framework files were the later uncommitted bytes; retained and excluded from freezing."
+  },
+  "scientific_research_executed": false,
+  "provider_dispatches_for_qualification": 0,
+  "scientific_acceptance": false
+}

@@ -1,0 +1,333 @@
+{
+  "states": {
+    "returned": 30,
+    "failed": 1,
+    "unknown": 1
+  },
+  "attempts": [
+    {
+      "job": "review-recovered-o01",
+      "state": "returned",
+      "receipt_sha256": "069a28bc7a6b6c79c6f8a5f8718f9fa1b0a671ac92d20998d2c84d6deb7883a7",
+      "transport_sha256": "7a4851c46a318efd9c65161178cefa3a6fd96177baff6b2b6fd4fe77300b3fb4",
+      "error": null,
+      "elapsed_seconds": 431.18404802400005,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o02",
+      "state": "returned",
+      "receipt_sha256": "4b4ee0ff8a80cc3175b5725d8c124f86cdc2294f41935dda2b741f381713b9d5",
+      "transport_sha256": "eaecf30890591362196f04515b3613fa13d97bfaa59280d25f16428701f29da3",
+      "error": null,
+      "elapsed_seconds": 613.693649701,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o03",
+      "state": "failed",
+      "receipt_sha256": "be9cf782f8e85f67b8d75ae89579e3b4722e1fb2beaa1b1d67806ad011c7ddc7",
+      "transport_sha256": "9e918816873439fab2a60dcfdefa964385ca754c2e26d989beaf2a9e2a5f840a",
+      "error": "provider completed; final filing invalid: invalid JSON: Expecting value: line 9 column 3 (char 3904)",
+      "elapsed_seconds": 707.9856387520001,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o04",
+      "state": "returned",
+      "receipt_sha256": "18cd5294c303f9e6b59e825cf3174af25c802e4e8f3d198614ae50cc9b9936de",
+      "transport_sha256": "c7708c587c7e63b130f67b8891c34932ff0af43327da5b80f74e743f685b6e34",
+      "error": null,
+      "elapsed_seconds": 513.084896195,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o05",
+      "state": "returned",
+      "receipt_sha256": "8832ee959b0f3f4bb536c44a46826e39f35dbe9df7ce457a2823b74b1281ac4a",
+      "transport_sha256": "d0ea737e133e8e5cfdcd08808fce51e7dbf7a959df9e63658893867068d58b6a",
+      "error": null,
+      "elapsed_seconds": 474.719912054,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o06",
+      "state": "returned",
+      "receipt_sha256": "f6df0f7707aecfa2b47f858a9fed8e8501753f8775e3fd911c5b62c36c3d9d22",
+      "transport_sha256": "c59e4bac1ad655daccb04b8f14336022916298a20d43feed888d9968a67a7347",
+      "error": null,
+      "elapsed_seconds": 935.6083496109999,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o07",
+      "state": "returned",
+      "receipt_sha256": "4c9b6c63fdf90258164405dc97672caddbc975c392256f405c134218b8370bb6",
+      "transport_sha256": "540056c92c0366940dfd43b41640c08f1ec52d4a3f904e91b6fbf070ac234c66",
+      "error": null,
+      "elapsed_seconds": 525.777915694,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o08",
+      "state": "returned",
+      "receipt_sha256": "34fde3c7aeb33fdb53f5676e219a2e90eabde8ecfc7c674a4464e034633aa29e",
+      "transport_sha256": "9f1c14f574e2eca17f30c922ae9463d9cc1b7e6736d04c67bfabb9113f30200f",
+      "error": null,
+      "elapsed_seconds": 508.74695070300004,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o09",
+      "state": "returned",
+      "receipt_sha256": "2231d3824e7367738a08e4112309b9757fb703aeab5d12e887946cb017936ab6",
+      "transport_sha256": "c735fa50773278c6f32aee854f187b625e4d37bb5adce02c4d6a282029178687",
+      "error": null,
+      "elapsed_seconds": 494.0049046649999,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o10",
+      "state": "returned",
+      "receipt_sha256": "86f7eba5fea55ab6e44f7fc311d5db074fad8667af598a64d08735b3e0045467",
+      "transport_sha256": "1c2e9f00c67c5c0f32c7a53716a459ac35d910c428b85b55bb8df17934828eae",
+      "error": null,
+      "elapsed_seconds": 422.85120323699994,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o11",
+      "state": "returned",
+      "receipt_sha256": "5b4b2b37c22e76639dd4585ef7becdbd827502bbcf45ed1389cfdad1f6c2875a",
+      "transport_sha256": "1d8bef12d4bdcf2d076ae2fc50e72f10e9b8249706028db49478ea28b3eb68d7",
+      "error": null,
+      "elapsed_seconds": 475.89197751200004,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o12",
+      "state": "returned",
+      "receipt_sha256": "c75f5ff910a6b79e6bac5a799493365e52edfefcac0ea155694ebd44d81b0031",
+      "transport_sha256": "e7d70ed1efc853de73917121dd8a3c47f868c0a7db5f2dd6ec90d55e64c1f10a",
+      "error": null,
+      "elapsed_seconds": 551.544444474,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o13",
+      "state": "returned",
+      "receipt_sha256": "00f0a84ce84d55a65898de3a01b726a984cd7c8afb08768a576ebfe8869fd627",
+      "transport_sha256": "789f403ec38b8c972a08145295a4c8d9dfaa302c3982dbbf96bc7f61c1d849bc",
+      "error": null,
+      "elapsed_seconds": 443.876408221,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o14",
+      "state": "returned",
+      "receipt_sha256": "13cb29c672c57046e1372be6c91959a618763d721971ccba006b1820f7f5ae5a",
+      "transport_sha256": "944ca33ced43e4a32e11b5347bd22453c475f9603f45f6b0f73bffab4fb14c8b",
+      "error": null,
+      "elapsed_seconds": 1033.60037337,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o15",
+      "state": "returned",
+      "receipt_sha256": "b9617f6aa57789625f6034ca8119ad4b59f79c2e861d0f68dd7ae3ec19c8ddc6",
+      "transport_sha256": "aff0dbf21230b29d24153084f0195d7f7a4ec4d53d8de83fcc1db0f1a3831e52",
+      "error": null,
+      "elapsed_seconds": 396.41580640899997,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o16",
+      "state": "returned",
+      "receipt_sha256": "ccc02aa6d49ae62eadd701638ca1e7a67b361e9fab40fa5cf11c5fc4dbdd660c",
+      "transport_sha256": "6517ccbc78860049995c7385f6343529b6ef70c0c0581fbefd2790208ab7764f",
+      "error": null,
+      "elapsed_seconds": 444.45513108299997,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o17",
+      "state": "returned",
+      "receipt_sha256": "3c4bc938472c5687e07af2317b32f2f89c5fdb068dc6bcd01c131031002ebbac",
+      "transport_sha256": "b9f3e71b60983786f5d78b9f922ed4b456d011029aad416dd59749210f1b5163",
+      "error": null,
+      "elapsed_seconds": 814.349689151,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o18",
+      "state": "returned",
+      "receipt_sha256": "d801f4edd0853a93ca890ca871a1cf836c32dd7dc008a9a86491c6719cd8c8b9",
+      "transport_sha256": "38dbb17111153e6dd0f8078eef438f1d6938fab7488424e35bf9a0176cb539f1",
+      "error": null,
+      "elapsed_seconds": 1069.2182823150001,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o19",
+      "state": "returned",
+      "receipt_sha256": "de95006027d76e2e2db81e12a46130a57cff7239e5ddbab4535081d91a81a3f9",
+      "transport_sha256": "a95b9673c98ae80240f2a94c6712d48b612799136fd4333fd09068130d73b7bd",
+      "error": null,
+      "elapsed_seconds": 348.5864971530001,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o20",
+      "state": "returned",
+      "receipt_sha256": "566187eb5574f3eb5b1853d437e4de56bd92d7e59b85e06c0a39c166c53d3966",
+      "transport_sha256": "0cbbdb8050c856b110e1d59775283589a6a77b2114ed110f9a20e920f872a00d",
+      "error": null,
+      "elapsed_seconds": 457.922861647,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o21",
+      "state": "returned",
+      "receipt_sha256": "d25dd1117356d660847014774ea0a2f02e9972cae2b9955f38e2e20278d8cc10",
+      "transport_sha256": "150ff640080547c21ab4829e4ddeb966bd5ab4a1fc83aaf724c0e73947aee34a",
+      "error": null,
+      "elapsed_seconds": 812.2096922069999,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o22",
+      "state": "returned",
+      "receipt_sha256": "17700fbeb0f579d8a6bc250c4e04786c04591a3e18785cea7b6ec38dc17f5df7",
+      "transport_sha256": "378a10364874ad56e7018a98d53fe29346ff2dd7ef14e94206f4c54560d04256",
+      "error": null,
+      "elapsed_seconds": 419.521561677,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o23",
+      "state": "returned",
+      "receipt_sha256": "28e0e8c7dd717213710b3b21dc75586b11f10c251b39a9a7b587ebb738ad7ea3",
+      "transport_sha256": "142523cbb813b2825f4e4ccd66b3522677b1b7b52816578b696887ba8558967a",
+      "error": null,
+      "elapsed_seconds": 536.475892591,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o24",
+      "state": "returned",
+      "receipt_sha256": "cddfbbf51babddf7c4b69e5ff43b07095bdf5b8e81ed606b27d51ca0e55cbcfa",
+      "transport_sha256": "7560b714b472f694d5b5c15f6c4c1e48de6644cbe91cb1eb0a5d42c070882c85",
+      "error": null,
+      "elapsed_seconds": 692.033402822,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o25",
+      "state": "returned",
+      "receipt_sha256": "dea3cca91b15e6273a3b1650998431ea4891ca0f28b38c0d3cd7a636ed61e167",
+      "transport_sha256": "76defe5b63ca62a96d51c957243a2d543f7ffeca6ffa901de1402ab6a232aca2",
+      "error": null,
+      "elapsed_seconds": 493.3998421450001,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o26",
+      "state": "returned",
+      "receipt_sha256": "2592a3575e8b08400113a8355fdc3d6e8222167b22a4eb3063cc78ac160c6d78",
+      "transport_sha256": "d9933c18481a225ce526eb76e595a2b2c321f005f304a27c1a00945b1463ad12",
+      "error": null,
+      "elapsed_seconds": 676.8932450770001,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o27",
+      "state": "returned",
+      "receipt_sha256": "cbaeb0d50fd6aa7f75b0b4c64adfc13a44ea4cff4334fc0291f6d853e220892b",
+      "transport_sha256": "9219567319f229f955c2c7c61d9464f75965f211b2f4f4304ca0db33267a14de",
+      "error": null,
+      "elapsed_seconds": 375.825724381,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o28",
+      "state": "unknown",
+      "receipt_sha256": "6effa5b9cb4de2da05a3335941f244d1f518214e3596c3a7133c920527545bb8",
+      "transport_sha256": "382e9ebd01c1f7dfa8e2db4179e2e7687f14c6f81f3efe52de862977ea5e60bf",
+      "error": "Refused: expected fields: job_id,summary,findings,evidence,dissent,limitations,files",
+      "elapsed_seconds": 532.6988152560001,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o29",
+      "state": "returned",
+      "receipt_sha256": "79ceb75f45d6e9ed3829f82a39ae7257ffec3993f4805e76e2ef5960da572f05",
+      "transport_sha256": "67a25f147ed3122de0bf5cd644b1d87499bde40aaeeac8e9a2ca396a40cc1904",
+      "error": null,
+      "elapsed_seconds": 632.7767073279999,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o30",
+      "state": "returned",
+      "receipt_sha256": "c3187e4531e0dcfb08c9792fe266b3a9b960c02c565a64d51c8be5663eec3a93",
+      "transport_sha256": "53e3d36d26a56bc91c4cf08ba72f4d757c3cb538bd85588b476178db7aac7651",
+      "error": null,
+      "elapsed_seconds": 745.790195924,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o31",
+      "state": "returned",
+      "receipt_sha256": "c50084e027ec346db400c148dd4ab8c0c5d677b9d28582c01734ae475881662c",
+      "transport_sha256": "31795436846219ce85c64fbfc200223cf7a0492ffdf362903b119a0ec66a6b3b",
+      "error": null,
+      "elapsed_seconds": 772.8801623029999,
+      "local_quiescent": true
+    },
+    {
+      "job": "review-recovered-o32",
+      "state": "returned",
+      "receipt_sha256": "6b8f4e1cbd1904223162367397d7a7500d490f89cefb450c6c65d3b3b61c11ae",
+      "transport_sha256": "a5865e15c49cbb4868474b57798bde17d5bf9ce3073f37523badb2b2d798007a",
+      "error": null,
+      "elapsed_seconds": 656.578726436,
+      "local_quiescent": true
+    }
+  ],
+  "held_before": 130,
+  "held_after": 131,
+  "released_unknowns": 0,
+  "rate_limit_errors": 0,
+  "elapsed_seconds": {
+    "min": 348.5864971530001,
+    "median": 529.238365475,
+    "max": 1069.2182823150001
+  },
+  "aggregate_peak_bytes": 1983156224,
+  "aggregate_oom_events": 0,
+  "aggregate_cgroup_removed": true,
+  "coordinators": [
+    {
+      "name": "coordinator-cursor-0",
+      "receipt_sha256": "3342bd82f2b5dde879cd98bf756f33c99f316c939ed2b1f5b35d360c151925e3",
+      "synthesis_sha256": "648f0a3e06c955183d87c3cf34bf2c286852eeefe0bd0ff7945d364241abaf0f"
+    },
+    {
+      "name": "coordinator-cursor-1",
+      "receipt_sha256": "a3eadcd3262fa4faec52c53673384e10bf109c03d49672db6fa38a7f80a1af9e",
+      "synthesis_sha256": "5c2e7c8ebbfb9351098647e8fae7c44d714f97aa1b4e098bddc1d7a14b5c0459"
+    },
+    {
+      "name": "coordinator-cursor-2",
+      "receipt_sha256": "52d9cebcf241d03f85d1dbc46cc1ba2f86d17cc007bfe62b671d190a7d3eeeb1",
+      "synthesis_sha256": "3d1fc26daac43175049c24c5a2920af1e637818f2b514ecc0d2fad62896ea331"
+    },
+    {
+      "name": "coordinator-cursor-3",
+      "receipt_sha256": "00e0450d0299457cac5facddd42252202e612893de78499b84d483b439f25147",
+      "synthesis_sha256": "5d4fb866afa0867cd6932d47e4aed7291b05e4372c0ccef269f5339d30f7eda0"
+    }
+  ],
+  "scientific_units": 0,
+  "original_research_execution": false
+}

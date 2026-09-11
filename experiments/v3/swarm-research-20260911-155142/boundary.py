@@ -14,6 +14,8 @@ import sys
 from math import factorial
 from pathlib import Path
 
+from research_entry import strict_json
+
 ROOT = Path(__file__).resolve().parents[3]
 CHECK_DIR = 'experiments/v3/eight-hour-research-20260910-01a08a22'
 sys.path.insert(0, str(ROOT / CHECK_DIR))
@@ -44,6 +46,11 @@ CENSUS_FIELDS = ('decision', 'q_invoked', 'responses_related', 'strict_related',
                  'source_generation', 'q_core_generation', 'journal_generation',
                  'source_core_generation_equal', 'source_journal_generation_equal',
                  'exact_common_field_differences')
+FROZEN_KEYS = frozenset(('packet', 'domain', 'profile_sha256', 'whole_inventory_sha256',
+                         'orders_per_unit', 'subclass_counts', 'selected',
+                         'symbolic_units', 'symbolic_limit', 'symbolic_unit',
+                         'inventory_hash_encoding', 'complete_original_profile_execution'))
+ITEM_KEYS = frozenset(('global_index', 'subclass', 'schedule'))
 
 
 class Symbolic:
@@ -177,15 +184,28 @@ def inventory(profile, symbolic_limit):
 
 def validate_frozen(frozen, profile, symbolic_limit):
     symbolic = Symbolic(symbolic_limit)
+    require(type(frozen) is dict and frozenset(frozen) == FROZEN_KEYS,
+            'exact frozen inventory keys')
     require(frozen['packet'] == PACKET and frozen['domain'] == DOMAIN and
             frozen['profile_sha256'] == d.digest(profile), 'frozen inventory profile identity')
     require(frozen['orders_per_unit'] == 192 and frozen['subclass_counts'] == SUBCLASS_ORDERS,
             'complete declared inventory counts')
-    require(len(frozen['selected']) == 192 and frozen['symbolic_units'] == WHOLE + 192,
+    require(type(frozen['selected']) is list and len(frozen['selected']) == 192
+            and type(frozen['symbolic_units']) is int and frozen['symbolic_units'] == WHOLE + 192
+            and type(frozen['symbolic_limit']) is int and frozen['symbolic_limit'] == WHOLE + 192
+            and frozen['symbolic_unit'] == 'complete-schedule-candidate'
+            and frozen['inventory_hash_encoding'] ==
+                'sha256 newline-delimited compact JSON original schedules'
+            and frozen['complete_original_profile_execution'] is False,
             'exact prevalidated inventory shape and generator work')
     selected, seen, counts = [], set(), {name: 0 for name in PATTERNS}
     for item in frozen['selected']:
         symbolic.take(1)
+        require(type(item) is dict and frozenset(item) == ITEM_KEYS
+                and type(item['schedule']) is list
+                and len(item['schedule']) == DEPTH
+                and all(type(action) is str for action in item['schedule']),
+                'exact typed frozen selected member')
         schedule = tuple(item['schedule'])
         c.validate_inventory(profile, (schedule,), 1)
         index = global_index(profile, schedule)
@@ -276,7 +296,7 @@ def attestation_observation(case, label):
                     actual['adapter_observation']['decision'] == predicted and not actual['q_invoked'])
 
 
-def explore(frozen, indices, state_limit, symbolic_limit, stdout_limit):
+def explore(frozen, indices, state_limit, symbolic_limit, stdout_limit, inventory_input_sha256):
     """One exact shard of the 384 frozen histories under a checked c.Counter."""
     profile = c.domain({'domain': DOMAIN})
     selected, symbolic_units = validate_frozen(frozen, profile, symbolic_limit)
@@ -314,6 +334,7 @@ def explore(frozen, indices, state_limit, symbolic_limit, stdout_limit):
                   state_visits=counter.visits, state_limit=state_limit,
                   profile_sha256=frozen['profile_sha256'],
                   whole_inventory_sha256=frozen['whole_inventory_sha256'],
+                  inventory_input_sha256=inventory_input_sha256,
                   subclass_counts=frozen['subclass_counts'], cases=cases, summaries=summaries,
                   prefix_censuses=censuses, prefix_census_totals=tally(censuses),
                   attestation_observations=observations,
@@ -345,12 +366,16 @@ def main(argv=None):
         require(args.inventory is not None and args.indices and args.state_limit is not None,
                 'frozen retained inventory, exact identities and state reservation')
         require(args.inventory.stat().st_size <= 1048576, 'bounded frozen inventory bytes')
-        frozen = json.loads(args.inventory.read_text())
+        require(args.symbolic_limit == 192, 'exact explore inventory-validation reservation')
+        inventory_raw = args.inventory.read_bytes()
+        frozen = strict_json(inventory_raw)
         indices = [int(x) for x in args.indices.split(',')]
-        print(explore(frozen, indices, args.state_limit, args.symbolic_limit, args.stdout_limit))
+        print(explore(frozen, indices, args.state_limit, args.symbolic_limit, args.stdout_limit,
+                      hashlib.sha256(inventory_raw).hexdigest()))
     else:
         require(args.inventory is None and args.indices is None and args.state_limit is None,
                 'symbolic inventory mode executes no model histories')
+        require(args.symbolic_limit == WHOLE + 192, 'exact producer symbolic reservation')
         payload = json.dumps(inventory(c.domain({'domain': DOMAIN}), args.symbolic_limit),
                              sort_keys=True, separators=(',', ':'))
         require(len(payload.encode()) <= args.stdout_limit, 'bounded inventory stdout')
