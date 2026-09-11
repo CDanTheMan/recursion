@@ -1,0 +1,29 @@
+[
+  {
+    "id": "audit-reservation-contract",
+    "domain": "execution-contracts",
+    "kind": "research",
+    "brief": "Find concrete missing physical probes for route/process admission in the supplied M1B contract. Separate inert specification from observed implementation. Give at most five discriminating experiments, each with a failure oracle. Do not claim to execute them or change semantics.",
+    "inputs": ["docs/v3/M1B-EXECUTION-CONTRACTS.md", "docs/v3/TERMINAL-RUNTIME.md"],
+    "depends_on": [],
+    "allowed_paths": []
+  },
+  {
+    "id": "challenge-reservation-audit",
+    "domain": "independent-review",
+    "kind": "review",
+    "brief": "Independently assess the original source and dependency filing. Identify unsupported claims, duplicated completed probes, missing adverse cases, and limits. Preserve disagreement and propose a prioritized next bounded experiment without claiming a gate pass.",
+    "inputs": ["docs/v3/M1B-EXECUTION-CONTRACTS.md", "docs/v3/TERMINAL-RUNTIME.md"],
+    "depends_on": ["audit-reservation-contract"],
+    "allowed_paths": []
+  },
+  {
+    "id": "research-handoff",
+    "domain": "synthesis",
+    "kind": "synthesis",
+    "brief": "Synthesize the frozen source and both filings into a concise next-packet recommendation. Cite dependency IDs, preserve dissent, identify the exact gate and unresolved assumptions. Do not infer implementation, proof completion, or permission from agreement.",
+    "inputs": ["docs/v3/M1B-EXECUTION-CONTRACTS.md"],
+    "depends_on": ["audit-reservation-contract", "challenge-reservation-audit"],
+    "allowed_paths": []
+  }
+]
