@@ -139,6 +139,16 @@ class BrokerTests(unittest.TestCase):
             with self.assertRaises(Refused):
                 parsed_json(text)
 
+    def test_dependent_verifier_sees_proposed_bytes_and_conflicts_block(self):
+        from .foundry_client import workspace_files
+        packet = {'source_inputs': {'tools/code.py': {'content': 'old'}}, 'dependencies': {
+            'developer': {'filing': {'files': [{'path': 'tools/code.py', 'content': 'new'},
+                                             {'path': 'tools/test_new.py', 'content': 'gate'}]}}}}
+        self.assertEqual(workspace_files(packet), {'tools/code.py': 'new', 'tools/test_new.py': 'gate'})
+        packet['dependencies']['other'] = {'filing': {'files': [{'path': 'tools/code.py', 'content': 'conflicting'}]}}
+        with self.assertRaisesRegex(Refused, 'conflicting'):
+            workspace_files(packet)
+
 
 LINUX_SCOPE = sys.platform == 'linux' and Path('/sys/fs/cgroup/cgroup.subtree_control').exists()
 

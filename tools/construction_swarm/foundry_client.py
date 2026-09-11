@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .contracts import Refused, digest, encoded, require, strict_json
+from .contracts import Refused, digest, encoded, path, require, strict_json
 from .foundry_output import CompletedFailure, parsed_json
 from .foundry_tools import TOOL_NAMES, Broker, serve_connection
 from .process import execute
@@ -22,6 +22,21 @@ NATIVE_DENY = ['read', 'write', 'edit', 'apply_patch', 'notebook_read', 'noteboo
                'webfetch', 'fetch', 'web_search', 'skill', 'request_scope',
                'run_subagent', 'read_subagent', 'mcp_read_resource', 'Read(/**)',
                'Write(/**)', 'Exec(*)', 'Fetch(*)']
+
+
+def workspace_files(packet):
+    """Declared dependencies provide testable proposals, never authority/config."""
+    files = {name: item['content'] for name, item in packet['source_inputs'].items()}
+    proposals = {}
+    for dependency in packet['dependencies'].values():
+        for item in dependency['filing']['files']:
+            name = path(item['path'])
+            require(name.startswith(('tools/', 'docs/', 'experiments/')), 'dependency proposal outside construction scope')
+            require(name not in proposals or proposals[name] == item['content'], 'conflicting dependency proposals require review')
+            proposals[name] = item['content']
+    files.update(proposals)
+    require(len(encoded(files)) <= 2 * 1024**2, 'dependency workspace exceeds cap')
+    return files
 
 
 def client_argv(runtime, credential, output, config, argv, *, provider='devin', socket_path=None):
@@ -133,7 +148,7 @@ def devin_tools(directory, route, credential, packet, sources, scope_parent, sec
               'Use the exact job.brief as your task.\n' + encoded(packet).decode())
     put(config / 'prompt.md', prompt.encode())
     finished = threading.Event()
-    broker = Broker(directory / 'tools', {p: v['content'] for p, v in packet['source_inputs'].items()},
+    broker = Broker(directory / 'tools', workspace_files(packet),
                     job['allowed_paths'], sources, stop=lambda: stop() or finished.is_set())
     socket_path = Path('/run') / ('recursion-foundry-' + uuid.uuid4().hex + '.sock')
     errors = []

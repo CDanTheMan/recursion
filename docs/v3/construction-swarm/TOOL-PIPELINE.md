@@ -40,6 +40,11 @@ mounts. The tool response records actual exit, output and descendant cleanup.
 Large escaped output is retained as an artifact with a digest and an explicit
 output-limit response; it does not silently become a successful test.
 
+A dependent verifier receives the proposed file bytes from its explicitly named
+dependencies overlaid on its pinned sources. Conflicting proposals for the same
+path block dispatch before inference. This lets a separate worker test the actual
+proposal while preserving both the original source and filing references.
+
 Research uses pinned repository inputs and a reviewed public-source corpus.
 `fetch_source` retrieves an exact URL from that frozen corpus, including its
 digest and retrieval time. It does not provide unrestricted live web browsing.

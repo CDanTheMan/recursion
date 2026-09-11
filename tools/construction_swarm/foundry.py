@@ -24,7 +24,7 @@ from .contracts import (
     timestamp,
     validate_plan,
 )
-from .foundry_client import devin_tools, process_scope
+from .foundry_client import devin_tools, process_scope, workspace_files
 from .foundry_output import CompletedFailure
 from .ledger import Ledger, controller_lock
 from .runner import git, packet_for, put, verified_filing
@@ -126,6 +126,7 @@ def run_one(root, plan, job, number, packet, scope_parent, aborted=lambda: False
         executable = Path(plan['route']['executable'])
         require(digest(executable.read_bytes()) == plan['route']['sha256'], 'executable changed')
         require(Path(plan['credentials']).is_file(), 'credential mount missing')
+        workspace_files(packet)  # deterministic dependency conflicts fail before provider launch
         until = time.monotonic() + min(plan['limits']['timeout_seconds'], timestamp(plan['deadline_utc']) - time.time())
         stop = lambda: aborted() or (root / 'STOP').exists() or time.monotonic() >= until or free_memory() < 4 * 1024**3
         require(not stop(), 'deadline/STOP/resources before launch')
