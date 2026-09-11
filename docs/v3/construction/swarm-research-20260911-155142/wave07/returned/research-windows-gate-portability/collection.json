@@ -1,0 +1,15 @@
+{
+  "job": "research-windows-gate-portability",
+  "filing_sha256": "10e431c4b4eda380c01e1915f4d0adcc381b91802f1422f4d0b8bdca64eb0772",
+  "attempt_receipt_sha256": "fbcd3cc1fac6792d90336a3899a26b8acdda07cec29a5ea122541f32ddc9a8d7",
+  "artifact_verification": "frozen r3b foundry.report checked ledger, transport, provider export, and every tool request/receipt binding",
+  "files": [
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave07/proposals/windows-gate-portability.json",
+      "sha256": "c29de86a9ca531a45e3d5da97609624532aca3ab7b604ff08a52707e4d024dfe",
+      "bytes": 19506
+    }
+  ],
+  "integrated": false,
+  "executed": false
+}

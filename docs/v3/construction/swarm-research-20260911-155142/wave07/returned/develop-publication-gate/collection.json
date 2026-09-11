@@ -1,0 +1,15 @@
+{
+  "job": "develop-publication-gate",
+  "filing_sha256": "200501d0cbcc7d1b4b4ad0db96c1fd0b4deda233df320b7458f72caed1836ae3",
+  "attempt_receipt_sha256": "14e11bbd535d7d892b79a94b77aaabda55063f89838800c57a233c53c03259fc",
+  "artifact_verification": "frozen r3b foundry.report checked ledger, transport, provider export, and every tool request/receipt binding",
+  "files": [
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave07/proposals/publication-gate-automation.json",
+      "sha256": "bcec1c11b2ff2829e06def0631a423e6e3d45ea634f8c778bf64cafb083f5ebb",
+      "bytes": 27832
+    }
+  ],
+  "integrated": false,
+  "executed": false
+}
