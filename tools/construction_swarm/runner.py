@@ -14,6 +14,7 @@ from .contracts import (Refused, digest, encoded, now, require, strict_json,
                         timestamp, validate_filing, validate_plan)
 from .ledger import Ledger, controller_lock
 from .process import execute
+from .capacity import free_memory, slot_ceiling, admit_host
 
 REVIEW_CONFIG = {
     'permissions': {'deny': ['*', 'read', 'edit', 'write', 'grep', 'glob', 'exec',
@@ -237,6 +238,11 @@ def run(root):
         try:
             plan = validate_plan(ledger.plan)
             ledger.recover()
+            host_slots = (slot_ceiling(free_memory()) if plan['route']['backend'] == 'devin'
+                          else plan['limits']['model_slots'])
+            with ledger.db:
+                ledger.event('host-admission', {'slot_ceiling': host_slots,
+                                              'model_slots_requested': plan['limits']['model_slots']})
             with ThreadPoolExecutor(max_workers=plan['limits']['model_slots']) as executor:
                 pending = {}
                 while True:
@@ -248,6 +254,14 @@ def run(root):
                             break
                         if not all(rows[d]['state'] in {'returned', 'accepted'} for d in job['depends_on']):
                             continue
+                        if plan['route']['backend'] == 'devin':
+                            active = sum(r['state'] in {'running', 'unknown'} for r in ledger.rows())
+                            if active >= host_slots:
+                                continue
+                            try:
+                                admit_host(root)
+                            except Refused:
+                                continue
                         packet = packet_for(root, plan, job, rows)
                         try:
                             number = ledger.reserve(job['id'])

@@ -86,8 +86,9 @@ Live runs serialize through a per-Windows-user provider-pool lock in
 `%LOCALAPPDATA%/recursion-construction/pool`. An unresolved campaign retains pool
 ownership. This coordinates this tool's live runs only, not other applications,
 accounts or machines. `model_slots` is a ceiling, never a promise of host capacity.
-Use measured RAM/CPU headroom, reserving for other workloads before raising it.
-Model processes have hard per-job limits; the first release does not implement a
+The dispatcher limits live slots by observed initial free RAM minus a 3 GiB reserve,
+charging 2 GiB per admitted slot; it rechecks at least 5 GiB free RAM and 1 GiB
+free evidence disk before each launch. This is conservative admission, not a
 cross-application host governor. Start with two, measure, then increase deliberately.
 
 `max_dispatches` is cumulative across attempts; failures are never refunded.

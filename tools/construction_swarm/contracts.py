@@ -89,7 +89,7 @@ def now():
 def validate_plan(plan):
     keys(plan, ["version", "run_id", "parent_goal", "authorization", "source_commit",
                 "deadline_utc", "limits", "route", "jobs"])
-    require(plan["version"] == 1, "unsupported plan version")
+    require(type(plan["version"]) is int and plan["version"] == 1, "unsupported plan version")
     identifier(plan["run_id"])
     identifier(plan["parent_goal"])
     require(type(plan["authorization"]) is str and 10 <= len(plan["authorization"]) <= 4000,

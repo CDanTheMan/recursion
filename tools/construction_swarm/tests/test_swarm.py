@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tools.construction_swarm.contracts import (Refused, digest, encoded, path,
                                               strict_json, validate_filing, validate_plan)
@@ -13,6 +14,7 @@ from tools.construction_swarm.ledger import Ledger, controller_lock
 from tools.construction_swarm.process import execute
 from tools.construction_swarm.runner import initialize, manifest, packet_for, run
 from tools.construction_swarm.sandbox import isolated_execute
+from tools.construction_swarm.capacity import slot_ceiling, JOB_BYTES, RESERVE_BYTES
 
 
 def plan(count=2):
@@ -31,6 +33,9 @@ def plan(count=2):
 
 
 class Contracts(unittest.TestCase):
+    def test_memory_reservations(self):
+        self.assertEqual(slot_ceiling(RESERVE_BYTES - 1), 0)
+        self.assertEqual(slot_ceiling(RESERVE_BYTES + JOB_BYTES * 3), 3)
     def test_duplicate_and_nonfinite_json(self):
         for value in [b'{"x":1,"x":2}', b'{"x":NaN}', b'{"x":Infinity}']:
             with self.assertRaises(Refused):
@@ -139,6 +144,28 @@ class DurableQueue(unittest.TestCase):
         with self.assertRaises(Refused):
             self.ledger.reserve('job-0')
 
+    def test_cumulative_budget_not_refunded(self):
+        # A fresh independent fixture uses a two-dispatch total ceiling.
+        other = self.root / 'other'
+        other.mkdir()
+        ledger = Ledger(other)
+        try:
+            p = plan(3)
+            p['limits']['max_dispatches'] = 2
+            ledger.initialize(p)
+            for job in ['job-0', 'job-1']:
+                ledger.reserve(job)
+                ledger.finish(job, 1, 'failed', {'known_local_failure': True})
+            with self.assertRaises(Refused):
+                ledger.reserve('job-2')
+        finally:
+            ledger.close()
+
+    def test_expired_deadline(self):
+        with patch('tools.construction_swarm.ledger.time.time', return_value=10**12):
+            with self.assertRaises(Refused):
+                self.ledger.reserve('job-0')
+
     def test_status_reads_during_controller_ownership(self):
         with controller_lock(self.root):
             reader = Ledger.readonly(self.root)
@@ -190,6 +217,15 @@ class Integration(unittest.TestCase):
         try:
             output = manifest(root, ledger)
             self.assertFalse(output['empirical_pass'])
+            active = maximum = 0
+            for row in ledger.db.execute('SELECT event FROM events ORDER BY seq'):
+                if row[0] == 'reserved':
+                    active += 1
+                    maximum = max(maximum, active)
+                elif row[0] == 'finished':
+                    active -= 1
+                self.assertLessEqual(active, 50)
+            self.assertEqual(maximum, 50)
         finally:
             ledger.close()
 

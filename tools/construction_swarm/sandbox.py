@@ -130,6 +130,8 @@ def test_staged(root, staging_manifest, entry):
             from .contracts import timestamp
             seconds = min(plan['limits']['timeout_seconds'], timestamp(plan['deadline_utc']) - time.time())
             require(seconds >= 1, 'deadline reached')
+            from .capacity import admit_host
+            admit_host(root)
             result = isolated_execute(source, entry, seconds, plan['limits']['output_bytes'],
                                       stop=lambda: (root / 'STOP').exists())
             receipt_dir = root / 'tests' / uuid.uuid4().hex
