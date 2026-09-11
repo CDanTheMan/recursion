@@ -115,9 +115,10 @@ def synthesize(root, provider, runtime, credential, batch_index=0):
             with process_scope('/sys/fs/cgroup', 'recursion-foundry-coordinator-' + provider) as (group, observation):
                 result.update(execute_scoped(argv, directory, group, 180, lambda: (root / 'STOP').exists()))
             result['scope'] = observation
+            result['local_quiescent'] = observation['quiescent'] and result['direct_process_exited']
             for name in ['stdout', 'stderr']:
                 put(directory / (name + '.txt'), result.pop(name))
-            require(result['exit_code'] == 0 and not result['reason'] and observation['quiescent'], 'coordinator did not complete normally')
+            require(result['exit_code'] == 0 and not result['reason'] and result['local_quiescent'], 'coordinator did not complete normally')
             if provider == 'cursor':
                 events = [strict_json(line) for line in (directory / 'stdout.txt').read_bytes().splitlines() if line.strip()]
                 require(any(e.get('type') == 'system' and e.get('subtype') == 'init' and
