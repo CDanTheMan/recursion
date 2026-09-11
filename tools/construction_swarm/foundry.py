@@ -235,6 +235,19 @@ def run(root, host_claim):
             ledger.close()
 
 
+def verify_attempt_artifacts(attempt, receipt):
+    """Check transport and tool evidence before presenting a filing for review."""
+    for name, field in [('packet.json', 'packet_sha256'), ('transport.json', 'transport_sha256'),
+                        ('client-output/export.json', 'export_sha256')]:
+        require(file_digest(attempt / name) == receipt[field], f'{name} changed')
+    for tool in receipt['tool_receipts']:
+        directory = attempt / 'tools' / str(tool['number'])
+        data = (directory / 'receipt.json').read_bytes()
+        require(digest(data) == tool['sha256'], 'tool receipt changed')
+        retained = strict_json(data)
+        require(file_digest(directory / 'request.json') == retained['request_sha256'], 'tool request changed')
+
+
 def report(root):
     root = Path(root).resolve(strict=True)
     ledger = Ledger.readonly(root)
@@ -252,9 +265,8 @@ def report(root):
                     retained = ledger.db.execute('SELECT receipt FROM attempts WHERE job=? AND number=?',
                                                  (row['id'], row['attempts'])).fetchone()[0]
                     require(encoded(receipt) == encoded(strict_json(retained)), 'attempt receipt differs from ledger')
+                    verify_attempt_artifacts(attempt, receipt)
                     item['tools'] = receipt['tool_receipts']
-                    for tool in item['tools']:
-                        require(digest((attempt / 'tools' / str(tool['number']) / 'receipt.json').read_bytes()) == tool['sha256'], 'tool receipt changed')
                 except (Refused, OSError, KeyError) as exc:
                     item['artifact_error'] = str(exc)
             result['jobs'].append(item)

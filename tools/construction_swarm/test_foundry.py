@@ -1,4 +1,5 @@
 """Adversarial and real Linux isolation gates for the native construction route."""
+import contextlib
 import socket
 import sys
 import tempfile
@@ -52,6 +53,40 @@ class BrokerTests(unittest.TestCase):
             result = broker.call('run_command', {'argv': ['true'], 'seconds': 1})
         self.assertFalse(result['ok'])
         self.assertTrue(broker.uncertain)
+        with self.assertRaisesRegex(Refused, 'uncertain'):
+            broker.call('list_files', {})
+
+    def test_execute_exception_retains_uncertain_scope_cleanup_receipt(self):
+        broker = self.broker()
+        cleanup_ran = []
+
+        @contextlib.contextmanager
+        def uncertain_scope(stop, seconds):
+            observation = {'path': '/synthetic/cgroup', 'quiescent': False,
+                           'cleanup_error': None}
+            try:
+                yield Path(observation['path']), observation
+            finally:
+                observation['cleanup_error'] = 'injected cgroup kill failure'
+                cleanup_ran.append(True)
+
+        with patch('tools.construction_swarm.foundry_tools.tool_scope', uncertain_scope), \
+                patch('tools.construction_swarm.foundry_tools.bwrap_argv', return_value=['/synthetic/bwrap']), \
+                patch('tools.construction_swarm.foundry_tools.execute', side_effect=OSError('injected transport failure')):
+            result = broker.call('run_command', {'argv': ['true'], 'seconds': 1})
+
+        self.assertEqual(cleanup_ran, [True])
+        self.assertFalse(result['ok'])
+        self.assertTrue(result['uncertain'])
+        self.assertTrue(broker.uncertain)
+        observation = result['observation']
+        self.assertEqual(observation['reason'], 'transport-exception')
+        self.assertIn('injected transport failure', observation['error'])
+        self.assertEqual(observation['isolation']['cleanup_error'], 'injected cgroup kill failure')
+        self.assertFalse(observation['local_quiescent'])
+        retained = strict_json((broker.root / '1/receipt.json').read_bytes())
+        self.assertEqual(retained['result']['observation'], observation)
+        self.assertEqual(digest((broker.root / '1/receipt.json').read_bytes()), broker.receipts[0]['sha256'])
         with self.assertRaisesRegex(Refused, 'uncertain'):
             broker.call('list_files', {})
 
@@ -138,6 +173,42 @@ class BrokerTests(unittest.TestCase):
                      'Text with no filing', '```json\n{"a":NaN}\n```']:
             with self.assertRaises(Refused):
                 parsed_json(text)
+
+    def test_malformed_filing_cannot_bypass_execution_qualification(self):
+        import copy
+
+        from .foundry_client import collect_filing
+        from .foundry_output import CompletedFailure
+
+        broker = self.broker()
+        broker.call('list_files', {})
+        job = {'id': 'worker', 'allowed_paths': []}
+        transport = {'exit_code': 0, 'reason': None, 'local_quiescent': True, 'broker_errors': []}
+        export = {'agent': {'model_name': 'SWE-2 Max'}, 'steps': [{
+            'source': 'agent', 'model_name': 'swe-2-max', 'message': 'Malformed final filing',
+            'tool_calls': [{'function_name': 'mcp_call_tool', 'arguments': {
+                'server_name': 'foundry', 'tool_name': 'list_files', 'arguments': {}}}]}]}
+
+        with self.assertRaises(CompletedFailure):
+            collect_filing(export, broker, job, [], transport)
+
+        for name, mutate, expected_error in [
+            ('changed-model', lambda e: e['steps'][0].update(model_name='other-model'), 'model changed'),
+            ('native-tool', lambda e: e['steps'][0]['tool_calls'].append({
+                'function_name': 'exec', 'arguments': {'command': 'true'}}), 'native tool'),
+            ('unreceipted-tool', lambda e: e['steps'][0]['tool_calls'].append({
+                'function_name': 'mcp_call_tool', 'arguments': {
+                    'server_name': 'foundry', 'tool_name': 'search', 'arguments': {'text': 'x'}}}),
+             'differ from durable broker receipts'),
+        ]:
+            with self.subTest(name=name):
+                invalid = copy.deepcopy(export)
+                mutate(invalid)
+                with self.assertRaisesRegex(Refused, expected_error):
+                    collect_filing(invalid, broker, job, [], transport)
+
+        with self.assertRaisesRegex(Refused, 'did not complete normally'):
+            collect_filing(export, broker, job, [], {**transport, 'local_quiescent': False})
 
     def test_dependent_verifier_sees_proposed_bytes_and_conflicts_block(self):
         from .foundry_client import workspace_files

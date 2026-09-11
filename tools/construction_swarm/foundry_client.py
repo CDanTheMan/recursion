@@ -201,16 +201,19 @@ def devin_tools(directory, route, credential, packet, sources, scope_parent, sec
     export_path = output / 'export.json'
     require(export_path.stat().st_size <= 32 * 1024**2, 'provider export too large')
     export = strict_json(export_path.read_bytes())
+    value = collect_filing(export, broker, job, packet['citation_ids'], result)
+    result.update(export_sha256=digest(export_path.read_bytes()), usage=export.get('final_metrics'),
+                  tools_used=[r['name'] for r in broker.receipts])
+    return value, result
+
+
+def collect_filing(export, broker, job, citation_ids, transport):
+    """Qualify execution evidence before malformed output can release a hold."""
+    require(not broker.uncertain and not transport['broker_errors'], 'broker completion uncertain')
+    require(transport['exit_code'] == 0 and not transport['reason'] and transport['local_quiescent'],
+            'native Linux client did not complete normally')
     require(export.get('agent', {}).get('model_name') == 'SWE-2 Max', 'SWE-2 Max identity not confirmed')
     steps = export.get('steps', [])
-    answers = [s['message'] for s in steps if s.get('source') == 'agent' and s.get('message')]
-    require(answers, 'missing final worker answer')
-    try:
-        value = parsed_json(answers[-1])
-    except (Refused, ValueError) as exc:
-        # A positive normal native CLI exit plus exact-model export and broker
-        # quiescence settles transport; malformed task output is a failed job.
-        raise CompletedFailure(f'provider completed; final filing invalid: {exc}') from exc
     calls = []
     for step in steps:
         if step.get('source') == 'agent':
@@ -229,11 +232,17 @@ def devin_tools(directory, route, credential, packet, sources, scope_parent, sec
         request = strict_json((broker.root / str(row['number']) / 'request.json').read_bytes())
         observed.append(encoded({'name': request['name'], 'arguments': request['arguments']}))
     require(sorted(calls) == sorted(observed), 'provider tool calls differ from durable broker receipts')
+    answers = [s['message'] for s in steps if s.get('source') == 'agent' and s.get('message')]
+    require(answers, 'missing final worker answer')
+    try:
+        value = parsed_json(answers[-1])
+    except (Refused, ValueError) as exc:
+        # Only qualified transport, model identity and matched tool receipts
+        # permit settling malformed task output as a known completed failure.
+        raise CompletedFailure(f'provider completed; final filing invalid: {exc}') from exc
     require(value.get('files') == [], 'proposals must come from independently collected broker writes')
     value['files'] = broker.proposed_files()
     refs = [f"tool:{r['number']}@{r['sha256']}" for r in broker.receipts]
     from .contracts import validate_filing
-    validate_filing(value, job, [*packet['citation_ids'], *refs])
-    result.update(export_sha256=digest(export_path.read_bytes()), usage=export.get('final_metrics'),
-                  tools_used=[r['name'] for r in broker.receipts])
-    return value, result
+    validate_filing(value, job, [*citation_ids, *refs])
+    return value
