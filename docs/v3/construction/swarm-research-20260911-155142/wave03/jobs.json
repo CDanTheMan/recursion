@@ -3344,5 +3344,51 @@
       "o32-merge-soundness-counter"
     ],
     "allowed_paths": []
+  },
+  {
+    "id": "native-envelope-develop",
+    "domain": "native-local-admission",
+    "kind": "develop",
+    "brief": "Parent goal-recursion-v2-execution-fabric. New additive campaign-local code proposal; no run_command/imports/model execution/nested delegation, no auth/config/old source changes. Use read_file/search/list_files/write_file only. <=650finalwords with proper filing arrays. Write experiments/v3/swarm-research-20260911-155142/native_local.py. Design a narrow controller for NEW local research commands using unchanged trusted tools.construction_swarm.foundry_tools.run_command (60seconds,1MiB stdout,2GiB,64MiB scratch,4shared slots), not a heavy adapter and not an87gate replacement. Require explicit exact committed command manifest with source SHA256/input Git blob closure, candidate/parent/allowed roots/clean workspace, immutable15:51:42-23:51:42Zclock, PAUSE checks, fresh<=900s quota, enough policy reserve, two bound independent Astra prospective review records. Append/fsync nonrefundable hash-linked reservation under a controller lock before imports of any research code or run_command, starting3823610. Commands may be inventory(symbolic), explore(model visits), or retained audit with separate declared accounting; inputs include exact serialized dependencies. Require finite exact argv, max60s, and budget including outstanding full-gate/new-check reservations. Use host Python only for trusted controller/meta work; all supplied code goes through run_command in native WSL. Persist full raw stdout/stderr, admission/execution JSON, hashes/exit/resource/cleanup and verify total attempt<=256MiB including final receipt; retain failures and unknowns. No retries/refunds/auto-launch; fail closed on uncertain cleanup. Output small CLI receipt pointer. Make pure validation/accounting functions testable without executing models. No automatic provider launch. Keep <=300lines if practical. Root will review before any execution.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/charter.json",
+      "docs/v3/construction/swarm-research-20260911-155142/policy-revision-02.json",
+      "docs/v3/construction/swarm-research-20260911-155142/validation-contract.json",
+      "docs/v3/construction/swarm-research-20260911-155142/boundary-01/spec.json",
+      "tools/construction_swarm/foundry_tools.py",
+      "tools/construction_swarm/contracts.py",
+      "tools/construction_swarm/ledger.py",
+      "tools/construction_swarm/capacity.py",
+      "tools/construction_swarm/process.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/envelope.py"
+    ],
+    "depends_on": [],
+    "allowed_paths": [
+      "experiments/v3/swarm-research-20260911-155142/native_local.py"
+    ]
+  },
+  {
+    "id": "native-envelope-test-propose",
+    "domain": "native-local-admission",
+    "kind": "develop",
+    "brief": "Parent goal-recursion-v2-execution-fabric. New additive campaign-local code proposal; no run_command/imports/model execution/nested delegation, no auth/config/old source changes. Use read_file/search/list_files/write_file only. <=650finalwords with proper filing arrays. Inspect actual dependency native_local.py. Write experiments/v3/swarm-research-20260911-155142/test_native_local.py, using unittest and temporary fixtures/mocks to test trusted admission/accounting behavior without running research or provider processes: stale quota/deadline/PAUSE, exact source and candidate mismatch, missing or nonindependent review binding, insufficient reserved budget, tampered/duplicate/refunded reservation chain, failure retains charges, cleanup uncertainty blocks further dispatch, output/whole-attempt overflow incl finalreceipt, late serialization failure. Include tests of passed/failed/unknown synthetic command results with zero actual reducer/provider execution, distinguish test fixture monkeypatches from forbidden historical evidence changes. Report code defects and exact fixes needed; do not change developer source yourself. Root later executes qualified existing sandbox tests.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/charter.json",
+      "docs/v3/construction/swarm-research-20260911-155142/policy-revision-02.json",
+      "docs/v3/construction/swarm-research-20260911-155142/validation-contract.json",
+      "docs/v3/construction/swarm-research-20260911-155142/boundary-01/spec.json",
+      "tools/construction_swarm/foundry_tools.py",
+      "tools/construction_swarm/contracts.py",
+      "tools/construction_swarm/ledger.py",
+      "tools/construction_swarm/capacity.py",
+      "tools/construction_swarm/process.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/envelope.py"
+    ],
+    "depends_on": [
+      "native-envelope-develop"
+    ],
+    "allowed_paths": [
+      "experiments/v3/swarm-research-20260911-155142/test_native_local.py"
+    ]
   }
 ]

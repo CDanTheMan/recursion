@@ -3,9 +3,9 @@
   "parent_goal": "goal-recursion-v2-execution-fabric",
   "source_commit_basis": "78e6605",
   "scope": "32 distinct source/publication obligations; each has independent source analyst, counterexample/test proposal developer, and verifier consuming both",
-  "logical_jobs": 96,
-  "initial_independent_jobs": 64,
-  "dependent_verifiers": 32,
+  "logical_jobs": 98,
+  "initial_independent_jobs": 65,
+  "dependent_verifiers": 33,
   "maximum_reserved_slots": 96,
   "retained_inherited_unknown_slots": 4,
   "coordinator": "cursor-grok-4.5-high NON-FAST",
@@ -20,5 +20,6 @@
   "basis": "Owner asks to use large swarm after completed four-job throughput wave.64 independent initial jobs are meaningful distinct analyses/test designs, with32 dependent reviews;96 is a DAG size and reservation ceiling, not a claim of96 simultaneous active clients.",
   "source_files": 34,
   "source_bytes": 271613,
-  "non_goals": "No scope expansion beyond approved existing source/publication semantics; no language/store/framework/runtime choice or formal-freeze claim."
+  "non_goals": "No scope expansion beyond approved existing source/publication semantics; no language/store/framework/runtime choice or formal-freeze claim.",
+  "additional_scope": "Two dependent native local admission-envelope implementation/test proposals. Ordinary60secondfoundry tool containment unchanged; historical87gate explicitly remains Windows-bound."
 }
