@@ -1,0 +1,15 @@
+{
+  "job": "controls-o14",
+  "filing_sha256": "d65564e17ef3467c63c0b98f2d3bf49409cfa6e95962ede3f5c29466b0355098",
+  "attempt_receipt_sha256": "2e284e82c00b0b87342cc6706c5cbeebb83bed600057f67f21d0bfb71abb8469",
+  "artifact_verification": "frozen r3b foundry.report checked ledger, transport, provider export and every tool request/receipt binding",
+  "files": [
+    {
+      "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/setup_delivery.py",
+      "sha256": "638deb58c1e0fb1badfe21c977cad8d3171300ee052a2b3251a9650bd0b4b2ff",
+      "bytes": 13747
+    }
+  ],
+  "integrated": false,
+  "executed": false
+}

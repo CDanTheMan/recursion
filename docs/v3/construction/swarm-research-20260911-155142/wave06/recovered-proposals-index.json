@@ -1,0 +1,1764 @@
+[
+  {
+    "job": "controls-o04",
+    "origin_state": "failed",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "9c7fac15a4d9c1ea1c3e20f5d39d835bfefbb073aa0cd5afcc84819172ac976c",
+    "packet_sha256": "3eb1fc2801aa51a7323e20a7879ddca33841db2aefe30d246fdce5920c17468b",
+    "origin_error": "provider completed; final filing invalid: exactly one JSON filing required",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "a837f96139a718bbbb8d4d5996edc3fedb4d9d6bd3987d0db7c8b7e6cc287eb8",
+        "receipt_sha256": "0100f2fe98c8ccb5feca3a8d1fc09e214bafbb33eef92d9b87eae5d8f1bf2afd"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "56b09909f9e72eff66c4aa9b64015313c64fb3191745d83af793405e03a6bd2c",
+        "receipt_sha256": "c13598ee605c9be5f51add74d0f5e5fcc790dba1a3ed3954fc8abf910cc59744"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "b92c58a87e8965350ebd6a99c073d25877974c72b667f077f344326a89430a38",
+        "receipt_sha256": "8a951d6ff440672531efe8d60ad9205f6d005906ce1c039fe7186daba1ffb0f8"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "bb6bf907b83d487fa4a41958c1e1f594561f7ebafd8ad6939dfbbb1f1f994982",
+        "receipt_sha256": "0737a38d7fc7fe3df3bb1d11fa3cc09123545a173c79f8a38ebfcd1e4c7ab128"
+      },
+      {
+        "number": 5,
+        "name": "read_file",
+        "request_sha256": "8024ca29275185a173ec33915ef6baeddc36c2d98b2fc393fe01e8a0827e39d9",
+        "receipt_sha256": "d3cb35dadbac7f42d9f2b491c40d5f180882e210bc06060ce74b66ad2a58e9a0"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/append_order.py",
+        "sha256": "9df43b35c04d8a08f702472e22730e90a448a90c2bdc01df71c32318fd8f5fea",
+        "bytes": 11590,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o05",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "bdf1af89b50f527e2f5420dec2e6b584f08597118c06af39d7d54cecde0724d2",
+    "packet_sha256": "45d60a3bf6c627ca8eb69d62176f5713e0e2f44ad1921fa284c1870baae14622",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "5d2b1667ffc4780fd2fb11aaf8f0f338fbab847376e25169e9673def584be925",
+        "receipt_sha256": "857874027341103002e7e6744ca45b9e0ce7b6f487c31ed6dbda8d41984c0f60"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "bad66ec1fcd0bdb3c9d9ddfa4c989d02baa324b5c9a4365cf2e1617714321bfc",
+        "receipt_sha256": "50901c806af123ad004b2df854009972ac9d7601a9a35642350f5a6f7cb00848"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "f793fef0f8c4c5b4161ecfc0bf1cebe4471532937021822bb0fbebd41e9beced",
+        "receipt_sha256": "92028410e5a6c16c37db9a6a5cd25e6e4ee2adeaaedc00f3e34e5e7a1d8afb36"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/collection_capture.py",
+        "sha256": "4cc61ba8f064d6d010eba2b644dfe790ed1b4afbd3c0978bfb2dacb9efdbd89f",
+        "bytes": 15366,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o08",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "da0226389f62ad3153c53fdcd73b7d78ae4f19bfa39a68fb4d29abb50f0395ad",
+    "packet_sha256": "c46ea97311f636260434dc46a2519a6cda7fb08f00c336ac8ffe4a3415e513af",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "a759c1f15750c2918552b2e2f9b323ba6f7efee68aaed56e8978e2adbb13f579",
+        "receipt_sha256": "adbc89a6799f8f04670911f719cb39ba70ebedf7e8630057fa9dd343324ede0c"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "0660a7050a31aaa692a17085d02b06e5d938900fd302a67ba75ea08dcd7f6951",
+        "receipt_sha256": "3b1e608835e33ea8facb879a91d9756b961ef828604028a523d3cd6b4629ac9f"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "34d473d4e3bc6679dffde44a15f4b1c79ba25d23f84c39d459ad23ff7ce98445",
+        "receipt_sha256": "0f671d89fa9312869ec6ec70011d183e6230b4b5012e2073e89cce342797618c"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "15f9ce4dc2b2cf2d9442f4f7b9ba89510be4ad6054d145c0a9df319f7836c2f1",
+        "receipt_sha256": "47ba0b8775903d7b69ab4e3bfa03a9f035400b7d72fe666ff32f78dc746285b0"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/refused_q_frame.py",
+        "sha256": "438ccc6f6e9380cf7e0a2c8d4471c9a3cca2781de7a4ad40e8385b4b3de22cb0",
+        "bytes": 11686,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o09",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "8b16df1b210bba62ed38c84f483644ab7e01a216b9bdf70db09dd67aa7c10422",
+    "packet_sha256": "747cd2f0d4577f2384040db7a6b316327d61e4785da2689953709f085973343c",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "6d96c44c79b642331b15d3f4fa6d997830dc40085959b2beb50bd4e5b4e67071",
+        "receipt_sha256": "65725cbcbd746760082702c5b01c6f77920a097c3533a17b60db8c64efee78bc"
+      },
+      {
+        "number": 2,
+        "name": "read_file",
+        "request_sha256": "473ed1d8c7dbc339874220f002459307a4189d1e38de56ff4160b2a08bfa42a3",
+        "receipt_sha256": "9c4cd87c25e5d1f34ec9fafff9a1b2da1e4c15463046d7e26a873767fc79cc08"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "bee2449b75f3abf5182f60d853770969b77354901cf0bca2f8d834eb6a1a6db7",
+        "receipt_sha256": "8f8ad02e89ccaa2531d1d6311f36049423d7d59ba1c2a07972e883cdad56849a"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "ad75b4393da28c8725fac55d788f160ce17ed61dc4ca65f55cd4707e0f4b5473",
+        "receipt_sha256": "45906e0b6b7b1a7a0e62477579bb988fc767867e24b78bbfcb14d32ebe6f25cb"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/core_generation.py",
+        "sha256": "fbff6c7068aed47fb7afea3a1dd6a8d4017dddae801380f126a3bc6c5a42f994",
+        "bytes": 17139,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o10",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "f05eb535d10d1d5332f913fdda19d4f60e5ef7d773b4468c41725a49608ceba5",
+    "packet_sha256": "6e91894e4a3f817494ee1a6607ca054ead09d3c978e7c1435fdeb86974a4160e",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "2659923513f99d093d9654e12039be3498a987e37bc4ecc23e66849c95058282",
+        "receipt_sha256": "c0309d4fd9f841e06c93257d90ffc51b0c9c139e9cb473c0170f6cf0fb541c7b"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "c9a09610dab5235c3d4299fd4f099b56226dd6aafc84243f9c4f71f80930e306",
+        "receipt_sha256": "777ba1a545c7b78fbb2d9e717558a6319ff2f5a631ef3d6be85d7c2580539746"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "25cc1ab8ccc8872b51ede6c00c27f2ac0026b2cd5e52568d6ced2074efb5d4d8",
+        "receipt_sha256": "9fb153c6fdf169692a6ab8c9fdce50544902afe7ea71c81ad5606228918979b7"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "175dc34ba1e37b31b558dc1da916bcb631d8d6e073f6abc1caedf0632f5a475e",
+        "receipt_sha256": "e8637623bf6307c7ac9080cb446a8375f37fe20aad6861e920fb429a15e77a29"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "e6bae7ad055987afaf32bc2f1f7ba541c0334a1eeb4223a649314c8ed21eb1e5",
+        "receipt_sha256": "a031c2fdb61d8da677585ef5156b37882e6772235d236ff9ca998d829335fa91"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/revision_ledger.py",
+        "sha256": "ae962e85ad83631c3cbb45df45bb5ee4f6f9e545a1fa5b9f300262a7ba747423",
+        "bytes": 13067,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o11",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "ac21094dbf3be825a0bdbe3bad0ea62dd82f8eddce0fa301eaa373f25c6b72db",
+    "packet_sha256": "04f01ef49562628ece7ca99b39e4bbec213675dd34ddf91a339340d605f5a67f",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "070fddda2696c2d360cade02f493b5b1f02e96ef850a2906c1e867b45485c7d9",
+        "receipt_sha256": "adb408bb22a7ab1df593c019d472c18f054b3c9cba52102762e0d0d63330f597"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "c2c5b0f789331be64dcc5581165d8009ec984391ca2a270106c6426eabb7b52f",
+        "receipt_sha256": "4099fbdb6206083e3fdb4d3fdcadb8df284fe707beb5eb87be0fef9ebadfaf8e"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "f183ec5a1d172b6b7eb4f2c7b3f73d1ae833fa47c0d255e1022f26155de3c929",
+        "receipt_sha256": "60c0410b317cee6b9b18fc1570ee2f746e86309a18acc23b5a5b4e61f86ebb50"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "836359adea7ceb728de8186d699e564cb6da622a449d304a72ac9aa2d1d84128",
+        "receipt_sha256": "795abd3778e3fd6e53bfc8e8e10ca0dc92025087c42c44fab01eaf922e26d7e6"
+      },
+      {
+        "number": 5,
+        "name": "read_file",
+        "request_sha256": "a9fab837d875b5accbe74d527c34a5d3bfbe6dba13b0e2c8d6ddf7c05531f73d",
+        "receipt_sha256": "a1ee9af7c63271f4064af5826139151c3c39ebbf99cfc9a3e34c552fb13df41b"
+      },
+      {
+        "number": 6,
+        "name": "write_file",
+        "request_sha256": "ea319420c3f0dc2a5bd7eb98ddb18b5401bf667a18f45ba349b9f7e46add5065",
+        "receipt_sha256": "9b98ec77b2eaf3f80faddac7eaf8b4e8759c92e111b1822d1deed5c78b66d467"
+      },
+      {
+        "number": 7,
+        "name": "write_file",
+        "request_sha256": "92d71d4d8104f54bfdcc4c75e2f818c7f5fe4e76323729b3e470645b6c1328d5",
+        "receipt_sha256": "3b212e6ec671f03061f859285f4eb43438f5f2d22232e1606f047a4c2bffdd13"
+      },
+      {
+        "number": 8,
+        "name": "run_command",
+        "request_sha256": "964d93d2eec4d337f0014db2bdc529fddb3d4630a818133fccb42b7fddc87007",
+        "receipt_sha256": "fb8164ef79c70964a5bad31770ce0454783ca278a6e28d7f14d61c3d00531de8"
+      },
+      {
+        "number": 9,
+        "name": "write_file",
+        "request_sha256": "4ced131836955f5de8ab00972f17a6285d8e1fd0888ae19a030c2f6851a9c941",
+        "receipt_sha256": "d4a2818dedcf29bc60c4499810f3be8a02a11a0c92603a858a693d8576b80fc4"
+      },
+      {
+        "number": 10,
+        "name": "run_command",
+        "request_sha256": "0c841de0c1c0190bdcf1e2030344bf61e1cdea0926654c57bc086c93ea8151ba",
+        "receipt_sha256": "7a94a68f0d55b2ded343d83a6330a3d602d0e3dc05482a68ac2bb3c6caa0285a"
+      },
+      {
+        "number": 11,
+        "name": "run_command",
+        "request_sha256": "4c919a88e9f35d83ce1a2b8a6953257566ab9e94919cd2c3baf64b1efb3098a8",
+        "receipt_sha256": "d08c6145e91a66b40f95aed668ca9093d6bfab6256730e77bc59a261388c9eb8"
+      },
+      {
+        "number": 12,
+        "name": "run_command",
+        "request_sha256": "c3f897360ef35f069d4e9a36099c5b2546696eff75ba3bf43ab5553314f0e28f",
+        "receipt_sha256": "10b5ab6d4fa5240df285737f065bd8e47bb3a2eb1a0dfcb5091b9afa192b2f68"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/outer_mask.py",
+        "sha256": "8aa82abc2f1860aa8cef29d30bbe4336c108fda4efb1152a7002174a12094400",
+        "bytes": 10747,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o12",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "a80159c8387fae75a1db36f7bf66c055b70722ce79d69f900d53824686ea696a",
+    "packet_sha256": "5d072a2a1a933d57c1c186a3f9ef037d9c030ce8eba5cadae37cc80377614cf5",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "e37329b10ba57767b863e0f6357163cd2c7989f948096565018fd89d799fc1a2",
+        "receipt_sha256": "af5922bcb5566a396a9b63c075ded6b6b24dc1eaf267401e8cec2a3faed08db2"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "318a5e1325888ce9cbd3f9883d003561c3a857c3cc860d31c9d132ac8ffc7809",
+        "receipt_sha256": "423cc5528d9d27283656c55267699947d66436c60566ae18f1a94f80a224e861"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "3f9dde49cdbf60b8256d5cb151be9e47fe72b529c3576251aa259b021b0abff4",
+        "receipt_sha256": "88542201d48fa0e8b6fffc8864e861b7e83c8ef589e37100634c328ee3f0ec65"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "d1c40f8117ec0749b4f7170ba72af4ecd65d3089aa1c4ca2317f662641446ff1",
+        "receipt_sha256": "c73ba36bb3bc2a74d3069344a98be7aad70264d85d46d1bba5fb7f1eb0410dfe"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "92b33e6759b38d0ddbe99c7559b6ddb91ee2093e116825ffa623beda0eedbf91",
+        "receipt_sha256": "4847894115a9f06a2f61c9dacc7be995acd33fc090fb3ba73f271f4e6502fc43"
+      },
+      {
+        "number": 6,
+        "name": "write_file",
+        "request_sha256": "6b99194c94cc943a7fc1ffa0841908eb17b1aee38c2b31375bed4ce28e78d163",
+        "receipt_sha256": "5638f7cad3c69b5a08668483e358519e135a9f4322f0f5e10ee75f6f4edd23dc"
+      },
+      {
+        "number": 7,
+        "name": "write_file",
+        "request_sha256": "ccfe443f9a2b8f4cd0c617c476285a92c45b3f794630c7c7123b756420e2a114",
+        "receipt_sha256": "f888586b3dd927cf632ad60f780a045a509c1ee2a567126930755799ff2f6035"
+      },
+      {
+        "number": 8,
+        "name": "run_command",
+        "request_sha256": "bde458774c56082c4d121ef2489243e9bcb762b7f8fc74174201960bc2637337",
+        "receipt_sha256": "31962424ee2cbc8478a5a7fe9f25ce41456ecebd804ba05145af7a5851a2553f"
+      },
+      {
+        "number": 9,
+        "name": "run_command",
+        "request_sha256": "d8e2585835b43a4f32e76d206daeffcbdfd0c369a65785604cb73ef1f8b9d118",
+        "receipt_sha256": "06957f7d0bbca7a1de4232a91dbf17b681065cfdb7d259e6fda5f4203d05a9ba"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/q_mask.py",
+        "sha256": "f06309f173bb866bd5c905a0be6cad165c76234e67ce9f5f08a08ba36b964133",
+        "bytes": 12597,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o15",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "bcbc67f7014dff68d3a7939acfdd3cb53575022adae0218a912e32c296781e78",
+    "packet_sha256": "a2379cbdc7b14fc199d6e1c57f7c76da32d8d48a6605f50356f7185fd7bbec8f",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "b225a7451cd555025c895122f155f286818a290623f957901260bf2b3e2bf14d",
+        "receipt_sha256": "4ead95b7a8f79b5b62bfb7c49d01e7e3281397f263af7f3b65e886e0f182c781"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "f547df5d639a783ef938f24e99474e013c25cc548cc598842c8d11c09d948bcc",
+        "receipt_sha256": "679b56e082e21390172a5dfd64549779b20e36107aee9c6833442a5d4ca43b6b"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "199177542dcf393945d556c21c60516870b1e8c9caebfff703b69e80d387b1f5",
+        "receipt_sha256": "180a853a05cd2058de4a87b868b2bb56d292746accf80c2fb607c6eba7b3288d"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "4fedb77f5b58d522af2f2aa4b8f238171dafea639cc9371a886a41a07de198de",
+        "receipt_sha256": "ab39120f749b1061b655639781af97dbb89ed50bb369549f36626435f5b4a707"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "d91d373da0ebf9e7182f7507bae7e14486996efdfd30b646792978372843352a",
+        "receipt_sha256": "9c116c093ae93d960e766ebabbc391e833da3610bcd55226b1eccb428d80adf3"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/stage_identity.py",
+        "sha256": "1b206576de14ef4a57ea9d42fa4421f0a10ece15b268f07c41accd0a02a881ab",
+        "bytes": 11830,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o17",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "76ca116d30a19a9db08cc54d95481707b4fd48e17b7add878b754b0b36b49394",
+    "packet_sha256": "234370d45e7c3879a9e5b89de692f27f30d9633468fe31adf0da3d75a77022cc",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "97c910043f5b619ab6b827751e2ed2a092d9e1adb21144b619e5b867bb628c66",
+        "receipt_sha256": "b415b298be9a0d90692e5bf1813ebda09d069d16253cf8401ba6a95a92b1a154"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "b677c5ac62b09e7b14af68a43bb6db3eccff0f21a2f5d6fc01af4a347760598f",
+        "receipt_sha256": "260f13e4ddee1c8ae9ac0b420b7adc3c89f08bb70795a34f299b712f9b353067"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "da9d4d7b1220334446adb7cc0be2baea503655688d554104e16db76c973b1f6a",
+        "receipt_sha256": "4c1a20bf4b31e9cde2ed5122328150dc51d342db0dcfb0b89307d5e1373dd64b"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/staged_source.py",
+        "sha256": "b475485c21423bd13ae7df7418198394b0800c84a2e860188edd5e00761ebc95",
+        "bytes": 12410,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o20",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "56c1b624d8541eb5f5f669621fd57e7ca9267524d1ca26609411df90f8a055fc",
+    "packet_sha256": "6786fd9af10a3ccd4fc46020ff9eeb99c0085104520147a674ec2d4230e02457",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "06ac77db627f41509ae36f138075a8cc7364de903481c6907880d7eaf9f417e2",
+        "receipt_sha256": "22e510345d99f3f87477e3d27857b630d8e341534c2ff73e8bb350f579c41a61"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "1cfaf6873bc1ad7b6692c3de4d1e4670c528c13cb2eb6252383c5734762317d7",
+        "receipt_sha256": "9767f5582a1262e00de10d3e3a6d518aab36d3f3544dc9e65d75f8a0d1cf1855"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "8d5d2f01f7cd9eda86f07ce2e362a599d99744c55b45bee1d01d8e06b7f45544",
+        "receipt_sha256": "b1840ce4f14873b95d025eb291e2e3cde36856e2876e553dbe51e5715721f552"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/selection_authority.py",
+        "sha256": "07505ad83353d508fb360eed6c309ac81e5a5fa9be705d1f6e3b6c00d30fba48",
+        "bytes": 12518,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o23",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "cfb54dd7d42ba98dec343d92e1b5fe23a068c6bb62a2e1259cb8afecbbdb448f",
+    "packet_sha256": "0b0264f3ba5d04ca0e76499f0008ad762e821a32a445c7c0db4ebd89a417ad97",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "da254ae51beef640a3c33eb443459c3164f07e16ab968c8921ee98feaada5096",
+        "receipt_sha256": "2b39a120d9368fb9490c111f518e52bdf0c834eeddaa0775613150c39ca8efce"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "37e2fdc4d2c01ec024908a477be9a574e22b36a82d09b9ba434b57ff064de607",
+        "receipt_sha256": "d422b9324159b117a8d869a48de6623226e165f0588c555a041a3ace05a26cca"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "23e4e25b7a9b34dde32503cafe71fdd784dd0d58d32f4c4d7ff1cec3e0b55e48",
+        "receipt_sha256": "3e73b286b058c62bf6235048523a1570517c60f177d527471bfa17ffcb20b937"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/trace_patches.py",
+        "sha256": "4e54810c67a974937cac672e004382e30523e8c9082b14aec8b744af70bb724b",
+        "bytes": 13058,
+        "python_syntax": false
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o24",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "77662dda2d9c79569e90a81894eeb2aef5f8da2a0f76d36eb283b52e4b2f2c8a",
+    "packet_sha256": "1d4427bad09f46a30dd8efb3ab8a91f6a139274e23e71ac29b45a553fa9000b2",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "b5bb4a48ac9d0823827fd49a8cf2c033d19a9dd702ab59fd9e57c47015d96c3e",
+        "receipt_sha256": "95e61ed04f9e558b57e3f2686c1250b459eeb33bad4b576fa194e8380508a291"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "cce633d6a0725c3ef042820ca03abeaa185e0ab5fc58375702393236ce231b1c",
+        "receipt_sha256": "20d30b0712ece28c170951e152e61803a30d18a1ac76587ac43785593b95cbf1"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "65bf86cf40f513d1b8b8ce4d6bb49e90f179d3431b1b8afe1b52d0b531570d37",
+        "receipt_sha256": "0c02a200ad7f8e65324b6ef170abf744787f46b856c0d8d89d3f6c8b4444495d"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/incarnation_pairs.py",
+        "sha256": "438cb5060603602aa3cb6445bb8742ca49c37fc5f4d1f75ab8dd0bc2778b3b07",
+        "bytes": 16905,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o26",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "1a190d9ce3ed8e143e4c53d76ae4eb0783085677c29767ada60939215c4890c8",
+    "packet_sha256": "c28c08ae8d11153d0e4c9a272826a7868fa92df8f527688fd90aaca2d664dcdb",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "baf7afe49175c171854ccf686ee8a72c15a6a999ef59ce5aa5bf7fe888748b70",
+        "receipt_sha256": "ee8f0d0f73f5c5f00438fa3d59851e7ad8efbbdd669d17799a5c1b2950b484ad"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "26a60f7dd6d08c4c03e938ee03c7e47490e21b7ec2b6ad2810e6d8071974ab36",
+        "receipt_sha256": "103d8c26aefa4ab6a7831e4feb36b6542b1d56d74507b28cc68cc10a6b2faaeb"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "ff21e9e7c3cd75d312b51a488c913b8710ff35dff3f56d49416d291e0d437ecf",
+        "receipt_sha256": "6f076215830ac36c701180f4eb844d5294d1cfc159261de431684bac2e8fca95"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "858c35e52676a87c5af93f78cb90a6a88cf4c560eb0a75d6e4e918bba804a0d0",
+        "receipt_sha256": "37f9c7416e0af5a0770e91c1a808f822cef4db7f19f383814aaefc0c6927f8bc"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "d5bdc6c9fe2514f6b1e160793a942d355736102caf8a8127a3d1a405f76140e1",
+        "receipt_sha256": "ef958ae693702e03a93232ac3b5616f559d5b0dfd788d791ea0bce776d46732b"
+      },
+      {
+        "number": 6,
+        "name": "write_file",
+        "request_sha256": "c9d847a4680080f5e8ba2427648578e7a0239228b23b351ea10a8f5a442f9b93",
+        "receipt_sha256": "c02b758f2f6e93582fc224413f149b73e41f4357a09db63d50cf4a958247f759"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/relation_disjunction.py",
+        "sha256": "290f068fc971eec1194a2ca08b00fab3da83e328d587e0bb7d54f7d9c96e4fd5",
+        "bytes": 16112,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "controls-o30",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "5d4bbd6918bb431ff62c5d1c0f1c8efc143af0d771162007792bb6be4ddc3dab",
+    "packet_sha256": "a2337a4d72f9e81ec6b3136eeb1d7eb0c14a08b2642150d83e18afa470c60da8",
+    "origin_error": "Refused: provider tool calls differ from durable broker receipts",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "1357a1cb7053146eadd0fdbcadc927505c11342ef4103d6e9e596c399d61dae1",
+        "receipt_sha256": "74139e728f5559a5da2b5adce282f05e04c6d47a9930d5633df7f4c4123a83a6"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "6dbd466f38a162bb19fccc859b2acffd4de0ad2debdf1da12a5c8580470a6fa5",
+        "receipt_sha256": "90dfff131ee0c274f139209d397fbc681335e025bde8db8b6ab6a752957b3444"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "b8849c3e94454ccd0ae0fbc82a41db37121fdcea27d2b23d65d63663c64e73b1",
+        "receipt_sha256": "cc65b12008293dded6a915d64a48b003a335cb2a59530fe54acc59892febca89"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "00c0fd41d89379e3f8d093a50040727fb218529ce926296c47af5a37a8ce864c",
+        "receipt_sha256": "966641a09bfb9d6fb0594bf77282c98cdce09996010ce85d264d3b8e52549ae6"
+      },
+      {
+        "number": 5,
+        "name": "read_file",
+        "request_sha256": "970eaa3d8c7fd259f857c6d80ebf1b02bf3875af895917d5a928d679c2ab70d8",
+        "receipt_sha256": "1aac9ad988a2ffa85e710d1aa9c8929e60c773f3b2cefad85435746173cdfbf9"
+      },
+      {
+        "number": 6,
+        "name": "write_file",
+        "request_sha256": "b3fe1bb8bb7c97540e908da8f208d7bba8ecf7b77f9262655b8d29c497cddf2b",
+        "receipt_sha256": "62bd7e2b0220462f3bb02bed5ffced3034a149d4df36dffde91acaa31c04020d"
+      },
+      {
+        "number": 7,
+        "name": "write_file",
+        "request_sha256": "33f9a71cb4977070660b04bc1a8c16ba6a1d8dde0424add2947e3188637cad47",
+        "receipt_sha256": "34df76e5cc5c4bc1528af83d365d494bc9da6ac0c402873e83f356e154a455c4"
+      },
+      {
+        "number": 8,
+        "name": "write_file",
+        "request_sha256": "45cc25b85bc905509110b0861af51fb8de3281a73541313688b98ef58e1227b4",
+        "receipt_sha256": "1e7b4570f2b2f932db40d8662db8c2bb716dc39a29def4b8e920c09388eab570"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_independent_controls/guard_prediction.py",
+        "sha256": "045888f3fb9c2c753b09fac8c82476d931b9c55ee69a3e80e81c0a7a9c3b2037",
+        "bytes": 14238,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o01",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "80eac7886b059e427464381617a3aa51f2679654c024a0d93ace9c714ccb8da1",
+    "packet_sha256": "3e78e3efe851618bb5f9b6b6200f20940f41d6f42766b12eb6fb0508687e3aac",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "1c01e1768cf6a9ac2c90d0bdb7aaa172ff650e5275d4be79f62df9dba96b085e",
+        "receipt_sha256": "11150369081bd6108e4e596b5e1bfa2cd7b69bc6aa63e25df0a48a346006610a"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "d26b194e28141606d1c78d73b97c893b4b30c8e68b70c74a88406d4c380e8a91",
+        "receipt_sha256": "201e8259dfd85368e60a1b8cb119ede6528f1ba0ac8abddfc7c538991ea486f3"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "1a13d95f90c5860557262f8b809a2e2da3d088aa91be23c0fc5c26e911cfd608",
+        "receipt_sha256": "581285dd09e267bc0a4a9e92856ebe0a78c698d3811d8221cf21c997455b5de3"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "e5d846904d6c818046584c547acf25996cef07230bcec10e23bf76b80a45698c",
+        "receipt_sha256": "a1839deeea43a5888f3542d2132df59ec6580e68f1303d79ad27aa5a43bcf22c"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "b6bc1e53e80c4ab3200557fa0ce2bf0b71654e16a591f3ecf5673e9bea8337c0",
+        "receipt_sha256": "7fe7299364d56d6f8bec2fd5bc90aa7d0da49ad73458545251d8a547714cf58f"
+      },
+      {
+        "number": 6,
+        "name": "write_file",
+        "request_sha256": "e6a60b4a218ab8b03d971c35285391fc0fc9339f6c2bdda15696c2baa67a94ce",
+        "receipt_sha256": "e2becf3c8e388d015536272fb5528304ac4efe7406e6f6c268a5398a637b48e0"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/registration.py",
+        "sha256": "fc1f4fd1f15584b4e280a9339b688d18507552a1b4ba24f41436166830cfe195",
+        "bytes": 27851,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o02",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "32e8a471b2d116d6f750c813c9c5dea81b9fbf81da34e678f2ec90474b4c3569",
+    "packet_sha256": "5d24577652056690f0fb281de491d2c55be66283fde28d0642b1c3110c36547c",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "89d4220a95c14eeb14382791de6db8c1113ec78565a2168fcb277c612c62a77c",
+        "receipt_sha256": "d85fea40de4517a165e54b59b79391b121b6c5509eed5bc41ea4252ed5c41164"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "3e1dbe63a8c154942f64bddde614087468c9ff9e5e4dab43e3d3f1afab25e3c6",
+        "receipt_sha256": "a9fc7be036feca8b69e36e5b7d10147b31d651366aa336bb96ece842cd114982"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "bdc25945601323fcceedddec4c7ab647e22731604bdb3266fd4471b20632aaa9",
+        "receipt_sha256": "605bb1a9219d096e3a519e256b2838e3d0f24f9fa3d2a01ad3c86ea7e45bb28c"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "cefe8a250cbb3fe75b9d3ae2191b8ebeb6541ba0516aaf35680fb98618ddbd84",
+        "receipt_sha256": "4ef99fccd62453f0d4aec6f29e6df61bbd7cf877e93c01fea31a7f80d122e6b0"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "d68a236d71c27acd052ef91ccd308c514b59ead76acb9bf6d558d8a96870c72f",
+        "receipt_sha256": "f96216a3dc0b2a351f884cb45d5b0ea415caa7b628f496305e93630092341514"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/attempt_order.py",
+        "sha256": "734d7af2ad4c08d069a643d1e356989deb1791de43c7fcc731c1114a886b413b",
+        "bytes": 30993,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o04",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "cc8e5d13d0cc13b71e8d2968273d86bda25a46823184d9e463571f4271d1c8aa",
+    "packet_sha256": "f5884ee295b96077b86c526a6c595c955b711c61c87abece3a87b4e7d6ca9d02",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "a837f96139a718bbbb8d4d5996edc3fedb4d9d6bd3987d0db7c8b7e6cc287eb8",
+        "receipt_sha256": "3def31e20f3321bfb517f8df2c1cc0c85aa9ab8488aa90cf2a09bf7fe71f17ab"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "3f1d23fd14fcfbb64ee7f6624874afb79c8b2c997182799794fb4f1d477e3a88",
+        "receipt_sha256": "5b64347600d8983590f72068140a57650985f74113798a5628c2eb4f6b9ab080"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "b7c0b21bcddd206b135f0de0d35d03ed5bae7758ebd37d0bcd8f64926d491103",
+        "receipt_sha256": "805d2e132035c92dec598f716ea1f3a6d0434bcf82e8765fd99516c3bad14e5f"
+      },
+      {
+        "number": 4,
+        "name": "search",
+        "request_sha256": "cd098a6202bdd50e6e7d11789be7d28680b7160bebd5230d1dc164e26c0e5b8f",
+        "receipt_sha256": "45a06c7e14ceaf826df6447eadff83309e4d5b4828248e7fc79f5e2e2a142c89"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/append_order.py",
+        "sha256": "bd7ac638f8d55fe5113f908989a6d58b882ff52915cbac19a8ecf97a733d5b21",
+        "bytes": 36041,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o06",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "0574996c114ec30b3e90909a803634eaf1f2dc1f255321ad0feedc0262723f72",
+    "packet_sha256": "6349f0f623cc393bf2b31a0c468a543649c84d2a836cb2a34c762388814bd7c7",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "2fce7edc721d34a166cad2748df77490d85a14b0e8e6bff4316224b1eb99214c",
+        "receipt_sha256": "99bd25e054e66d38a94b9bb3b4f99ccc2905af3d48018a65f14a62a2324f4542"
+      },
+      {
+        "number": 2,
+        "name": "read_file",
+        "request_sha256": "d843e518a605f866111d33416392d2a9e9189c8dfe7fe8addb94a0cb73cce612",
+        "receipt_sha256": "7868ed66fe4a9a8e67e01d61fc493e587f1ea0447a016ef8bb7c5547506d255a"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "f2ab6969fd6aedd4a5c5ff4f1ecdf542ced2323e65f406ad0f688650337ead94",
+        "receipt_sha256": "64d6008970ba9ceaeb0bfb6dbb1ab778528f19ad1fc1163bac692f47eb0b6fff"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "5704697dbb748dd8ca236ad01e0960716ec601156019a664c4d540a9946b79db",
+        "receipt_sha256": "965f1d3150054995b37d0ab7afe53c19177296bd0c448cc036b2296449c2f29d"
+      },
+      {
+        "number": 5,
+        "name": "read_file",
+        "request_sha256": "3b7cfbbc72004d7baea57118d10ffff3133c8b34eef700bbcc87852b1d6013f4",
+        "receipt_sha256": "fa4bd4a3a8b39a961378f1441ffbbe64272ac64522d5edc3e48e53f493c03516"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/collection_inventory.py",
+        "sha256": "ef9bb9710b9194955bedd9561bb57860ff37d20c852060dd808a2e6d7bf535ba",
+        "bytes": 35491,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o07",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "cb752678629e1d08ebf4f932eb77f5bdc5c2f47395655be07aa42177ab3d60e4",
+    "packet_sha256": "7709e21fccb27200fa1ec427c65ea201ded710a7b589d2708bf2b1a142cb09a0",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "85069d09dcfabc7accd0585fac7f800fa28d4eaa68a000feb544450c17eb832d",
+        "receipt_sha256": "4a279b455c1ed8ab0a857b61a1edc5449728f39bdceb6c75f4228927a5bbfcfb"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "cbdab8469595a74d4cda314e7e83163f9640fa41c5305c5d0fa530aeccc71ee0",
+        "receipt_sha256": "b42a7b1484a28b5afbb5dd7b1ca889e4c25389d7160135dc83b82b19569886ce"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "d4c531cee7c89f6db8df73ff9084824aaa0a0205e7a93f214ec1399ef37ffbad",
+        "receipt_sha256": "b05863f1e349d0b795b48653a3c9b1891ee23f310a5396b4a92cc609c3d1897d"
+      },
+      {
+        "number": 4,
+        "name": "search",
+        "request_sha256": "227fe0549c6c817d7fdb502971797cde85ab763bb6168fb649f398bcf730d579",
+        "receipt_sha256": "bcf302c0bf8e7ee64b574a1c14d5f36a26d3285a4098ea4e05fb57470d4ad4a6"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "f23eee0b79042a578217364dc2b0e62c0de657d7841614a911117620791252e4",
+        "receipt_sha256": "83ee3ccc727ea1025af799bee03406d42b106a26229c92e48203a5650398c9d9"
+      },
+      {
+        "number": 6,
+        "name": "search",
+        "request_sha256": "cdf1aa30529f1e836c3683a92b1dd12be1c70e8d860db6808194ef81386d9a9c",
+        "receipt_sha256": "76c3e744442873df84ba716531c7631f4786122bab8de1cf5fedb9c819fc2628"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/attestation_registry.py",
+        "sha256": "e5a2998ee54dbfa7c0619ac84a59d27c598026a560774d24dc8ec5726ba0ce87",
+        "bytes": 34520,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o08",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "fafa417939e532fe4006772609298c1258645421382b9e62e36debf46d36d6cc",
+    "packet_sha256": "3be2e3d4dd8b06baba447c9c8b5dd00b1e9e9c6bbb6dce219b1bfb8b0753ab0c",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "a759c1f15750c2918552b2e2f9b323ba6f7efee68aaed56e8978e2adbb13f579",
+        "receipt_sha256": "e7a0aaffb43d9b9c0a3488be943bc84eced58cad02f18efb9e7667987a66b365"
+      },
+      {
+        "number": 2,
+        "name": "read_file",
+        "request_sha256": "7bbfe833e04c2d9680c7ab1a20a7d84f725ab035bdf4fea270368bbfe885a20f",
+        "receipt_sha256": "5acfdf162816f6412c4e76cca18a39c78a4b0ba9ed4d334ec871e6a04de6b54c"
+      },
+      {
+        "number": 3,
+        "name": "write_file",
+        "request_sha256": "7f6f45fe2282710dc30985b21ea367534ecd5aef1bc737ca14bdda70c6205c3e",
+        "receipt_sha256": "b61d739afeb9aee79935a77acb188a0e2d29e126d84c3802c7bc89bfbde462c5"
+      },
+      {
+        "number": 4,
+        "name": "read_file",
+        "request_sha256": "85fe4f625a369cd4f34449ec67ce408388fdeec9177ebf92bb1ab8d8de65ade1",
+        "receipt_sha256": "e5b0baaf6b673d6fdb038cb8189d059e362715eec755498908a42ed7ca647479"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/refused_q_frame.py",
+        "sha256": "85a173c81385f700334eaa7889f0fe0ab74f0b309a3e24d3bc556c669e8bdbbf",
+        "bytes": 33366,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o09",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "d19a553a280b1cc0da1c84fc512fd08692812082b361502310f9d6c54660cc9e",
+    "packet_sha256": "cb932b0ff8405084b424031664c0f4645c07014901edd5019f7755b68ce3667d",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "6d96c44c79b642331b15d3f4fa6d997830dc40085959b2beb50bd4e5b4e67071",
+        "receipt_sha256": "013cc997903db51452688530120252bec795812b555b4c829c1da0e0cbdd59b7"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "9e78bbbc8d59be863c600601d268e07ad8889c26f8305caa5b2d9227da07b575",
+        "receipt_sha256": "8f4fe44436e166a2301ae25fff4ce033af63734cbc91d44d54fa5de0af62dbff"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "34f428aabe163fc17058ae1d587a20d725b4b73ea9e580d58413164449d8c53f",
+        "receipt_sha256": "e380bec32b4d392da690c198ca4b1bf2553d8dc2e3b8b974ceefbfa863700f7a"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "b965c906863904a77f573c7b0a229a0d361dc2664e1c3a3d45e1ef070c9efe01",
+        "receipt_sha256": "bca6746800611b094fd1da70d04827cd35b59c3b08da4600d923dfa999d747c0"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/core_generation.py",
+        "sha256": "023176d0a1e33184f1e2dc127ebfe270e4ea9c406d6311ad2027e60029bf3d6a",
+        "bytes": 28934,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o10",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "17f2f884a960c4870587e9f43008f83a3ac0143bfb06dc8c032350840bc09618",
+    "packet_sha256": "7ab7239152f925aef054d593330793205ee1b74b0839e892f229e3dd51a5f139",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "2659923513f99d093d9654e12039be3498a987e37bc4ecc23e66849c95058282",
+        "receipt_sha256": "bc840cf4e7149269c8dd607cc7c27ec855058fd26a5cdf6d084dd6432664c2a7"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "c5a65653b865c26cca65c2455813cc5335cdc412c326a354528a47f43feba8ae",
+        "receipt_sha256": "efa9496c25c5812ce611c7181083f463d45c960345311b8268e0049ba0bdb698"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "46ec7b49d9ee70e766b4a66427ce9699454cd1533f8091f4e57c6eaab596b5ab",
+        "receipt_sha256": "688ccb7cf2d7d4feac7875ef1f835fd553f6497ba56737dd3091de62321f4b07"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/revision_ledger.py",
+        "sha256": "3eea2f0e85a73aa6562a0cbb758b1829d2a390bb6cc65834b0f3a8ed67d255e0",
+        "bytes": 46270,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o12",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "91b937757c274b60b6de4bb4700ea6892717d255aab9169fda3926a5ba0dc6de",
+    "packet_sha256": "5e66e5b8214305c147ca6552062529fbb0c4d68b829c08def1c8ec900a3812e7",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "e37329b10ba57767b863e0f6357163cd2c7989f948096565018fd89d799fc1a2",
+        "receipt_sha256": "6cc1bc9942b4edbe3f8fda39e0459b3adea9059ae9428517eb80ea2cab1ce2de"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "7d8cc00f154a2d3a455f010d79d27f182d461316c6d71865d6951dd632bd3788",
+        "receipt_sha256": "d7bc8588579c156e5fafafea32137e967a5f608137c6e5dc7e3a29a1de261785"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "c1334bd0cbf8f9e5dc410494bd907ffa2a9a6c682475f111cf55345a949f9a49",
+        "receipt_sha256": "6129fd0a6ee190fd995d2bc1b34c0193c9940845c21809cfd394bff691072f09"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/q_mask.py",
+        "sha256": "e063b61bb34b2524762536e5167f660646e70568e9c507049f52af89dd94ae65",
+        "bytes": 38092,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o13",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "6e15bbad7235caf2c9f37b9e9658bfed8be9ac92146942bc880161f56b953a63",
+    "packet_sha256": "b5f4ff5b87955b7ce9cb7e7bd9c429991acc8f17123423b3da843538ade076c1",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "004d48dff5bcdd407401bef81a2abd088accbbeda4023a6d33d1af6b65eeda0d",
+        "receipt_sha256": "fee27e35bc304165574e87283837c982be54bad347697e2004b13f46c914f161"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "35b5c3cfae824914fed7305758e833a0bf093c705561c57f6c60578f6d509bf9",
+        "receipt_sha256": "9518324dafc5ab213329e6f86476bffa9b060bc14b4a362775d06448d4a8a225"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "7011b656f4f61bae03e420ee921e7a3cb3514c19ebbd1aff1342ba5bb01e1e87",
+        "receipt_sha256": "a0935f83a53247297df3b04654fa87e1a1e75fda05dbcfa69372fded1b9d3970"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "4ddd160ab494a82a52acf2e974838fe6f376b4160569f0e3c1dd0efbad2cc2fb",
+        "receipt_sha256": "121515d022fa336fb9e9adaf01b9662a233ff4cccd293b327ef3ea2cc5123a88"
+      },
+      {
+        "number": 5,
+        "name": "write_file",
+        "request_sha256": "e9245ffc40f9303bcff01994aef8a777b2370fa2982ed341ba51fb453cafc7e5",
+        "receipt_sha256": "eb824880a83eb399670a8379789813e61c740b13e4e26f8a45daa4564b07e0aa"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/outer_response.py",
+        "sha256": "5f925726a36cbeef7f28f5b94695f49c5aa0b906baa3ad797d5b4813b7d9caad",
+        "bytes": 30812,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o16",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "6151cea9366a9dbbe7a89a9728c86a39f001ddc5490903180b33ae7c35c41790",
+    "packet_sha256": "a9a25939dbedff9d2f7fa58a8324802a21a477ad47b1825cf05d6f6b7905d252",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "3967da4e462b44f4f8e10e1a241c73a2e8d2fb187c03286871026a0283fe59e3",
+        "receipt_sha256": "1167973e0fefcbdd6bedd82712277b6d11d39b9944e0ca04db4a9d70e00399c7"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "25ca81d714899874d23f75650af494f1a56ef0d95ca4856c726ccb32d4d04f0b",
+        "receipt_sha256": "47f6e9be9cd4da86ce9aea69de44e5fa26355afb371e9b646929b897f1865cf0"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "b429b819c29b67892a50fb42deca55c5fcfde97bc13ac6875562016c317e7cdd",
+        "receipt_sha256": "3146c8bd1f501afd4c1b3854f672a40480e2b8a96ee89391d75d5afa2271bb81"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/stage_origin.py",
+        "sha256": "66e85ad4fff536495a8ebd6b9e11facebcfeb69564ebc7ff870c643c20cd737e",
+        "bytes": 27332,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o17",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "176455bfc8f0c66ebfa5e05ee3bcab4f84efd9d184eb27f402d96a0e5435d7da",
+    "packet_sha256": "689d165e0609468e8842b1286b77330932f7bc1ea00fd359bc62fb03c7ce9ec8",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "97c910043f5b619ab6b827751e2ed2a092d9e1adb21144b619e5b867bb628c66",
+        "receipt_sha256": "be14ade651e4e8ce89c49b07f38d3f69bc2ca44fbfceac3ba3e3b9216d57c8e6"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "d3a7feb3d2abb2ff307f45b150ad482a65f523b041e5045fed301eafc9493b0e",
+        "receipt_sha256": "75fa3169a1a85dfcfb99512edb817ab4f89a83c427f8dca2154622d329783c68"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "3a0293a4eb8fd57162a5aebc708eed61322ce2f1402b7450e48f02142db860ac",
+        "receipt_sha256": "a03f1c8d20a42d0674b281efad904866001d5a6fcd749b9685f2b72f28b7df5a"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/staged_source.py",
+        "sha256": "bd4cb01bd90a918f605e7c8cb845ebff1a411de831a12ab21123c8d6f597fcf9",
+        "bytes": 40651,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o18",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "0987db54ea552c96eced9e36b8aed7c3b4c112a99cd25d3fb7e05501ed382897",
+    "packet_sha256": "03b75517242174d58b278fdf17ab63691e767ee361f34fe4af0e67c766de272b",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "00b101d97400e138270315d33ddf49a071c3803b1acfca954d4acbaea0b6201f",
+        "receipt_sha256": "a55bda48cf4d26911d6e3355d12c60608d5b97ac404955d261cd433a5401fbbd"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "8d46260b8ca6977e7cecb848c7eec27a17829ae42ea9983704e6a844e3c48223",
+        "receipt_sha256": "a418c61d3bd9bcd731d18d83711e89bac693369a06fe9bbdf0d54ee1ef188f85"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "da97271fc59ea23ac2e1931c1383f8e2fdbea293fcc004b0d2c5ee2f13ddfc18",
+        "receipt_sha256": "59f59b8a0fbef55c15099ed468e34a01a80f49c7283925fc40eaab92c4a79a7f"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/publication_current.py",
+        "sha256": "94af2f231456d4161a3b49d0dcdba5a89051f976dc430590c5cfd860d09b0dc7",
+        "bytes": 44135,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o19",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "c2d2dad620f0648b04cde36bc1cb31aa2d5d99fe02eb842665ba607cfe4ef2ea",
+    "packet_sha256": "827122f2962880ad6e0ad8f3bea99855778155da3e0558980921425ed208d20b",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "7abfae5362ff225119b5375d7fb723082a37f0392dae3a8088a2fe534df9ad9f",
+        "receipt_sha256": "62593a994eb61c40334f6c47f0dd985330fda3ab6f6d6646bcbdfd2d853c81c8"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "d68cb5965d7417ae2515c94a51b06ac7a2a3015413905eea0dcf5fd3be954f27",
+        "receipt_sha256": "79ed0bf917a6282d7b95f6882b52fee3c5a0e9702e1ccac10453eeea19eff1ff"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "962825042024b94622bafae3b73bdf5a18a8dc45f6c0ed728ee219ecb04d4a9b",
+        "receipt_sha256": "dea7f0d0a56d726dc319fe5e1274b98e79e711832f0d2341c10970d0dd613287"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/publication_duplicate.py",
+        "sha256": "5b294a38c135c81435302e17655e3d97d4340a34c057903aeac2249a54490783",
+        "bytes": 43846,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o20",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "8874b24907fb9d273f17c2e01d08375da7a1cf52bcbefc66b86f89c3c0485721",
+    "packet_sha256": "6dcbee2b5a805b9f30ef57ebb2d89196066a1163a0387fefdcd0e827e5070465",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "06ac77db627f41509ae36f138075a8cc7364de903481c6907880d7eaf9f417e2",
+        "receipt_sha256": "638d06ae88e74226dc13cbd1ce77f8c66449f7613f0eb26b3383ad4ca7994eb8"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "57184941ed0ea286a66ef0d8c91a72b66b3b49fdb2da35434fd9782ece6062b3",
+        "receipt_sha256": "12eb78d4608c043176bfc5bf94916cdf6c7b93c41afcbc5c83bd2ccc88cc3597"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "4ca0807a580457648d29690321f7c561c11aa26b9cc58047dd15a7018c8da60f",
+        "receipt_sha256": "1d3b6d1f9fadc67e670989ed81e419e2500bad41c6894a61fe36cd288853d9a8"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/selection_authority.py",
+        "sha256": "0cd7e5f28d23be8ba5cbe86dbb2b28c021696d40accddc1fdab376627bf069e3",
+        "bytes": 32377,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o21",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "3db5d692dd5125a9a0210e81168668dfb1fd63075bf0298cf8b6c3154f21b46a",
+    "packet_sha256": "f8f6f8c98af3fefa812cbb401147cc3097227daa9fd9bb0a07114ebe37a64d5d",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "c436ed77ab9589d5a8a48e8f2f40b7c12145be29d543bf6f9610810e600b1934",
+        "receipt_sha256": "0a5ed474bc78e62d923e0d98827c37ef8d516274fa75979d09ae1104dc0fe7bc"
+      },
+      {
+        "number": 2,
+        "name": "read_file",
+        "request_sha256": "95978488c9e3e81a712fa1132cd8e1c868803218029bc36b0b0fe66337c04f0f",
+        "receipt_sha256": "5f9397a5a791a6a20a874d0a99331c84e4f7133d60c3650452499537024f2d9e"
+      },
+      {
+        "number": 3,
+        "name": "search",
+        "request_sha256": "a573af412d4ab8697ffe2e8b14ecea6057bd40b9545b1345b4ad9287049c81dc",
+        "receipt_sha256": "30eeea3acca826a5a39ec9fd006e96009985dfe92ee5d19a0a56bbb6f57e2a24"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "42697c76ca30e0f2fcd53d2456ed30db6cd5ff45170ae3fc76614b36c1147920",
+        "receipt_sha256": "e8e387e73b7ab18ec355caa4a346d13d12506f8318c2c14b6cbc6b1e84ffd71c"
+      },
+      {
+        "number": 5,
+        "name": "read_file",
+        "request_sha256": "2851a9b6a343317fb3455576ddae542db36fcf9d94adbf24d2cd464a41e26cfd",
+        "receipt_sha256": "f50e1178aebcba7be51b851134cc9560b03f4a4c5322653b86c79f190368cdd7"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/reconcile_current.py",
+        "sha256": "e808913e7febfb0e81e216c885ebba92ce3c15ed20dc6ecb99e5341049369825",
+        "bytes": 47640,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o22",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "9854ee3e4848101030c6512f62e4a80502c9b3bd8e8d1c9e09cdc0d9753bfd04",
+    "packet_sha256": "a697e65c2edc5641fa95cfd3dd69c23410579838943f136856ffbf37f54fced5",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "d0949258444ac5f1533eee268625d4d8cb329882ea7f54b557354c54fb463dc8",
+        "receipt_sha256": "637dcc14dea88b676d5b99fa37fa67df65e19359e1d7ffef93ef3962f79f22b1"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "804c3a1283058fdede621e8774efa9f9f000808548cfb5a97936ae8c7f1257d7",
+        "receipt_sha256": "0a54841b087d7a541156f7d1d5423c3a5a2611b9e6213d3fb21169225a03935a"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "81fcc9bf7c221435465ccccc7cb27526d68029f1f8d98e18dc448af9f6b78e67",
+        "receipt_sha256": "3da5130e215886fd03b90711a672751960b366ad98a753793ec459289181f932"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/reader_lineage.py",
+        "sha256": "11f6f53d341984e0d5431115882f64d548ef38176ebfbed73f45da3447079c02",
+        "bytes": 54072,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o23",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "2c548e91d58f9e0086b3d91b8be9c9757a219f7da7bea1750cb53052b457bd9f",
+    "packet_sha256": "8989a097354740f3d3e68de7ab69ad8b440a8b4cacd06791becb518f4423f93d",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "1168378ee320a51d28804a996ce3fff15e30f18d00951a21ba664fc53130d43d",
+        "receipt_sha256": "7581607dccd6a599a6dea9f213727c4b81a7f5f4453082db8a321ab6c0894751"
+      },
+      {
+        "number": 2,
+        "name": "list_files",
+        "request_sha256": "a834f65e6bffcd60b6e911e12f778d1a5db9ec6c05016b846db4a23dfe2790fb",
+        "receipt_sha256": "de9565d43fec16c2b26b490fec4fd4a98768e86a110db24a8b3737cf4c73cd3f"
+      },
+      {
+        "number": 3,
+        "name": "write_file",
+        "request_sha256": "b83316575e795bc945f2aa3cc6a8e8fce977ed36e39400cde6616056f547b260",
+        "receipt_sha256": "684e2923d000af76d6d41442b07fdad4f2fbc59a9c0702eda0038544bb04e042"
+      },
+      {
+        "number": 4,
+        "name": "read_file",
+        "request_sha256": "ebb75981b32b2b3fd6c22b846fe43ac77bd862e7466c17ddfb4422183176eee5",
+        "receipt_sha256": "ed80ca3643a2517fecb0a5d083cb23753738f6369ec944003ba88ae04d3a6c12"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/trace_patches.py",
+        "sha256": "da1780bc5b7ebd4e16eef04ca69748d1394996b7ac694bafe541bacec2b33b8f",
+        "bytes": 56251,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o24",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "bb19e7bdfc40cf448dc060e9fd3b5f893aeed874bbc585a8c3e26626b8a0ddd3",
+    "packet_sha256": "86039f75257ccba77bebf2e526c54763ffcb7095c6ec5006d51179af5be245fa",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "b5bb4a48ac9d0823827fd49a8cf2c033d19a9dd702ab59fd9e57c47015d96c3e",
+        "receipt_sha256": "d2ba947b8606e610384e95ce36bfb5747bc9bc73bd518370ef2587a17fb092d1"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "8bb20effad5d41eb4a9f9dc825dc868c1bc3ce9458286d7d79be905162aece9e",
+        "receipt_sha256": "6a6c480d0482c4c4d75ebea73b0426fb1b6158eaff54feabb80c08768d17cf66"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "75fab719c9b8ea60b859b2bebc4e84977ebdbc3d9829fe279854480ef4639d8e",
+        "receipt_sha256": "998a9e8a5f660674eb68c8cfff50a768398f32ab42aee178511d5c471a938530"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "f9e7744e5e660ef66166dbd327e6984d2556c143ffc27aa07368083ecb3eb7e5",
+        "receipt_sha256": "c3e2090cd148740bd9d7cc212a5291131f32f8923fc31db937a78aa7263feff0"
+      },
+      {
+        "number": 5,
+        "name": "search",
+        "request_sha256": "8041ab4c6948045de0a8ce2dd48693b020e84ae545f665c87ab06b8075a59f83",
+        "receipt_sha256": "31a24413d565cfa1974e0d98aa2fda63722febdf167059a0d7e61a06eced1c00"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/incarnation_pairs.py",
+        "sha256": "4fdb68bc260d72cfeee0e63e801d352288965e33838349726c271285b38dd6f4",
+        "bytes": 37535,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o25",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "bbde957eae6a79d74a2f29f3812f74e40b2e138e8330210e95662e07cf7a8fc7",
+    "packet_sha256": "f2b967c0ad2cab4d0492ca3871fcd4028c229c33f58dd9034128edd8f6f5f194",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "c28014ef6406ae9af9be6eb6c6caf66684b8d59f9968a851967af06efd04969e",
+        "receipt_sha256": "d34d1633972cae04c4fe30a1a0bb667230d9ec0beda3320aab1a163c9ecea9cb"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "f0d9fc65c85af24e2c88ac75c9451b12901fab0ad3e9a069f593f97fbfbce0f9",
+        "receipt_sha256": "78617bff72800bdb301d058ac731ec8c88c13eedd46ff0d5c38966cf13d8d9d2"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "5d5d71a37231987fa2beb661d693c6ef218640fe3a9a11396ce77cd66772df93",
+        "receipt_sha256": "19c4692fbd4ef1c5f0530f267595f2de4ab2119e6a877f1e1497adff04bdbdd9"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "e508808979199a8360e41e58348bf14b8f5276a8cc7dc24458b7f5ed9a755084",
+        "receipt_sha256": "973d7a650ec41e1d53578f1a4c3340d53e4c5cf0d065bc836928ad54e2b97d8b"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/field_completeness.py",
+        "sha256": "8b59a40a35b7f43ef63369cac1e02324e8a025de2ed730ab40e57679e8d1d734",
+        "bytes": 33145,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o26",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "beb9f94f6f2e68807649a5a69cdbc141af7dc942355647120914daf34a351090",
+    "packet_sha256": "fcf88e332a5de79e894700d27c2098402b1a91d7b5337c6b3982f6c52a0964fc",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "baf7afe49175c171854ccf686ee8a72c15a6a999ef59ce5aa5bf7fe888748b70",
+        "receipt_sha256": "a401484ab55ee0f67acd1e908b9d9fce039570f8418814e400a7714c2e477f2b"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "740e2d06c565a75aaee45534abbab0f9cf96b3b1bcff04d0789a2ba85d2b9349",
+        "receipt_sha256": "47f92d3c989bab769ebb8e826eb11645c17b6aa240b9d644d47c1a73ebadb74f"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "8e2da3da9969fa3d88f81bf570b0e0134416d447774a9c201255700f775d3e75",
+        "receipt_sha256": "ba144c9013f2112badb4058315945d3cf5a1a2f1e1096edce6f887418a1e97be"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/relation_disjunction.py",
+        "sha256": "7b46675f6da6684c964c004702bb76a2054056a9e137cbaad36021b1900f1530",
+        "bytes": 26848,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o30",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "145c584c27909671d78031e5953861cff4a9c4635370ea54005b4ab359931502",
+    "packet_sha256": "e30cc47cae71028876f35d1e19cfe8d57e721753179bd59c70b9bd2480890ad0",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "1357a1cb7053146eadd0fdbcadc927505c11342ef4103d6e9e596c399d61dae1",
+        "receipt_sha256": "88d2506af45457120841342b72498e5252d7a7fbfc89d7d6eb3134fa4a894e3e"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "4c60b3e5acfffdcb3c96a3e273e038300138de59bc2c13de526f75ad6b4453b0",
+        "receipt_sha256": "1ae496e4e62a4fa97854618be5a4886c4be3273b28e09229855ffdd23813d89c"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "92fb7865b02a30460b1775327c77a0244d74dc1df854cf62dc4477e3d071b8a9",
+        "receipt_sha256": "0991643ae21bed7a4d3792851a623981ff8bbafd38cda3d6c36a592fb6bc6041"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/guard_prediction.py",
+        "sha256": "5484224b29f6441e5f51df1bc88658abc23d9f76926cede7e42633ec760c9891",
+        "bytes": 35296,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o31",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "594c4ef2869a2aa591dcc67df1e1e82444bd2b73b1f7c4424a533d3071d405dc",
+    "packet_sha256": "b91d5e3fbda93e13e211b83bd0e77e76aac4b729aad2d5d9eb1929127729a01f",
+    "origin_error": "Refused: foreign/native tool attempted",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "f919e501ea0f1ea316ab8218c86ce3653a557ff7e64266bea4179e66347a246c",
+        "receipt_sha256": "5234360bd0b67eb50aeb789379061c1513c3c3236d06898582c87dfcb9f99234"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "b2c6baaa997bd3bd7c09cc30074e48191df7670c52694699f0c99b32a3077c7d",
+        "receipt_sha256": "447342941ddc0d4b787e03a7d18e3f3802c8d95a7760d651e0541deebec61cca"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "1d3d7764461bb823d2390fc07584ee1caf136d8560b6696ce4035c29155c7f6d",
+        "receipt_sha256": "e0f1f7af9e4b6109a08f26c1dd8bc0a1b17047ce08e4d3566ed512ba36fbcc25"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/q_frame_determinism.py",
+        "sha256": "49b2f466d234a129001be4d9329433f684a24d1fb481104bdebafab31b644bb4",
+        "bytes": 34578,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  },
+  {
+    "job": "repair-o32",
+    "origin_state": "unknown",
+    "filing_acceptance_not_inferred": true,
+    "receipt_sha256": "98d1aa5a82453c4044f02be83dbc891cf6db3880cd6d286cf6c9398adc025774",
+    "packet_sha256": "22c92ab3b96317d66f40dc9728200a95df006b42708a087e00b08ba75cef4e21",
+    "origin_error": "Refused: native Linux client did not complete normally",
+    "tool_chain": [
+      {
+        "number": 1,
+        "name": "list_files",
+        "request_sha256": "58c457a6014fdbcfaac5288744ab5e9f8040487ba4622062dcf9f02c31eac953",
+        "receipt_sha256": "37ac16cf24337332e41c4528c4b8e1f571c3f0fdc63e7210fd06e52149ba3ebe"
+      },
+      {
+        "number": 2,
+        "name": "write_file",
+        "request_sha256": "a973d832c77a8d3287a7eca3fc0e8504bc6b6e019f1510e4168716a0420c3102",
+        "receipt_sha256": "f30fd00d44de8922b7b55cdf5bfe4fed7154b0a4adcf9d67ef823b980dcc4b58"
+      },
+      {
+        "number": 3,
+        "name": "read_file",
+        "request_sha256": "5b457b372d505f78074648bfbf16baadbe2a4ff9f1d01bec6cd95f5b5311efb9",
+        "receipt_sha256": "8aa0bbcc052915ce91f130af1dfabd1408509c0c4faa50868236e40b9c8ba50f"
+      },
+      {
+        "number": 4,
+        "name": "write_file",
+        "request_sha256": "acc6d48d83f20a5bf678c7a4889c507563102ee1b1ecfab7665a989909e36e6e",
+        "receipt_sha256": "14112e10fa0239f5fdf137482cd7ca3dded176adc0dad3d5ebd5e2c5ed546f6d"
+      }
+    ],
+    "files": [
+      {
+        "path": "experiments/v3/swarm-research-20260911-155142/obligation_packets/merge_soundness.py",
+        "sha256": "239d881566bb1e518de23a155bc6da2c0d3f39c2bbca08d86954e4c505f149dd",
+        "bytes": 28043,
+        "python_syntax": true
+      }
+    ],
+    "scientific_execution": false,
+    "reservation_released": false
+  }
+]
