@@ -1,6 +1,7 @@
 """Adversarial admission/live-observation tests; no provider or research execution."""
 import contextlib
 import copy
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ from unittest.mock import patch
 
 from .contracts import Refused, digest, encoded
 from .foundry import validate
+from .foundry_prepare import refuse_operating_git
 from .foundry_supervision import (
     campaign_live,
     ceiling,
@@ -197,6 +199,39 @@ class SupervisionTests(unittest.TestCase):
         v2_with_policy['jobs'][0]['allowed_tools'] = []
         with self.assertRaises(Refused):
             validate(v2_with_policy)
+
+    def test_put_refuses_crlf_filename(self):
+        from .runner import put
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / 'controller-resume.log\r'
+            with self.assertRaises(Refused):
+                put(target, b'x')
+            put(Path(temporary) / 'controller-resume.log', b'x')
+            self.assertEqual((Path(temporary) / 'controller-resume.log').read_bytes(), b'x')
+
+    def test_refuse_operating_git_rejects_loop_refs_and_allows_foundry_branch(self):
+        def init_commit(repo, branch):
+            subprocess.check_call(['git', 'init', '-b', branch, str(repo)],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.check_call(['git', '-C', str(repo), 'config', 'user.email', 'foundry@test'],
+                                  stdout=subprocess.DEVNULL)
+            subprocess.check_call(['git', '-C', str(repo), 'config', 'user.name', 'foundry'],
+                                  stdout=subprocess.DEVNULL)
+            subprocess.check_call(['git', '-C', str(repo), 'commit', '--allow-empty', '-m', 'init'],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            good = Path(temporary) / 'foundry'
+            init_commit(good, 'foundry-recovery')
+            observed = refuse_operating_git(good, require_foundry_location=False)
+            self.assertEqual(observed['branch'], 'foundry-recovery')
+            self.assertEqual(observed['worktrees'], 1)
+            with self.assertRaises(Refused):
+                refuse_operating_git(good)
+            bad = Path(temporary) / 'ops'
+            init_commit(bad, 'loop/work/repair-wave-guards')
+            with self.assertRaises(Refused):
+                refuse_operating_git(bad, require_foundry_location=False)
 
     def test_campaign_preparation_strips_then_restores_only_v3_tool_policy(self):
         from .foundry_prepare import version_one_jobs

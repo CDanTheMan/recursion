@@ -9,7 +9,36 @@ from pathlib import Path
 from .contracts import digest, encoded, integer, require, strict_json, validate_plan
 from .foundry_supervision import MAX_SLOTS, MAX_WORKER_SECONDS
 from .foundry_wsl import linux_path
-from .runner import put
+from .runner import git, put
+
+MAX_FOUNDRY_WORKTREES = 16
+
+
+def refuse_operating_git(repo, *, require_foundry_location=True):
+    """Foundry review checkouts are dedicated clones, not Recursion's operating git."""
+    repo = Path(repo).resolve(strict=True)
+    common = git(repo, 'rev-parse', '--git-common-dir').decode().strip()
+    common = Path(common)
+    if not common.is_absolute():
+        common = (repo / common).resolve()
+    else:
+        common = common.resolve()
+    listing = git(repo, 'worktree', 'list', '--porcelain').decode()
+    worktrees = listing.count('worktree ')
+    require(worktrees <= MAX_FOUNDRY_WORKTREES,
+            f'operating git worktree registry ({worktrees}); use a dedicated foundry clone')
+    branch = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD').decode().strip()
+    require(not branch.startswith('loop/'),
+            'foundry review checkout must not use Recursion operating refs')
+    if require_foundry_location:
+        if os.name == 'nt':
+            require(str(repo).replace('\\', '/').lower().startswith('d:/recursionswarm/'),
+                    'Windows foundry review checkout must live under D:/RecursionSwarm')
+        else:
+            require(str(repo).startswith('/opt/recursion-foundry/'),
+                    'Linux foundry source clone must live under /opt/recursion-foundry')
+    return {'repo': str(repo), 'git_common_dir': str(common),
+            'branch': branch, 'worktrees': worktrees}
 
 
 def version_one_jobs(jobs, campaign):
@@ -39,6 +68,7 @@ def main():
     args.worker_seconds = (args.worker_seconds if args.worker_seconds is not None
                            else (MAX_WORKER_SECONDS if args.campaign else 600))
     require(os.name == 'nt', 'prepare through the Windows admission host')
+    refuse_operating_git(args.repo)
     integer(args.slots, 1, MAX_SLOTS if args.campaign else 100)
     integer(args.worker_seconds, 1, MAX_WORKER_SECONDS if args.campaign else 1200)
     integer(args.minutes, 1, 480)

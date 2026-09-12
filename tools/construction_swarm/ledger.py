@@ -203,3 +203,21 @@ class Ledger:
             self.event('reconciled-return', {'job': job_id, 'attempt': number,
                                            'evidence_sha256': evidence_hash,
                                            'dispatch_charge_retained': True})
+
+    def reconcile_failed(self, job_id, number, evidence_hash, terminal='failed'):
+        """Release an unknown hold as a completed failure or cancellation.
+
+        Dispatch charges stay. This never marks returned/accepted.
+        """
+        require(terminal in {'failed', 'cancelled'}, 'invalid owner-settlement terminal')
+        with self.db:
+            row = self.db.execute('SELECT state,attempts FROM jobs WHERE id=?', (job_id,)).fetchone()
+            require(row and row['state'] == 'unknown' and row['attempts'] == number,
+                    'only the current unknown attempt may reconcile')
+            self.db.execute("UPDATE jobs SET state=? WHERE id=?", (terminal, job_id))
+            self.db.execute("UPDATE attempts SET state=? WHERE job=? AND number=?",
+                           (terminal, job_id, number))
+            self.event('reconciled-failure', {'job': job_id, 'attempt': number,
+                                              'terminal': terminal,
+                                              'evidence_sha256': evidence_hash,
+                                              'dispatch_charge_retained': True})

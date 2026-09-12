@@ -90,7 +90,9 @@ def provider_pool(root, plan):
 
 def put(path, data):
     """Exclusive creation; no attempt or evidence is overwritten."""
-    with Path(path).open('xb') as handle:
+    path = Path(path)
+    require('\r' not in path.name and '\n' not in path.name, 'CR/LF in filename')
+    with path.open('xb') as handle:
         handle.write(data)
         handle.flush()
         os.fsync(handle.fileno())
