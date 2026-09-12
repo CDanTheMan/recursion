@@ -156,5 +156,7 @@ of the 2026-09-11 qualification write-up above; dispatch charges from those
 holds were not refunded.
 
 The next native Devin campaign used the same probe + collector methods. Census
-and limits: [`NIGHT-RDT-20260912.md`](NIGHT-RDT-20260912.md).
+and limits: [`NIGHT-RDT-20260912.md`](NIGHT-RDT-20260912.md). Wave18 re-hit
+Cognition `overall message rate limit` (13/30 stderr hits). Overnight Devin
+admits stop; next width after the org window is 8.
 

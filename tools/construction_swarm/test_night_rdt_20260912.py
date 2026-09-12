@@ -100,7 +100,21 @@ class NightRdt20260912Tests(unittest.TestCase):
             '6d06ee9fe68f77146cd2cbc0a8b54e0ad483fa9951f42959bc0bb5ed6e711364',
         )
 
+    def test_wave18_hit_org_message_rate_limit(self):
+        wave18 = self.census['campaigns'][8]
+        self.assertEqual(wave18['run_id'], 'foundry-rdt-wave18')
+        self.assertEqual(wave18['returned'], 17)
+        self.assertEqual(wave18['failed'], 13)
+        self.assertTrue(wave18['rate_limited'])
+        self.assertEqual(wave18['rate_limit_hits'], 13)
+        self.assertIn('overall message rate limit', wave18['error'])
+        self.assertEqual(
+            wave18['compact_sha256'],
+            'de65541e9ca2b9f41949704d306096064fcf61e06d0bef40b348c1284ef662fc',
+        )
+
     def test_do_not_step_to_fifty_from_this_census(self):
-        self.assertEqual(self.census['limits']['next_devin_width'], 30)
+        self.assertEqual(self.census['limits']['next_devin_width'], 8)
+        self.assertTrue(self.census['limits']['do_not_admit_until_org_rate_limit_clears'])
         self.assertTrue(self.census['limits']['do_not_admit_50_until_returning_30_reviewed'])
         self.assertEqual(self.census['limits']['reset_credits_used'], 0)
