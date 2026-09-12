@@ -37,6 +37,13 @@
       "failed_job": "research-exactly-one-json",
       "error": "provider completed; final filing invalid: exactly one JSON filing required",
       "compact_sha256": "3973f49727bfc7876ab60e82dbcce591c46aafc2d55a554d48a6c85e88d6a334"
+    },
+    {
+      "run_id": "foundry-rdt-wave13",
+      "returned": 30,
+      "failed": 0,
+      "rate_limited": false,
+      "compact_sha256": "00adf22ad00177c6198e4b20511cd8ff2ad7415e4d612388ef932d9a53a7b1b9"
     }
   ],
   "limits": {
