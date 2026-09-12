@@ -28,6 +28,7 @@ from .contracts import (
 )
 from .foundry_client import devin_tools, process_scope, workspace_files
 from .foundry_output import CompletedFailure
+from .foundry_prepare import refuse_operating_git
 from .foundry_supervision import (
     MAX_WORKER_SECONDS,
     campaign_live,
@@ -87,6 +88,7 @@ def validate(plan):
 
 def initialize(repo, root, plan):
     validate(plan)
+    refuse_operating_git(repo)
     root = Path(root).absolute()
     require(sys.platform == 'linux' and not str(root).startswith('/mnt/'), 'run state must use native WSL filesystem')
     require(not root.exists(), 'new campaign directory required')

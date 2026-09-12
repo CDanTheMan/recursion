@@ -237,8 +237,11 @@ def devin_tools(directory, route, credential, packet, sources, scope_parent, sec
         put(directory / (name + '.txt'), result.pop(name))
     put(directory / 'transport.json', encoded(result))
     require(not broker.uncertain and not errors and not thread.is_alive(), 'broker completion uncertain')
-    require(result['exit_code'] == 0 and not result['reason'] and result['local_quiescent'],
-            'native Linux client did not complete normally')
+    require(result['local_quiescent'], 'native Linux client did not complete normally')
+    if result['reason'] or result['exit_code'] != 0:
+        raise CompletedFailure(
+            'native Linux client completed without a usable result: '
+            f'exit_code={result["exit_code"]} reason={result["reason"]}')
     export_path = output / 'export.json'
     require(export_path.stat().st_size <= 32 * 1024**2, 'provider export too large')
     export = strict_json(export_path.read_bytes())
@@ -267,7 +270,8 @@ def collect_filing(export, broker, job, citation_ids, transport, allowed_tools):
             require(step.get('model_name') in {'swe-2-max', 'SWE-2 Max'}, 'worker step model changed')
         for call in step.get('tool_calls') or []:
             args = call.get('arguments', {})
-            require(args.get('server_name') == 'foundry', 'foreign/native tool attempted')
+            if args.get('server_name') != 'foundry':
+                raise CompletedFailure('provider completed; foreign/native tool attempted')
             if call.get('function_name') == 'mcp_list_tools':
                 require(set(args) == {'server_name'}, 'unexpected discovery scope')
                 continue

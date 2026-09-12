@@ -267,8 +267,6 @@ class BrokerTests(unittest.TestCase):
 
         for name, mutate, expected_error in [
             ('changed-model', lambda e: e['steps'][0].update(model_name='other-model'), 'model changed'),
-            ('native-tool', lambda e: e['steps'][0]['tool_calls'].append({
-                'function_name': 'exec', 'arguments': {'command': 'true'}}), 'native tool'),
             ('unreceipted-tool', lambda e: e['steps'][0]['tool_calls'].append({
                 'function_name': 'mcp_call_tool', 'arguments': {
                     'server_name': 'foundry', 'tool_name': 'search', 'arguments': {'text': 'x'}}}),
@@ -279,6 +277,12 @@ class BrokerTests(unittest.TestCase):
                 mutate(invalid)
                 with self.assertRaisesRegex(Refused, expected_error):
                     collect_filing(invalid, broker, job, [], transport, JOB_TOOLS)
+
+        native = copy.deepcopy(export)
+        native['steps'][0]['tool_calls'].append({
+            'function_name': 'exec', 'arguments': {'command': 'true'}})
+        with self.assertRaisesRegex(CompletedFailure, 'native tool'):
+            collect_filing(native, broker, job, [], transport, JOB_TOOLS)
 
         with self.assertRaisesRegex(Refused, 'did not complete normally'):
             collect_filing(export, broker, job, [],
