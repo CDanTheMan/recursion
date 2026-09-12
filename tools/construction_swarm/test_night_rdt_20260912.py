@@ -67,6 +67,17 @@ class NightRdt20260912Tests(unittest.TestCase):
         with self.assertRaises(Refused):
             parsed_json('```json\n{"a":1}\n```\n```json\n{"b":2}\n```')
 
+    def test_wave15_was_a_returning_thirty(self):
+        wave15 = self.census['campaigns'][5]
+        self.assertEqual(wave15['run_id'], 'foundry-rdt-wave15')
+        self.assertEqual(wave15['returned'], 30)
+        self.assertEqual(wave15['failed'], 0)
+        self.assertFalse(wave15['rate_limited'])
+        self.assertEqual(
+            wave15['compact_sha256'],
+            'ee35fcc74461ba5439cca73fa760dc643a05c7b168fc50e9927a19bd42f42708',
+        )
+
     def test_do_not_step_to_fifty_from_this_census(self):
         self.assertEqual(self.census['limits']['next_devin_width'], 30)
         self.assertTrue(self.census['limits']['do_not_admit_50_until_returning_30_reviewed'])

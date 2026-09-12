@@ -53,6 +53,13 @@
       "error": "provider completed; final filing invalid: exactly one JSON filing required",
       "rate_limited": false,
       "compact_sha256": "430833c355fc57fba5ae8969b703e0f72e3bf130e43d2ab716ed15dc8b4733d6"
+    },
+    {
+      "run_id": "foundry-rdt-wave15",
+      "returned": 30,
+      "failed": 0,
+      "rate_limited": false,
+      "compact_sha256": "ee35fcc74461ba5439cca73fa760dc643a05c7b168fc50e9927a19bd42f42708"
     }
   ],
   "limits": {
