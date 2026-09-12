@@ -113,8 +113,24 @@ class NightRdt20260912Tests(unittest.TestCase):
             'de65541e9ca2b9f41949704d306096064fcf61e06d0bef40b348c1284ef662fc',
         )
 
+    def test_wave19_json_fence_not_org_rate_limit(self):
+        wave19 = self.census['campaigns'][9]
+        self.assertEqual(wave19['run_id'], 'foundry-rdt-wave19')
+        self.assertEqual(wave19['returned'], 7)
+        self.assertEqual(wave19['failed'], 1)
+        self.assertEqual(wave19['failed_job'], 'research-json-fence')
+        self.assertFalse(wave19['rate_limited'])
+        self.assertEqual(wave19['rate_limit_hits'], 0)
+        self.assertIn('exactly one JSON filing required', wave19['error'])
+        self.assertEqual(
+            wave19['compact_sha256'],
+            '284339f0f5df06818d8c2ea1e860c205621d5b76a0a964a767ff90a127f55537',
+        )
+        with self.assertRaises(Refused):
+            parsed_json('```json\n{"a":1}\n```\n```json\n{"b":2}\n```')
+
     def test_do_not_step_to_fifty_from_this_census(self):
         self.assertEqual(self.census['limits']['next_devin_width'], 8)
-        self.assertTrue(self.census['limits']['do_not_admit_until_org_rate_limit_clears'])
+        self.assertFalse(self.census['limits']['do_not_admit_until_org_rate_limit_clears'])
         self.assertTrue(self.census['limits']['do_not_admit_50_until_returning_30_reviewed'])
         self.assertEqual(self.census['limits']['reset_credits_used'], 0)

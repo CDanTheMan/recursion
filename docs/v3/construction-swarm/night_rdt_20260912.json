@@ -85,11 +85,21 @@
       "rate_limit_hits": 13,
       "error": "overall message rate limit",
       "compact_sha256": "de65541e9ca2b9f41949704d306096064fcf61e06d0bef40b348c1284ef662fc"
+    },
+    {
+      "run_id": "foundry-rdt-wave19",
+      "returned": 7,
+      "failed": 1,
+      "failed_job": "research-json-fence",
+      "error": "provider completed; final filing invalid: exactly one JSON filing required",
+      "rate_limited": false,
+      "rate_limit_hits": 0,
+      "compact_sha256": "284339f0f5df06818d8c2ea1e860c205621d5b76a0a964a767ff90a127f55537"
     }
   ],
   "limits": {
     "next_devin_width": 8,
-    "do_not_admit_until_org_rate_limit_clears": true,
+    "do_not_admit_until_org_rate_limit_clears": false,
     "do_not_admit_50_until_returning_30_reviewed": true,
     "reset_credits_used": 0,
     "muse_identity": "opencode-go/muse-spark-1.3-contributor"
