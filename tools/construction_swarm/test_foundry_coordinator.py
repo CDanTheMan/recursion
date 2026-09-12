@@ -6,10 +6,31 @@ from pathlib import Path
 from unittest.mock import patch
 
 from .contracts import digest, encoded, strict_json
-from .foundry_coordinator import synthesize
+from .foundry_coordinator import coordinator_batch_size, synthesize
+from .foundry_coordinator import main as coordinator_main
 
 
 class CoordinatorTests(unittest.TestCase):
+    def test_v3_uses_smaller_batches_for_filing_and_progress_evidence(self):
+        self.assertEqual(coordinator_batch_size({'version': 2}), 20)
+        self.assertEqual(coordinator_batch_size({'version': 3}), 8)
+
+    def test_cli_preserves_failed_batch_and_continues_independent_batches(self):
+        manifest = {'jobs': [{'id': f'job-{index}'} for index in range(16)]}
+        results = [{'state': 'unknown'}, {'state': 'returned'}]
+        argv = ['foundry-coordinator', '--root', 'synthetic', '--provider', 'cursor',
+                '--runtime', 'runtime', '--credential', 'credential', '--live-revision', '0']
+        with patch('sys.argv', argv), \
+                patch('builtins.print'), \
+                patch('tools.construction_swarm.foundry_coordinator.reviewed_plan',
+                      return_value={'version': 3}), \
+                patch('tools.construction_swarm.foundry_coordinator.report',
+                      return_value=manifest), \
+                patch('tools.construction_swarm.foundry_coordinator.synthesize',
+                      side_effect=results) as coordinator:
+            self.assertEqual(coordinator_main(), 2)
+        self.assertEqual([call.args[4] for call in coordinator.call_args_list], [0, 1])
+
     def test_synthesis_receipt_requires_empty_scope_and_direct_exit(self):
         manifest = {'run_id': 'synthetic', 'source_commit': '0' * 40, 'jobs': [
             {'id': 'missing', 'state': 'blocked', 'attempts': 0}]}
@@ -51,6 +72,7 @@ class CoordinatorTests(unittest.TestCase):
                                  'local_quiescent': False, 'pipes_closed': True,
                                  'stdout': stdout, 'stderr': b''}
                     with patch('tools.construction_swarm.foundry_coordinator.report', return_value=manifest), \
+                            patch('tools.construction_swarm.foundry_coordinator.reviewed_plan', return_value={'version': 2}), \
                             patch('tools.construction_swarm.foundry_coordinator.client_argv', return_value=['synthetic']), \
                             patch('tools.construction_swarm.foundry_coordinator.process_scope', scope), \
                             patch('tools.construction_swarm.foundry_coordinator.execute_scoped', return_value=transport):

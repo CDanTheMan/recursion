@@ -161,7 +161,8 @@ def packet_for(root, plan, job, rows):
                                     'filing': verified_filing(root, row)}
     refs = [f'source:{name}@{item["sha256"]}' for name, item in bound.items()]
     refs += [f'filing:{name}@{item["sha256"]}' for name, item in dependencies.items()]
-    packet = {'job': job, 'source_commit': plan['source_commit'], 'source_inputs': bound,
+    packet = {'job': job, 'plan_version': plan['version'],
+              'source_commit': plan['source_commit'], 'source_inputs': bound,
               'dependencies': dependencies, 'citation_ids': refs}
     require(len(encoded(packet)) <= plan['limits']['input_bytes'], 'packet/dependency input cap exceeded')
     return packet

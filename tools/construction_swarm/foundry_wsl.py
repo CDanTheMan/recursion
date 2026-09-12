@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 
 from .contracts import digest, encoded, require, strict_json
+from .foundry_supervision import MAX_SLOTS, ceiling
 from .ledger import Ledger, controller_lock
 from .runner import put
 
@@ -25,7 +26,7 @@ def native_holds(pool):
             claim = Path(record['shared_claim'])
             record = strict_json(claim.read_bytes())
         reservation = record['slots']
-        require(type(reservation) is int and 1 <= reservation <= 100, 'invalid native reservation')
+        require(type(reservation) is int and 1 <= reservation <= MAX_SLOTS, 'invalid native reservation')
         settled = claim.with_name(claim.stem + '.settled.json')
         if settled.exists():
             terminal = strict_json(settled.read_bytes())
@@ -76,7 +77,9 @@ def run_native(root, source, distro='Ubuntu-24.04'):
                 ledger.close()
             imported.append(linux_path(other))
         require(set(plan['legacy_roots']) == set(imported), 'legacy reservation import changed; prepare a fresh plan')
-        slots = min(plan['limits']['model_slots'], 100 - legacy_held - native_holds(pool))
+        from .foundry import validate
+        validate(plan)
+        slots = min(plan['limits']['model_slots'], ceiling(plan) - legacy_held - native_holds(pool))
         require(slots >= 1, 'shared provider capacity held by uncertain work')
         claims = pool / 'native-claims'
         claims.mkdir(exist_ok=True)

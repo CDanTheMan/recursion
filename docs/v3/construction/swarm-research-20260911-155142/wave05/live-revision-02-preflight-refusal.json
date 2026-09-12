@@ -1,0 +1,11 @@
+{
+  "observed_utc": "2026-09-11T17:47:55Z",
+  "runtime": "/opt/recursion-foundry/source-v3-20260911-155142-r2",
+  "requested_revision": 2,
+  "result": "REFUSED_BEFORE_RESERVATION_OR_PROVIDER_DISPATCH",
+  "reason": "The first 20-record batch exceeded the 96 KiB live coordinator packet bound after worker filings accumulated.",
+  "provider_dispatches": 0,
+  "reservation_directory_created": false,
+  "scientific_effect": false,
+  "follow_up": "Qualified committed r3b runtime uses eight-record v3 batches; revision 2 may proceed because no earlier revision-2 attempt or reservation exists."
+}

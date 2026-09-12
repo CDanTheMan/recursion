@@ -1,0 +1,315 @@
+{
+  "states": {
+    "returned": 11,
+    "unknown": 55,
+    "blocked": 32
+  },
+  "unknowns": [
+    {
+      "job": "native-envelope-test-propose",
+      "receipt_sha256": "4b091f607872720e483da4d074526f1bf6f9fabaf771eef2597c42c5ce1213aa",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o01-registration-counter",
+      "receipt_sha256": "41c1867c931362832cb519e3a1e39fc3f179a52c35e231c2030966a4a5ea75dd",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o01-registration-source",
+      "receipt_sha256": "27fe4be8c0ab7d6296182e9788c535257f8aad695a8d81d80f4bdc93d277d724",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o02-attempt-order-source",
+      "receipt_sha256": "736ce5ceb92272cfe6f17eb73c31c3017e4b4e88d0738e3bae4bf9dca62b7d3d",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o03-append-identity-counter",
+      "receipt_sha256": "d636f02e99393bd151d9a3733d131ee34b5513483fc15c11a49721f003693c4e",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o04-append-order-counter",
+      "receipt_sha256": "65c737308b9c82ff90b55d09e66ee15176462f8e85aecd3451578728c44a2be0",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o04-append-order-source",
+      "receipt_sha256": "4e9aba0cc9908af5139954cef7cd467f0e28d46a3e9f50a1d1622fdfacebb294",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o05-collection-capture-counter",
+      "receipt_sha256": "8745d32ecb3559ec1f00f1c2a4a40811ecfc36732f63801b9949773caa5e5b96",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o05-collection-capture-source",
+      "receipt_sha256": "551feca92ba4c85398c67adf7aee4af44d2958bf46ea5639414c3a9ac8e79218",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o06-collection-inventory-counter",
+      "receipt_sha256": "a5fb885474674fc19c3ea7759d51475cda8b274b82f2a8a7a4d1195443eb9508",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o06-collection-inventory-source",
+      "receipt_sha256": "00e128ee01b088484c8dba9806f2a9cd116586ecd3dc7879ff2a314bee515cb2",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o07-attestation-registry-counter",
+      "receipt_sha256": "e2632c1248f3ead80256429b7347d0cc87d4112f2039ae2a4f5425061fa24b35",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o07-attestation-registry-source",
+      "receipt_sha256": "210f4da1eb2a55e7dab2a87b2df5be6ae585fe5b1ff28f4a515f67d96e9a2c2c",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o08-refused-q-frame-counter",
+      "receipt_sha256": "5c3af7ebf920ab543db751d33572ac33438a9045f488e57c5569ac98d5e0e3d7",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o08-refused-q-frame-source",
+      "receipt_sha256": "2eb833a2f7fd4f64073c51d66f16ae322d851c1999a3b56e9fd2f4420a785fc4",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o09-core-generation-counter",
+      "receipt_sha256": "37e9a785f37b6070277f3d0ee63dca6084913cf56f947a8d00c7f572fa5884a1",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o09-core-generation-source",
+      "receipt_sha256": "4f98ac48b133aa19890908addfe9460311a67e606f74a4f427372fff4c8e9e97",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o10-revision-ledger-counter",
+      "receipt_sha256": "4c5714687f90be6c3d1ea0e25f56d23eb10513d1b2f32d3c0fe7457a7f6cdb46",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o10-revision-ledger-source",
+      "receipt_sha256": "0baa4bb1764f49b565134acbfb5634baff1f463dd4c28e6367b3482621731ed7",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o11-outer-mask-counter",
+      "receipt_sha256": "fd72dc8e78b3965e6a2564995af9892392ee82ca5236fe9d070c238f5704b79a",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o11-outer-mask-source",
+      "receipt_sha256": "92c91adecec4b21eb042be2815593a855284db420b2c0a9ffd9ef846385f3ef7",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o12-q-mask-counter",
+      "receipt_sha256": "fb19ecb4ca5403611c72a311c7c179c46dd50788c7125a8f1583e3483698840c",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o13-outer-response-counter",
+      "receipt_sha256": "fc28ea52594860ef7463543e7e5fdbfa65f2504f344021e8589d8f4a40c933d2",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o13-outer-response-source",
+      "receipt_sha256": "98defddb52e7e961635679e8beedcea93fba2ebbfbf87ee0ab5bf4ceb6984636",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o14-setup-delivery-counter",
+      "receipt_sha256": "418fc92147ad852def55e4fcd5758a6af99ebf562d38118a769b20f9e79b39bc",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o14-setup-delivery-source",
+      "receipt_sha256": "c3d70328fee6d35e6040aa474a1a1e3a034195e499c7be6f17e72913db3a3ac3",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o15-stage-identity-counter",
+      "receipt_sha256": "713a569ddfeb8edb34897523b1aae01af4dad640daa931d769014bd6deb9fa2f",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o15-stage-identity-source",
+      "receipt_sha256": "4f9a23d4e818a677a702d5938650faa0b50225fc184e8d7ee6280cebd22ae75d",
+      "reason": "Refused: foreign/native tool attempted"
+    },
+    {
+      "job": "o16-stage-origin-counter",
+      "receipt_sha256": "3ef59866e04f74b2de2be2a00b15ef6be53b6113eb5b9e055fa97e716dd54652",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o17-staged-source-counter",
+      "receipt_sha256": "8c000c1a319e56fe357a3ba534a61fe09c98c979470f6fda60372640f4b928d5",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o18-publication-current-counter",
+      "receipt_sha256": "d4dd5fe38b3ccd2cbb7649f19a06364e72c138eb0d7047acc683da808cbf6834",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o18-publication-current-source",
+      "receipt_sha256": "a59bff9954217e70e1812d1c9158992bc2243d01d9631958b8bfa8b20379e807",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o19-publication-duplicate-counter",
+      "receipt_sha256": "01dc3dd8e5b334d2569464e63159023aabf1bcb34565c1e85e8ab2cc05bfc73c",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o19-publication-duplicate-source",
+      "receipt_sha256": "91a9a7101d19444d5730cb559703e72c486a79ce1b4ca252dc76f5170cefa950",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o20-selection-authority-counter",
+      "receipt_sha256": "334387bba65266a55ede58e87c7e9ae95205a50a0ab7ff6060f7bd9aa57b66bc",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o20-selection-authority-source",
+      "receipt_sha256": "1309ddd737e123473dd394aa97fc47c93efb0f1e9d7eafe08493b7fab011e341",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o21-reconcile-current-counter",
+      "receipt_sha256": "53e13004bf6e04ec979d1a5b89fc9843c6ae37db835cf60f508c5187e734ec10",
+      "reason": "Refused: unbound evidence citation"
+    },
+    {
+      "job": "o22-reader-lineage-counter",
+      "receipt_sha256": "598a05c54048bed5e7d90f4e3521cec1f9211954d8273d862aa7c57c9ebb5876",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o22-reader-lineage-source",
+      "receipt_sha256": "e2967e951a1bd067ed52e191fd2614fb7093e0f47712773d40913372e3cf61cf",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o23-trace-patches-counter",
+      "receipt_sha256": "e399b531873adb867cc76cf625169f5f41cb8fd03ac7abc35c9ae191ff2327ce",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o24-incarnation-pairs-counter",
+      "receipt_sha256": "1d4ee2a3908a808a554de0f55f2c920f0adcd75bb2eea04774a69c2078d01f74",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o24-incarnation-pairs-source",
+      "receipt_sha256": "296d51868f8ff5d1ce0ebeafba83c2dd362c0d12439e476e2168df47b04c331c",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o25-field-completeness-counter",
+      "receipt_sha256": "d8fb57cea6fcd2492ead9eefbe0922aa1ee2ae7ae38ea07fab68f544bc5b7d46",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o25-field-completeness-source",
+      "receipt_sha256": "82f6e1d60f772099c09e5beec415b81c3bf12bf32c7911ba0d2ff2cb296662e3",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o26-relation-disjunction-counter",
+      "receipt_sha256": "4e372dc79328d48b333a3a44899e5c192ab3ecfd34db5bf0be68de59018dca16",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o27-certificate-binding-counter",
+      "receipt_sha256": "76cdf97855a0fd77fae2825b5ccf1fdef1146bb9e2c7993f9bc64008c3445645",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o27-certificate-binding-source",
+      "receipt_sha256": "b8423eef103c9b6b4cca78c3d0a3cbd250f3e1633670b6a339ca9620993a1d4a",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o28-control-adequacy-counter",
+      "receipt_sha256": "0da1b545166c21b6b79f1844f7108be71fd58ba3c67b05ce2a3bebd89cafba89",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o29-domain-membership-counter",
+      "receipt_sha256": "4b123ce338265456a191deaf882ead8c5d45e44498e8eef6f7c26bc1d3b41d94",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o30-guard-prediction-counter",
+      "receipt_sha256": "edfef283ded3af028836d246af69a73585627cdb1ec8c638531e757927138a21",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o30-guard-prediction-source",
+      "receipt_sha256": "2c24adf3507199efa33e88f606d951cdc22f4371b1acc5e2a80052f0f5e86426",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o31-q-frame-determinism-counter",
+      "receipt_sha256": "9c16aef729bf5f80cd82485cdc8e43184a37929c2e692811c176860b5f9644cf",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o31-q-frame-determinism-source",
+      "receipt_sha256": "c79e48c9b7ca654b5e293d26217f0955537f572626c214710efecdc14b07ff98",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o32-merge-soundness-counter",
+      "receipt_sha256": "5dcacb7c88eef7a8bcd0aac7d52691fb9251d565d7e8558dfc8af30c24cc6910",
+      "reason": "Refused: native Linux client did not complete normally"
+    },
+    {
+      "job": "o32-merge-soundness-source",
+      "receipt_sha256": "ba12cdfa3e25e303268919285ad3907943a3ee1218812fcd61dfa583492cc99c",
+      "reason": "Refused: native Linux client did not complete normally"
+    }
+  ],
+  "coordinators": [
+    {
+      "path": "coordinator-cursor-0",
+      "receipt_sha256": "7b4147daf64dd837425d53a5fc57a25e09e07f368932e5eb3877cfdbce7dab1b",
+      "synthesis_sha256": "bf43edc5b87f375e66c895ab91dabcadf65676c227dfde883e983fbc5eddaf3d"
+    },
+    {
+      "path": "coordinator-cursor-1",
+      "receipt_sha256": "a162b4700cc7f33917a3a2af73c568f788bcfc96574b6c350098e0c31af6c2ac",
+      "synthesis_sha256": "dd7aeb2a9712175b26b809ae98c8e5ad8707b0cc69433569246de34b8d92cb33"
+    },
+    {
+      "path": "coordinator-cursor-2",
+      "receipt_sha256": "b834f16fe5c721c0e3b34c12b1ee6496719373e51c99b65a02b925cc77a49761",
+      "synthesis_sha256": "120f44634450edbcfac216c76e60d2fc3c698e634574041e4140fef43ef9674d"
+    },
+    {
+      "path": "coordinator-cursor-3",
+      "receipt_sha256": "008c6b777b85fc70b7eb7c8a87e0bc36df8eb5320feb74a155cf47d722d3b5eb",
+      "synthesis_sha256": "ac930aa755c2902b7c7fb50866afe6a5359698536cce5e3daa3f83ebbddb2cce"
+    },
+    {
+      "path": "coordinator-cursor-4",
+      "receipt_sha256": "4239e6a7715514296c62596c9a496589348a0014b64bea6c338bf951e1a283c4",
+      "synthesis_sha256": "e0312a91d0417cfbb79182a55f15dc5eab983f44bbf0948db4cce6d54477744c"
+    }
+  ],
+  "held_total": 62,
+  "charges_released": 0,
+  "research_units": 3823610,
+  "model_or_symbolic_execution": 0
+}

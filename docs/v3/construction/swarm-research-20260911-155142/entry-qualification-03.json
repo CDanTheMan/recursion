@@ -1,0 +1,158 @@
+{
+  "checked_utc": "2026-09-11T17:25:20.753086+00:00",
+  "admission_sha256": "98cf93cc8c5433490f7ef1d9d4b2842dca4ac52679d5635e904bf96f4ae02811",
+  "cases": [
+    {
+      "name": "count-import",
+      "gate": true,
+      "exit_code": 0,
+      "expected_exit": 0,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 3,
+      "result_sha256": "bd05fe7400add01aa6174f99bb5741100a68d224f91dd91692735f523cf9b0c8"
+    },
+    {
+      "name": "caught-exhaustion",
+      "gate": true,
+      "exit_code": 86,
+      "expected_exit": 86,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 2,
+      "result_sha256": "28d992a827f4388b6a2a540236c2531f586b3913b1e953ddc09326c4e9457865"
+    },
+    {
+      "name": "closed-stderr",
+      "gate": true,
+      "exit_code": 86,
+      "expected_exit": 86,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 2,
+      "result_sha256": "e98016e0caa63f32a39e491f808396fcf5907f7f6234ff710796b8c4c4b4f5e8"
+    },
+    {
+      "name": "profile-disable",
+      "gate": true,
+      "exit_code": 86,
+      "expected_exit": 86,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "83669bc63b35b94cc4c3f9acb704d2e0669494bd8a0bb9d55a3356d2c9e794a3"
+    },
+    {
+      "name": "native-thread",
+      "gate": true,
+      "exit_code": 225,
+      "expected_exit": 225,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "4e6e71c776688013949059925da3e14ffa801ee189a8199115cde5f8c10afc14"
+    },
+    {
+      "name": "native-fork",
+      "gate": true,
+      "exit_code": 225,
+      "expected_exit": 225,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "a30919f33cb1dfe2245972d29057cfa5d8665cceb5f69fac84cbf168101cbbf3"
+    },
+    {
+      "name": "exec",
+      "gate": true,
+      "exit_code": 86,
+      "expected_exit": 86,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "5669ffbd657cee3217f833a43cc776594eae296d49ef6526ed1f9475dc20f261"
+    },
+    {
+      "name": "caught-overflow",
+      "gate": true,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "65973bf054fb1c7e326405493724483badfc9452c2eb115f3ea9b31f7ee592a6"
+    },
+    {
+      "name": "duplicate-json",
+      "gate": true,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "f15c9c9fcb1271854f69417afa3893e3d6e0cd172acccb6642829492cd531d92"
+    },
+    {
+      "name": "literal-nan",
+      "gate": true,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "bebc716e575d2000969ec45bf4f3db45944ec9baf9c2a798c81270bb61f959e3"
+    },
+    {
+      "name": "literal-infinity",
+      "gate": true,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "a89eaff1a7d9272fa4f3e06853e87f296771fb461de902271cfa8b160db5592b"
+    },
+    {
+      "name": "source-write",
+      "gate": true,
+      "exit_code": 86,
+      "expected_exit": 86,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "d064b595988494e0eb07770e55eba1dde11142b990c5e743e7840248e27dabc7"
+    },
+    {
+      "name": "numeric-overflow",
+      "gate": true,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "686bb9d986385d84038e9449788f4f9fb1a8657702d42eead669f1ccbc9db8c7"
+    },
+    {
+      "name": "trailing-json",
+      "gate": true,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "cb442bd01c30eb7d9e42f90e27080f6f579b33234d1c282d7d7f0c62c2dea08c"
+    },
+    {
+      "name": "wrong-filename",
+      "gate": true,
+      "exit_code": 86,
+      "expected_exit": 86,
+      "reason": null,
+      "local_quiescent": true,
+      "body_markers": 0,
+      "result_sha256": "25272bb0e3112f7bed4f0105db285856b7172504574b00c9d140d86dc68ad23b"
+    }
+  ],
+  "passed": true,
+  "scientific_units": 0
+}

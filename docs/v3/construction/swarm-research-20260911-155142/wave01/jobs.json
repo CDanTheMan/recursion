@@ -1,0 +1,88 @@
+[
+  {
+    "id": "q-coupling-audit",
+    "domain": "source-publication",
+    "kind": "research",
+    "brief": "Parent goal-recursion-v2-execution-fabric. Read-only source investigation; no run_command, imports, model execution, writes or recursive delegation. Zero research-state budget. Ten-minute hard worker limit. Use read_file/search/list_files only. Return at most 1200 words in the required JSON filing: findings, exact source evidence references, dissent and limitations must be arrays of strings; files=[]. Cite supplied input/tool refs exactly. Never claim executed verification. Falsifiable question: does the conditional pre-stage source lemma extend to every core action permutation through an explicit delegated-Q invariant under original fixed setup/delivery? Derive exact field/mask conditions, identify counterexamples or smallest executable discriminator, and propose one bounded packet without changing semantics. Prioritize a proof gap rather than restating the lemma.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/charter.json",
+      "docs/v3/construction/swarm-research-20260911-155142/inherited/prestage-correspondence-analysis.md",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/README.md",
+      "experiments/v3/cut-source-overnight/s_domain.py",
+      "experiments/v3/cut-source-overnight/s_inclusive.py",
+      "experiments/v3/cut-source-overnight/s_split.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_domain.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_inclusive.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_split.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_audit.py",
+      "experiments/v3/cut-publication/q_domain.py",
+      "experiments/v3/cut-publication/q_inclusive.py",
+      "experiments/v3/cut-publication/q_split.py",
+      "experiments/v3/cut-source-overnight/batch-05/semantic.py"
+    ],
+    "depends_on": [],
+    "allowed_paths": []
+  },
+  {
+    "id": "reduction-adversary",
+    "domain": "source-publication",
+    "kind": "research",
+    "brief": "Parent goal-recursion-v2-execution-fabric. Read-only source investigation; no run_command, imports, model execution, writes or recursive delegation. Zero research-state budget. Ten-minute hard worker limit. Use read_file/search/list_files only. Return at most 1200 words in the required JSON filing: findings, exact source evidence references, dissent and limitations must be arrays of strings; files=[]. Cite supplied input/tool refs exactly. Never claim executed verification. Falsifiable question: can a stronger bounded reuse/reduction reduce the unexecuted 40080 orders per unit without hiding responses/journals/refusals? Audit prefix sharing and the coverage argument; propose a precisely bounded improvement and independent unreduced small-domain controls, or explain a concrete obstruction. Distinguish certificate-generation cost from reducer visits.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/charter.json",
+      "docs/v3/construction/swarm-research-20260911-155142/inherited/prestage-correspondence-analysis.md",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/README.md",
+      "docs/v3/construction/swarm-research-20260911-155142/inherited/remaining-scale-coverage-analysis.md",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/prefix-argument.md",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/packet-06/guard-counting-argument.md",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/prefix_kernel.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/shared.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/selected.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/fresh_complete.py",
+      "experiments/v3/cut-source-overnight/batch-07/identity.py",
+      "experiments/v3/cut-source-overnight/batch-06/adapter_traces.py"
+    ],
+    "depends_on": [],
+    "allowed_paths": []
+  },
+  {
+    "id": "trace-proof-audit",
+    "domain": "source-publication",
+    "kind": "research",
+    "brief": "Parent goal-recursion-v2-execution-fabric. Read-only source investigation; no run_command, imports, model execution, writes or recursive delegation. Zero research-state budget. Ten-minute hard worker limit. Use read_file/search/list_files only. Return at most 1200 words in the required JSON filing: findings, exact source evidence references, dissent and limitations must be arrays of strings; files=[]. Cite supplied input/tool refs exactly. Never claim executed verification. Falsifiable question: which exact invariant remains required to lift staged-identity selected-history evidence to all original-scale action orders? Audit original masks, chronological indices, restoration and state patches; find a concrete defect or design a decisive independent test packet. Do not conflate original-Q reachability with adapter equivalence.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/charter.json",
+      "docs/v3/construction/swarm-research-20260911-155142/inherited/prestage-correspondence-analysis.md",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/README.md",
+      "experiments/v3/cut-source-overnight/batch-06/adapter_traces.py",
+      "experiments/v3/cut-source-overnight/batch-06/a_audit.py",
+      "experiments/v3/cut-source-overnight/batch-07/identity.py",
+      "experiments/v3/cut-source-overnight/batch-07/check.py",
+      "experiments/v3/cut-source-overnight/batch-05/semantic.py",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/packet-08/staged-origin-obligation.md"
+    ],
+    "depends_on": [],
+    "allowed_paths": []
+  },
+  {
+    "id": "gate-adapter-audit",
+    "domain": "source-publication",
+    "kind": "research",
+    "brief": "Parent goal-recursion-v2-execution-fabric. Read-only source investigation; no run_command, imports, model execution, writes or recursive delegation. Zero research-state budget. Ten-minute hard worker limit. Use read_file/search/list_files only. Return at most 1200 words in the required JSON filing: findings, exact source evidence references, dissent and limitations must be arrays of strings; files=[]. Cite supplied input/tool refs exactly. Never claim executed verification. Falsifiable question: which inherited scientific gate commands require Windows/large mounts/over60s, and what minimum additive WSL execution adapter could preserve exact source pins, charge-before-run counters, locks, ownership, limits and receipts? Inventory from source only. Propose an executable adapter packet and critical adversarial controls, not a weakened gate. Return exact source anchors and unresolved Windows bindings.",
+    "inputs": [
+      "docs/v3/construction/swarm-research-20260911-155142/charter.json",
+      "docs/v3/construction/swarm-research-20260911-155142/inherited/prestage-correspondence-analysis.md",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/README.md",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/run.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/envelope.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/baseline.py",
+      "experiments/v3/eight-hour-research-20260910-01a08a22-slice2/audit.py",
+      "tools/construction_swarm/sandbox.py",
+      "tools/construction_swarm/foundry_client.py",
+      "tools/construction_swarm/foundry_tools.py",
+      "docs/v3/construction/eight-hour-research-20260910-01a08a22-slice2/policy-revision-07.json"
+    ],
+    "depends_on": [],
+    "allowed_paths": []
+  }
+]

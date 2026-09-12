@@ -1,0 +1,61 @@
+[
+  {
+    "job": "budget-v2",
+    "state": "returned",
+    "verdict": "reject",
+    "input_sha256": "7926c7f92e4e62ac7abf7d6739b3f5d2fe0d9853452f38416e7d54f2a4fa0d2f",
+    "receipt_sha256": "01f9e2b1aa3db56fefd687a6343b68060af0707129e385a8cbeb8d3b8b71478d",
+    "local_quiescent": true,
+    "error": null,
+    "review_sha256": "a05cf653ae2814bbf6350d035b717689415f2d385ef14dbb5cb9589cfdc3a981"
+  },
+  {
+    "job": "control-entry-v2",
+    "state": "returned",
+    "verdict": "reject",
+    "input_sha256": "6e640acd5b6665a2bf8ab89dd517ecd645c385c01972026d1a957f59c67cb9c7",
+    "receipt_sha256": "cb93e4b86ce2da636be781fb98ae42f352945a11a1a9e573acf79c0f80bdba33",
+    "local_quiescent": true,
+    "error": null,
+    "review_sha256": "9e947d0150b5055e2453e2e80448931cf4c4583a96fc1dfd735a18ee47de78b3"
+  },
+  {
+    "job": "controller-a",
+    "state": "returned",
+    "verdict": "reject",
+    "input_sha256": "8f7cbc64bc9bd8fadfe7226e0e6ef998e1aaacdbe34538dcb4bb72ac0034b536",
+    "receipt_sha256": "acc8b4e3a269eba28497e383f58e07e2d82695f7998c8fc9b5013cbb6279116f",
+    "local_quiescent": true,
+    "error": null,
+    "review_sha256": "8ff5a20359b1f77fb3c1c92f4366870e1906196630ec4ca97ac179a1a919ad2b"
+  },
+  {
+    "job": "controller-b",
+    "state": "returned",
+    "verdict": "reject",
+    "input_sha256": "0723fed7bb12d5527342f04e88a15896547649b1e369b9ed735290285cb793bf",
+    "receipt_sha256": "ef4e7bd991697b29008f90d218e32a6fd730cb8ccdddd0568da9e9ceaf91d1e0",
+    "local_quiescent": true,
+    "error": null,
+    "review_sha256": "ebd18d66a58d683677e2e98a0c0d6ffc3c3388013e96a7fa1ad5271255a28bb3"
+  },
+  {
+    "job": "publication-recovered",
+    "state": "unknown",
+    "verdict": null,
+    "input_sha256": "ca543316b160198fe6bd67f6cd0cd3e709b61dcf2ff86996e62b0c4268fd3d7a",
+    "receipt_sha256": "eb73c84c7b80852a05e6df4f66abbc1eb05b2fbb860e10734f507247ade94ad7",
+    "local_quiescent": null,
+    "error": "OSError: [Errno 7] Argument list too long: '/usr/bin/python3'"
+  },
+  {
+    "job": "publication-recovered-r2",
+    "state": "returned",
+    "verdict": "repair",
+    "input_sha256": "5cf10def645879a0553c795a0746f7d9449cccca3ff65e76bed283c81f7c6b0a",
+    "receipt_sha256": "679349570511f44dc93e43d4470c1f69be6e85c70b706bc056e48489af93f6a8",
+    "local_quiescent": true,
+    "error": null,
+    "review_sha256": "ecbe29b418e4a558c0243d92410ba97d4ead2149e7a35e7ad0b4ea8cf399b990"
+  }
+]

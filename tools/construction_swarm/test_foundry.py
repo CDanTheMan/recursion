@@ -9,9 +9,15 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
-from .contracts import Refused, digest, encoded, strict_json
+from .contracts import JOB_TOOLS, Refused, digest, encoded, strict_json
 from .foundry_coordinator import validate_synthesis
-from .foundry_tools import Broker, ToolUncertain, run_command, serve_connection
+from .foundry_tools import (
+    Broker,
+    ToolUncertain,
+    definitions,
+    run_command,
+    serve_connection,
+)
 
 
 class BrokerTests(unittest.TestCase):
@@ -46,6 +52,22 @@ class BrokerTests(unittest.TestCase):
             data = (directory / 'receipt.json').read_bytes()
             self.assertEqual(digest(data), row['sha256'])
             self.assertEqual(strict_json(data)['request_sha256'], digest((directory / 'request.json').read_bytes()))
+
+    def test_job_tool_allowlist_filters_discovery_and_receipts_denial(self):
+        broker = self.broker(allowed_tools=['list_files', 'read_file'])
+        self.assertEqual([item['name'] for item in definitions(broker.allowed_tools)],
+                         ['list_files', 'read_file'])
+        denied = broker.call('run_command', {'argv': ['true'], 'seconds': 1})
+        self.assertFalse(denied['ok'])
+        self.assertIn('not permitted', denied['error'])
+        self.assertFalse(broker.uncertain)
+        self.assertTrue(broker.call('list_files', {})['ok'])
+        self.assertEqual(len(broker.receipts), 2)
+        request = strict_json((self.root / 'broker/1/request.json').read_bytes())
+        receipt = strict_json((self.root / 'broker/1/receipt.json').read_bytes())
+        self.assertEqual((request['number'], request['name']), (1, 'run_command'))
+        self.assertFalse(receipt['accepted'])
+        self.assertEqual(receipt['result']['error'], 'tool not permitted for this job')
 
     def test_uncertain_cleanup_prevents_further_tools_and_success(self):
         broker = self.broker()
@@ -182,7 +204,9 @@ class BrokerTests(unittest.TestCase):
 
         broker = self.broker()
         broker.call('list_files', {})
-        job = {'id': 'worker', 'allowed_paths': []}
+        job = {'id': 'worker', 'kind': 'develop',
+               'allowed_paths': ['tools/code.py', 'tools/new.py'],
+               'allowed_tools': list(JOB_TOOLS)}
         transport = {'exit_code': 0, 'reason': None, 'local_quiescent': True, 'broker_errors': []}
         export = {'agent': {'model_name': 'SWE-2 Max'}, 'steps': [{
             'source': 'agent', 'model_name': 'swe-2-max', 'message': 'Malformed final filing',
@@ -190,7 +214,56 @@ class BrokerTests(unittest.TestCase):
                 'server_name': 'foundry', 'tool_name': 'list_files', 'arguments': {}}}]}]}
 
         with self.assertRaises(CompletedFailure):
-            collect_filing(export, broker, job, [], transport)
+            collect_filing(export, broker, job, [], transport, JOB_TOOLS)
+
+        invalid_filing = copy.deepcopy(export)
+        invalid_filing['steps'][0]['message'] = encoded({
+            'job_id': 'worker', 'summary': 'Completed with a bad citation.',
+            'findings': [], 'evidence': ['unbound'], 'dissent': [],
+            'limitations': [], 'files': [],
+        }).decode()
+        with self.assertRaisesRegex(CompletedFailure, 'unbound evidence citation'):
+            collect_filing(invalid_filing, broker, job, [], transport, JOB_TOOLS)
+
+        no_answer = copy.deepcopy(export)
+        no_answer['steps'][0]['message'] = ''
+        with self.assertRaisesRegex(CompletedFailure, 'missing final worker answer'):
+            collect_filing(no_answer, broker, job, [], transport, JOB_TOOLS)
+
+        restricted_broker = self.broker('restricted', allowed_tools=['list_files'])
+        denied = restricted_broker.call('run_command', {'argv': ['true'], 'seconds': 1})
+        restricted_job = {'id': 'worker', 'allowed_paths': [], 'allowed_tools': ['list_files']}
+        restricted_export = {'agent': {'model_name': 'SWE-2 Max'}, 'steps': [{
+            'source': 'agent', 'model_name': 'swe-2-max',
+            'message': encoded({'job_id': 'worker', 'summary': 'Denied tool.',
+                                'findings': [], 'evidence': [denied['receipt']], 'dissent': [],
+                                'limitations': [], 'files': []}).decode(),
+            'tool_calls': [{'function_name': 'mcp_call_tool', 'arguments': {
+                'server_name': 'foundry', 'tool_name': 'run_command',
+                'arguments': {'argv': ['true'], 'seconds': 1}}}],
+        }]}
+        with self.assertRaisesRegex(CompletedFailure, 'tool outside job allowlist'):
+            collect_filing(restricted_export, restricted_broker, restricted_job, [], transport,
+                           allowed_tools=['list_files'])
+        with self.assertRaisesRegex(Refused, 'tool policy differs'):
+            collect_filing(restricted_export, restricted_broker, restricted_job, [], transport,
+                           allowed_tools=JOB_TOOLS)
+        with self.assertRaisesRegex(Refused, 'did not complete normally'):
+            collect_filing(restricted_export, restricted_broker, restricted_job, [],
+                           {**transport, 'local_quiescent': False},
+                           allowed_tools=['list_files'])
+
+        from .foundry_client import worker_allowed_tools
+        with self.assertRaisesRegex(Refused, 'plan_version'):
+            worker_allowed_tools({'job': {'id': 'unbound', 'allowed_paths': []}})
+        self.assertEqual(worker_allowed_tools({'plan_version': 2, 'job': {
+            'id': 'legacy', 'allowed_paths': []}}), JOB_TOOLS)
+        with self.assertRaisesRegex(Refused, 'allowed_tools'):
+            worker_allowed_tools({'plan_version': 3, 'job': {
+                'id': 'v3', 'kind': 'research', 'allowed_paths': []}})
+        self.assertEqual(worker_allowed_tools({'plan_version': 3, 'job': {
+            'id': 'v3', 'kind': 'research', 'allowed_paths': [],
+            'allowed_tools': []}}), ())
 
         for name, mutate, expected_error in [
             ('changed-model', lambda e: e['steps'][0].update(model_name='other-model'), 'model changed'),
@@ -205,10 +278,37 @@ class BrokerTests(unittest.TestCase):
                 invalid = copy.deepcopy(export)
                 mutate(invalid)
                 with self.assertRaisesRegex(Refused, expected_error):
-                    collect_filing(invalid, broker, job, [], transport)
+                    collect_filing(invalid, broker, job, [], transport, JOB_TOOLS)
 
         with self.assertRaisesRegex(Refused, 'did not complete normally'):
-            collect_filing(export, broker, job, [], {**transport, 'local_quiescent': False})
+            collect_filing(export, broker, job, [],
+                           {**transport, 'local_quiescent': False}, JOB_TOOLS)
+
+    def test_job_tool_allowlist_binds_mcp_config_prompt_and_discovery(self):
+        from .foundry_client import permission_presentation, worker_prompt
+        allowed = ('list_files', 'read_file')
+        packet = {'plan_version': 3, 'job': {
+            'id': 'worker', 'kind': 'research', 'allowed_paths': [],
+            'allowed_tools': list(allowed)}}
+        config = permission_presentation(allowed)
+        self.assertEqual(config['permissions']['allow'],
+                         ['mcp__foundry__list_files', 'mcp__foundry__read_file'])
+        prompt = worker_prompt(packet, allowed)
+        self.assertIn('exact allowed foundry tools are: list_files,read_file.', prompt)
+
+        broker = self.broker('filtered-mcp', allowed_tools=allowed)
+        client, server = socket.socketpair()
+        self.addCleanup(client.close)
+        self.addCleanup(server.close)
+        thread = threading.Thread(target=serve_connection, args=(server, broker), daemon=True)
+        thread.start()
+        client.sendall(encoded({'jsonrpc': '2.0', 'id': 8, 'method': 'tools/list'}) + b'\n')
+        with client.makefile('rb') as stream:
+            response = strict_json(stream.readline())
+        self.assertEqual([item['name'] for item in response['result']['tools']], list(allowed))
+        client.shutdown(socket.SHUT_WR)
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
 
     def test_dependent_verifier_sees_proposed_bytes_and_conflicts_block(self):
         from .foundry_client import workspace_files

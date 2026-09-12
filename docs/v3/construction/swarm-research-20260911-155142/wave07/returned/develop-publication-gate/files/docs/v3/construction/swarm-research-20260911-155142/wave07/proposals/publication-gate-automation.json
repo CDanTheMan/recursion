@@ -1,0 +1,421 @@
+{
+  "schema": "recursion-publication-gate-automation/v1",
+  "record": "publication-gate-automation",
+  "campaign": "research-20260911-155142",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "review_branch": "codex/swarm-research-20260911-155142",
+  "pull_request": 124,
+  "wave": "wave07",
+  "status": "SOURCE_ONLY_PROPOSAL_NOT_RUN",
+  "scientific_approval": false,
+  "accepted": false,
+  "purpose": "Define one machine-checkable exact-final-candidate publication gate for the review branch. The gate sequences the existing Windows and native-WSL construction checks, the qualified Ruff lint or its documented WSL substitute, diff checks, source-only syntax checks, candidate/branch/tree identity checks, separately owned receipt/source ownership audits, adversarial-review disposition completeness, PR-body hash binding and clean-cgroup verification into a single fail-closed verdict bound to one frozen commit. It is a construction/publication gate only; it is not the inherited 87-command scientific gate, not scientific admission, and not merge approval.",
+  "basis": {
+    "charter_sha256": "476ee2840dbbac5481fdc250104a85b4881a58c3c3292688294c9ea3f51d3f4e",
+    "policy_revision_02_sha256": "61947e0c3eef0dd63de5a72c3226df0b897254822f29ebf6db1fe460040b6714",
+    "model_revision_01_sha256": "81a0624af95c15bdf9b9e342d706b9fa4d1b4c39ff048249f27d0dca259aaecf",
+    "validation_contract_sha256": "39184142c00a1a55d66ca0700f26b78245593e51f78130550714f3fa547c34da",
+    "publication_workflow_status_01_sha256": "32130aa50853ec23de3be242f2112dcea9a01396a118dbf96d661698b1346674",
+    "workflow_audit_grok_01_sha256": "e9da530e8107cb18a24ce6cfc3d935e1ad49b1ce49a927b241c1099546c1c128",
+    "scientific_admission_status_01_sha256": "4de52d67fefe66c5fc39bfa7da5f38a1d4999d8626fabde7cc53e8c79ec33eb4"
+  },
+  "observed_facts_reflected": {
+    "github_evidence": "Merged PRs 120-123 have zero GitHub statusCheckRollup entries and zero GitHub review objects; their acceptance evidence was internal and candidate-bound. This gate therefore treats internal retained receipts as the acceptance evidence, does not require or consult GitHub status checks or review objects, and fails if the PR body claims GitHub-side checks or reviews that do not exist.",
+    "checkpoint_history": "construction-checkpoint-gate-01 FAILED because it added a WSL Ruff step although Ruff is not installed in the native environment; construction-checkpoint-gate-02 PASSED on cdd20b990e5e7bad99c1832332cdd1b37a40130e with windows-unittest, windows-ruff, diff-check, wsl-unittest and wsl-source-pycompile. Windows Ruff is the qualified lint route; the documented WSL substitute is source-only py_compile.",
+    "moving_candidate": "PR124 is a draft with a moving head; no immutable exact-current-candidate complete Windows or WSL gate receipt exists yet. Publication remains OPEN_MOVING_CANDIDATE until the freeze step of this gate.",
+    "scientific_separation": "scientific_admission remains BLOCKED_NO_EXECUTION_AUTHORIZED on a separate track; a PASS of this gate is construction-only and must never be read as scientific acceptance, execution authorization or control results.",
+    "internal_receipt_convention": "Receipt presence is not proof of contents; ownership audits must re-verify receipt bodies, log bytes and source membership before the verdict may pass."
+  },
+  "definitions": {
+    "hex40": "^[0-9a-f]{40}$",
+    "hex64": "^[0-9a-f]{64}$",
+    "cgroup_path_re": "^/sys/fs/cgroup/recursion-foundry-tool-[0-3]$",
+    "check_status": ["PASS", "FAIL", "UNKNOWN", "SKIPPED_NOT_RUN"],
+    "verdict_status": ["PASS_CONSTRUCTION_ONLY", "FAIL", "INCOMPLETE"],
+    "disposition_values": ["fixed-in-candidate", "rejected-with-reason", "deferred-owner-bound"],
+    "canonical_json": "UTF-8, no BOM, sorted keys, no duplicate keys, no nonfinite numbers, separators (',',':'), single trailing newline"
+  },
+  "inputs": [
+    {
+      "name": "frozen_candidate_commit",
+      "kind": "produced-by-freeze-step",
+      "requirement": "40-hex commit; equals git rev-parse HEAD on both Windows and WSL workspaces at every check; the current draft head cdd20b990e5e7bad99c1832332cdd1b37a40130e is a checkpoint observation, NOT the frozen value",
+      "resolved": false,
+      "unresolved_reason": "final candidate not yet frozen; integrations must stop first"
+    },
+    {
+      "name": "frozen_candidate_tree",
+      "kind": "produced-by-freeze-step",
+      "requirement": "40-hex tree of frozen_candidate_commit via git rev-parse HEAD^{tree}",
+      "resolved": false
+    },
+    {
+      "name": "activation_source_commit",
+      "kind": "constant",
+      "value": "235aaa7e76095ee18460d9b7ba7a6a8bad1005ac",
+      "resolved": true
+    },
+    {
+      "name": "command_manifest",
+      "kind": "preregistered-file",
+      "requirement": "One canonical JSON manifest naming every check id below, its exact argv per host, expected test counts, expected skip counts, the campaign source file list with sha256 entries, and frozen_candidate_commit/tree. Manifest sha256 is fixed before any gate command runs.",
+      "resolved": false,
+      "unresolved_reason": "manifest file does not exist yet"
+    },
+    {
+      "name": "campaign_source_manifest_entries",
+      "kind": "manifest-section",
+      "requirement": "Sorted list of {path, sha256, bytes} covering at minimum experiments/v3/swarm-research-20260911-155142/{boundary.py,inventory_audit.py,boundary_audit.py,boundary_controls.py,research_entry.py}; last tracked sha256 values are recorded in scientific-admission-status-01.json but the manifest must re-derive them from the frozen candidate",
+      "resolved": false
+    },
+    {
+      "name": "gate_attempt_ordinal",
+      "kind": "produced-by-freeze-step",
+      "requirement": "Monotonically increasing integer; each run of this gate is a new attempt; prior attempts are retained and never rewritten or reused",
+      "resolved": false
+    },
+    {
+      "name": "pr_body_bytes",
+      "kind": "file",
+      "requirement": "Final non-draft PR body as exact UTF-8 bytes; sha256 recorded in manifest before final reviews run",
+      "resolved": false,
+      "unresolved_reason": "final PR body not yet written"
+    },
+    {
+      "name": "receipt_root_native",
+      "kind": "directory",
+      "value": "/var/lib/recursion-foundry/campaigns/research-20260911-155142/publication-gate/<attempt>",
+      "requirement": "Append-only; every artifact below lands here with exclusive create, fsynced file and directory",
+      "resolved": true
+    },
+    {
+      "name": "receipt_root_windows",
+      "kind": "directory",
+      "requirement": "Windows-host retained artifact directory for windows-side logs/receipts; exact path is part of the command manifest",
+      "resolved": false,
+      "unresolved_reason": "Windows retained path not named in packet"
+    },
+    {
+      "name": "owned_audit_receipts",
+      "kind": "files",
+      "requirement": "Two separately owned audit receipts (distinct owner identity from the gate runner and from each other), each OWNED_RETAINED_AUDIT_PASS-bound to every gate receipt, log and source member",
+      "resolved": false
+    },
+    {
+      "name": "adversarial_review_bundle",
+      "kind": "files",
+      "requirement": "At least two independent final reviews bound to frozen_candidate_commit, command_manifest sha256, every gate receipt sha256, both audit sha256s, pr_body sha256 and the limitations text. Reviewer identities distinct. Reviewer set per model-revision-01 (gpt-5.6-sol xhigh where same-model review is required) plus the established adversarial coordinator route; exact reviewer list is fixed in the manifest.",
+      "resolved": false
+    },
+    {
+      "name": "disposition_table",
+      "kind": "file",
+      "requirement": "Canonical JSON mapping every reservation/defect/blocking_gap/dissent item id in the review bundle to {item_id, disposition in disposition_values, reason, evidence_sha256_or_null}",
+      "resolved": false
+    },
+    {
+      "name": "quota_observation",
+      "kind": "file",
+      "requirement": "usage record refreshed by an actual quota observation, age <= 900s at gate start and before verdict emission; remaining_percent above the 8-point rolling reserve; reset_credits_used == 0; new_metered_spend == 0",
+      "resolved": false
+    },
+    {
+      "name": "clock_bounds",
+      "kind": "constants",
+      "value": {
+        "campaign_deadline_utc": "2026-09-11T23:51:42Z",
+        "finalization_reserve_seconds": 10200
+      },
+      "requirement": "Verdict must be emitted before deadline minus finalization reserve",
+      "resolved": true
+    }
+  ],
+  "ordering": [
+    "freeze-and-scope",
+    "preregistration",
+    "windows-unittest",
+    "windows-ruff",
+    "wsl-unittest",
+    "wsl-lint-or-substitute",
+    "diff-check",
+    "source-only-syntax",
+    "clean-cgroup",
+    "ownership-audit-1",
+    "ownership-audit-2",
+    "final-reviews-bound",
+    "disposition-completeness",
+    "pr-body-hash-binding",
+    "verdict"
+  ],
+  "checks": [
+    {
+      "id": "freeze-and-scope",
+      "runs_on": "both-hosts",
+      "commands": [
+        "git rev-parse HEAD",
+        "git rev-parse HEAD^{tree}",
+        "git branch --show-current",
+        "git status --porcelain=v1 -z --untracked-files=all",
+        "git merge-base <activation_source_commit> HEAD",
+        "git rev-list --merges <activation_source_commit>..HEAD",
+        "git diff --name-only <activation_source_commit> HEAD",
+        "git diff --name-only --diff-filter=D <activation_source_commit> HEAD"
+      ],
+      "pass_conditions": [
+        "HEAD equals frozen_candidate_commit on both Windows and WSL workspaces",
+        "tree equals frozen_candidate_tree on both workspaces",
+        "branch equals codex/swarm-research-20260911-155142",
+        "porcelain output is empty on both workspaces (exactly clean)",
+        "merge-base equals activation_source_commit and it is an ancestor of HEAD",
+        "rev-list --merges output is empty (linear campaign ancestry)",
+        "every changed path is under docs/v3/construction/swarm-research-20260911-155142/, experiments/v3/swarm-research-20260911-155142/, tools/construction_swarm/ or docs/v3/construction-swarm/",
+        "no inherited path is deleted",
+        "no PAUSE or STOP marker exists in either workspace, the common git dir, or the evidence root",
+        "parent goal record goal-recursion-v2-execution-fabric is present and active",
+        "current time is before campaign deadline minus finalization reserve"
+      ],
+      "emits": ["freeze-receipt.json"],
+      "on_fail": "abort gate; verdict FAIL_CANDIDATE_IDENTITY"
+    },
+    {
+      "id": "preregistration",
+      "runs_on": "offline-record-check",
+      "commands": ["UNRESOLVED: manifest validation tool/path not named in packet; any strict-JSON re-hash of command_manifest suffices"],
+      "pass_conditions": [
+        "command_manifest exists, parses under canonical_json, and its sha256 is durably recorded before any later check runs",
+        "manifest binds frozen_candidate_commit, frozen_candidate_tree, review branch, parent goal, scope, non-goals and the complete ordered check list with per-check argv",
+        "manifest lists expected unittest counts and platform-skip counts per host; these become the expected values below (checkpoint observation was 70 tests / 7 Windows skips / 1 WSL skip and must NOT be hardcoded because the count already moved 69-to-70 once)",
+        "manifest lists campaign_source_manifest_entries with per-file sha256",
+        "manifest names the final reviewer identities and the PR-body evidence fields"
+      ],
+      "emits": ["manifest-receipt.json"],
+      "on_fail": "abort gate; verdict INCOMPLETE_MANIFEST"
+    },
+    {
+      "id": "windows-unittest",
+      "runs_on": "windows-host",
+      "commands": ["UNRESOLVED: exact Windows unittest argv lives in the command manifest; it must be the same complete construction suite already exercised by checkpoint-gate-02"],
+      "pass_conditions": [
+        "exit_code == 0",
+        "one uninterrupted run against frozen_candidate_commit only",
+        "observed test count equals manifest expected count; observed platform-skip count equals manifest expected skip count",
+        "log bytes retained; log_sha256 recorded in receipt"
+      ],
+      "emits": ["windows-unittest.log", "windows-unittest.receipt.json"],
+      "on_fail": "record FAIL with log; continue no further host checks; verdict FAIL"
+    },
+    {
+      "id": "windows-ruff",
+      "runs_on": "windows-host",
+      "commands": ["UNRESOLVED: exact ruff argv in manifest; Windows Ruff is the qualified lint route"],
+      "pass_conditions": [
+        "exit_code == 0",
+        "lint scope covers every path in campaign_source_manifest_entries plus the construction-tool paths named in the manifest",
+        "log retained with log_sha256"
+      ],
+      "emits": ["windows-ruff.log", "windows-ruff.receipt.json"],
+      "on_fail": "verdict FAIL"
+    },
+    {
+      "id": "wsl-unittest",
+      "runs_on": "wsl-native",
+      "commands": ["UNRESOLVED: exact WSL unittest argv in manifest; must be the same complete suite as windows-unittest on the same frozen candidate"],
+      "pass_conditions": [
+        "exit_code == 0",
+        "one uninterrupted run against frozen_candidate_commit",
+        "observed test/skip counts equal manifest WSL expectations",
+        "log retained with log_sha256"
+      ],
+      "emits": ["wsl-unittest.log", "wsl-unittest.receipt.json"],
+      "on_fail": "verdict FAIL"
+    },
+    {
+      "id": "wsl-lint-or-substitute",
+      "runs_on": "wsl-native",
+      "commands": [
+        "PREFERRED_IF_PRESENT: ruff <manifest lint scope>   (only when a ruff executable is actually observed on the native host)",
+        "DOCUMENTED_SUBSTITUTE: python3 -m py_compile <each campaign_source_manifest_entries path>   (source-only; no import, no execution)"
+      ],
+      "pass_conditions": [
+        "exactly one route is recorded: {route:'wsl-ruff', ruff_version} or {route:'wsl-source-pycompile', reason:'ruff-not-installed-native', windows_ruff_receipt_sha256:<hex64 of the windows-ruff receipt>}",
+        "chosen route exits 0 over the full manifest scope",
+        "if substitute is used the receipt must state that Windows Ruff remains the qualified lint route; a missing native ruff is NOT itself a failure, but adding a wsl-ruff step that cannot run repeats the checkpoint-gate-01 defect and is a manifest failure"
+      ],
+      "emits": ["wsl-lint.log", "wsl-lint.receipt.json"],
+      "on_fail": "verdict FAIL"
+    },
+    {
+      "id": "diff-check",
+      "runs_on": "both-hosts",
+      "commands": [
+        "git status --porcelain=v1 -z --untracked-files=all   (re-verified empty)",
+        "UNRESOLVED: the existing checkpoint 'diff-check' step's exact comparison (likely branch/PR diff) is in the command manifest"
+      ],
+      "pass_conditions": [
+        "exit_code == 0 for the manifest diff command on both hosts",
+        "working tree remains exactly clean after all host checks (no build residue, no stray writes)",
+        "empty diff-check log is acceptable and must still be retained and hashed"
+      ],
+      "emits": ["diff-check.log", "diff-check.receipt.json"],
+      "on_fail": "verdict FAIL"
+    },
+    {
+      "id": "source-only-syntax",
+      "runs_on": "wsl-native",
+      "commands": [
+        "python3 -c 'import ast,sys; [ast.parse(open(p,\"rb\").read(),p) for p in sys.argv[1:]]' <each campaign_source_manifest_entries path>   OR   python3 -m py_compile <each path>"
+      ],
+      "pass_conditions": [
+        "every listed source file parses/compiles with exit_code 0",
+        "no file is imported or executed; __main__ blocks, audithooks and module bodies never run",
+        "sha256 of each checked file equals its manifest entry (checked from frozen candidate bytes, not workspace drift)",
+        "boundary_controls.py's refusing __main__ and research_entry.py's wrapper requirements are expected source text, not syntax failures"
+      ],
+      "emits": ["source-syntax.log", "source-syntax.receipt.json"],
+      "on_fail": "verdict FAIL"
+    },
+    {
+      "id": "clean-cgroup",
+      "runs_on": "wsl-native (plus windows-quiescence-attestation)",
+      "commands": [
+        "for each tool-executed command: record outcome.isolation = {path, quiescent, cleanup_error, memory_peak, started_unix, ended_unix}",
+        "final sweep: verify no path matching cgroup_path_re exists for this attempt",
+        "UNRESOLVED: Windows-side equivalent quiescence mechanism is not named in packet; manifest must name a process-tree/exit-attestation field or mark the check windows-side-not-applicable with recorded reason"
+      ],
+      "pass_conditions": [
+        "every native command outcome reports exit-attributed isolation.path matching cgroup_path_re, quiescent == true, cleanup_error == null, and the path absent after the command ends",
+        "memory_peak is an int within the manifest job bound",
+        "final sweep finds zero live owned cgroups attributable to this attempt before verdict emission"
+      ],
+      "emits": ["cgroup-verification.receipt.json"],
+      "on_fail": "verdict FAIL; lingering owned cgroup blocks any PASS regardless of other checks"
+    },
+    {
+      "id": "ownership-audit-1",
+      "runs_on": "separately-owned-audit",
+      "commands": ["UNRESOLVED: owned auditor entry; must be a distinct owner identity from the gate runner and from ownership-audit-2"],
+      "pass_conditions": [
+        "re-parses every gate receipt under canonical_json; receipt fields bind frozen_candidate_commit, frozen_candidate_tree, manifest sha256 and attempt ordinal",
+        "recomputes every log_sha256 against retained log bytes; membership is complete (no unlisted file in the attempt directory, no listed file missing)",
+        "recomputes each campaign_source_manifest_entries sha256 from git show <candidate>:<path> bytes",
+        "emits OWNED_RETAINED_AUDIT_PASS receipt with attempt_membership map and scientific_approval == false"
+      ],
+      "emits": ["owned-audit-1.receipt.json"],
+      "on_fail": "verdict FAIL"
+    },
+    {
+      "id": "ownership-audit-2",
+      "runs_on": "separately-owned-audit",
+      "commands": ["UNRESOLVED: second independently owned auditor entry"],
+      "pass_conditions": ["same pass conditions as ownership-audit-1 under a distinct owner identity; both audit sha256 values enter the verdict"],
+      "emits": ["owned-audit-2.receipt.json"],
+      "on_fail": "verdict FAIL"
+    },
+    {
+      "id": "final-reviews-bound",
+      "runs_on": "offline-record-check",
+      "commands": ["re-hash each review file; compare fields"],
+      "pass_conditions": [
+        "at least two independent final review records exist with distinct reviewer identities",
+        "each review binds frozen_candidate_commit, manifest sha256, every gate check receipt sha256, both owned-audit sha256s, pr_body sha256 and the limitations text verbatim",
+        "reviews postdate the last gate receipt they cite; reviews bound to an earlier checkpoint or moving head are stale and do not count",
+        "adversarial/dissent sections may be non-empty; unresolved items are handled by disposition-completeness, not suppressed"
+      ],
+      "emits": ["review-binding.receipt.json"],
+      "on_fail": "verdict INCOMPLETE_REVIEWS"
+    },
+    {
+      "id": "disposition-completeness",
+      "runs_on": "offline-record-check",
+      "commands": ["re-hash disposition_table; enumerate review items"],
+      "pass_conditions": [
+        "every reservation, defect, blocking_gap and dissent item in every bound review appears exactly once in disposition_table",
+        "each disposition is one of disposition_values with a nonempty reason; fixed-in-candidate must cite evidence_sha256 (commit or artifact); deferred-owner-bound must cite the owning record that binds the deferral",
+        "disposition_table sha256 is recorded in the verdict; no review item is silently dropped",
+        "known live items that must appear if still asserted: moving-candidate gap, absent exact-current-candidate WSL/full gate receipts, unsupported PR120/PR123 body claims, weak PR122 receipt coverage, wave06 unfavorable outcomes"
+      ],
+      "emits": ["disposition.receipt.json"],
+      "on_fail": "verdict INCOMPLETE_DISPOSITIONS"
+    },
+    {
+      "id": "pr-body-hash-binding",
+      "runs_on": "offline-record-check",
+      "commands": ["sha256 over final pr_body_bytes; field scan"],
+      "pass_conditions": [
+        "sha256(pr_body_bytes) equals the value bound into manifest and final reviews",
+        "body contains: frozen_candidate_commit, verdict attempt ordinal, every gate check receipt sha256, both owned-audit sha256s, review bundle sha256s, disposition_table sha256, and a limitations section",
+        "honesty rule: body must not claim GitHub status checks, GitHub reviews or required-checks protection as evidence (observed: zero exist on PRs 120-124); acceptance evidence is internal receipts only and the body must say so",
+        "body must state scientific admission remains BLOCKED_NO_EXECUTION_AUTHORIZED and that this gate is construction-only",
+        "body is published on the review branch as non-draft only after verdict PASS_CONSTRUCTION_ONLY; merge authority is Lucas alone"
+      ],
+      "emits": ["pr-body-binding.receipt.json", "pr-body.snapshot.md"],
+      "on_fail": "verdict FAIL_PR_BODY_BINDING"
+    },
+    {
+      "id": "verdict",
+      "runs_on": "offline-record-emit",
+      "commands": ["emit publication-gate verdict record (canonical_json) into receipt_root_native"],
+      "pass_conditions": [
+        "PASS_CONSTRUCTION_ONLY requires every prior check PASS on the same frozen_candidate_commit and same attempt ordinal",
+        "verdict re-runs freeze-and-scope identity assertions immediately before emission; any drift downgrades to FAIL_CANDIDATE_DRIFT",
+        "verdict.status in verdict_status; verdict.scientific_admission == 'BLOCKED_NO_EXECUTION_AUTHORIZED'; verdict.accepted == false; verdict.merge_authority == 'Lucas alone'"
+      ],
+      "emits": ["verdict.json"],
+      "on_fail": "n/a"
+    }
+  ],
+  "outputs": {
+    "verdict_record_fields": [
+      "schema", "campaign", "parent_goal", "gate_attempt_ordinal", "candidate",
+      "candidate_tree", "review_branch", "pull_request", "manifest_sha256",
+      "checks[{id,status,receipt_sha256,log_sha256}]", "owned_audit_sha256[2]",
+      "review_sha256[]", "disposition_table_sha256", "pr_body_sha256",
+      "cgroup_verification{swept, violations[]}", "started_utc", "finished_utc",
+      "status", "scientific_admission", "accepted", "merge_authority",
+      "limitations[]"
+    ],
+    "retention": "All receipts, logs, review files, disposition table and PR body snapshot are retained immutably under receipt_root_native and receipt_root_windows; artifacts are created exclusively, fsynced, and hash-linked; no deletion or rewrite is permitted"
+  },
+  "failure_behavior": {
+    "fail_closed": "verdict is PASS_CONSTRUCTION_ONLY only if every check PASSes; any FAIL yields FAIL; any check that cannot run, times out, loses its host, or depends on an unresolved placeholder yields INCOMPLETE (never PASS)",
+    "candidate_drift": "HEAD/tree is re-verified before each host check and before verdict emission; drift aborts the attempt as FAIL_CANDIDATE_DRIFT and invalidates all receipts of that attempt for any other candidate",
+    "no_retry_identity": "a failed or unknown attempt is never retried under the same gate_attempt_ordinal; the reservation of that attempt's evidence is nonrefundable and retained",
+    "no_receipt_rewriting": "existing receipts, logs and reviews are never edited; corrections are new artifacts in a later attempt",
+    "host_unreachable": "Windows host unavailability records UNKNOWN on the windows-side checks and INCOMPLETE verdict; WSL-native PASS receipts cannot satisfy or impersonate the Windows checks (validation-contract full_gate_blocker)",
+    "github_absence_is_not_failure": "zero GitHub statusCheckRollup/review objects never fails the gate; claiming them in the PR body does fail pr-body-hash-binding"
+  },
+  "rerun_rules": [
+    "any new commit or tree change on the review branch: complete rerun from freeze-and-scope under a new attempt ordinal; no check result is carried over across candidates",
+    "any repair that does not move the candidate but changes manifest, PR body, disposition table or review bundle: rerun from preregistration onward for changed inputs; checks whose bound evidence is unchanged may be re-verified by hash rather than re-executed only if the manifest explicitly lists them as hash-stable",
+    "any new review reservation/defect: extend disposition_table and rerun disposition-completeness and verdict",
+    "any PR body edit: rerun pr-body-hash-binding, disposition-completeness and verdict; final reviews must re-bind the new pr_body_sha256 if the body changed after review",
+    "post-repair candidate change additionally requires fresh final reviews bound to the new candidate before verdict",
+    "all attempts must finish verdict emission before campaign deadline minus finalization_reserve_seconds; an attempt that cannot meet the bound records INCOMPLETE_DEADLINE"
+  ],
+  "non_goals": [
+    "scientific admission, execution authorization, or any model/reducer/control execution",
+    "the inherited 87-command full gates (separate Windows-bound track; this gate does not claim their equivalence)",
+    "merge, PR approval, or any GitHub-side state change; Lucas alone merges",
+    "receipt rewriting, fake host/path predicates, monkeypatched checks, or unrun PASS",
+    "settling the unresolved control-accounting question"
+  ],
+  "unresolved_placeholders": [
+    "frozen_candidate_commit / frozen_candidate_tree values (freeze step produces them)",
+    "command_manifest file and its sha256, including exact argv for windows-unittest, windows-ruff, wsl-unittest, diff-check, and both owned auditors",
+    "receipt_root_windows path",
+    "final reviewer identity list (must satisfy model-revision-01 where same-model review is required)",
+    "pr_body_bytes and its sha256",
+    "Windows-side quiescence attestation mechanism inside clean-cgroup",
+    "expected test/skip counts (recorded in manifest at freeze time; never hardcoded)"
+  ],
+  "preserved_limitations": [
+    "The unchanged inherited 87-command gates are Windows-host/path-bound and cannot pass truthfully in WSL; this construction gate neither satisfies nor impersonates them.",
+    "Ruff is not installed in the native WSL environment; the only admitted native lint evidence is the documented py_compile substitute plus the qualified Windows Ruff route.",
+    "The candidate was still moving at last observation and no immutable exact-current-candidate Windows or WSL gate receipt exists; this proposal defines the gate and does not claim it ran.",
+    "Receipt presence or hash identity is not proof of contents; the two separately owned audits exist precisely because internal receipts are the acceptance evidence.",
+    "Control-suite accounting remains unresolved: the conservative global-additive bound (~296979 units) exceeds the 76582-unit shared-inventory control margin, and no admitted ledger mapping exists; this gate does not settle it.",
+    "Some retained controls may remain unavailable-reachable-witness on real shards, forcing INCOMPLETE_FIXED_CONTROL_SUITE on the scientific track; preserved here as unresolved.",
+    "Merged PRs 120-123 show the GitHub UI never encoded the claimed workflow; only internal candidate-bound receipts carry acceptance, and the gate encodes that explicitly.",
+    "This proposal is source-only construction text; nothing in it was imported, executed or verified by this worker."
+  ]
+}

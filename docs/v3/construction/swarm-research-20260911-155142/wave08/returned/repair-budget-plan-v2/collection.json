@@ -1,0 +1,15 @@
+{
+  "job": "repair-budget-plan-v2",
+  "filing_sha256": "5ec66bc3b83e0d136ce6b70b1c7553c552d1ba1d68e18421e1ce49811d85b9a3",
+  "attempt_receipt_sha256": "c8e7c9a4de578f1f800f251488f7aee8e418a44fa66ea54161fc488d8126465c",
+  "artifact_verification": "frozen r3b foundry.report checked ledger, transport, provider export, and every tool request/receipt binding",
+  "files": [
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave08/proposals/scientific-budget-plan-v2.json",
+      "sha256": "7dbee0176d218adacceac9b8c2d07ca40d0d9890e442c0e0bc1e0c23a1660177",
+      "bytes": 67730
+    }
+  ],
+  "integrated": false,
+  "executed": false
+}

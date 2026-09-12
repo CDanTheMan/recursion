@@ -1,0 +1,119 @@
+{
+  "record": "wave06-live-revision-02-terminal-review",
+  "observed_utc": "2026-09-11T18:53:59Z",
+  "run_id": "research-20260911-155142-wave06",
+  "source_commit": "d78f8c9773bf84cf14816f3ee89bed3f21bb870f",
+  "plan_sha256": "a1a91055828ecaf03d87892a74e8f9bbf8a8c19c5f86ccd10bc852af16fc7d37",
+  "worker_states": {
+    "blocked": 30,
+    "failed": 1,
+    "returned": 3,
+    "unknown": 44
+  },
+  "coordinator": {
+    "live_revision": 2,
+    "provider": "cursor",
+    "model": "cursor-grok-4.5-high",
+    "display_identity": "Cursor Grok 4.5 High",
+    "speed": "NON-FAST",
+    "batch_size": 8,
+    "states": {
+      "returned": 10
+    },
+    "records": [
+      {
+        "batch": 0,
+        "state": "returned",
+        "synthesis_sha256": "4905da420516b69a80c92c228410aaa884fec56d0d562227fc95fa0fd07db1a7",
+        "receipt_sha256": "fec3487f6c978a2b69d00f9e2f6498f0ac7e412509c9d3fc590fff90fef8dfb0",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 1,
+        "state": "returned",
+        "synthesis_sha256": "004ca96cf09abde5b5ec6573e4fa8f1f32afbf7c327ff565baae82db9c550e56",
+        "receipt_sha256": "4ffe10ad10d27aac7527d0f6301bcb9790e1ad6e76df9145d450ec8624a9551d",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 2,
+        "state": "returned",
+        "synthesis_sha256": "9af40c34f3756f0ccd3dd277ec66484c1e5ad7d9ebbd9fc026978504b13e6db6",
+        "receipt_sha256": "feb49fc44f06b9ad6b7e8d2f3f8865802df3d8549fd10966e6fc4972dc97eab2",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 3,
+        "state": "returned",
+        "synthesis_sha256": "7e5f0ed51b67d53ad064de0fce9c9103db2d2c3ae6debb720d56870228f86cc4",
+        "receipt_sha256": "dfea250772c82b81da64db78e262579771f6cdbbec7057492d67326020dea77d",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 4,
+        "state": "returned",
+        "synthesis_sha256": "9a81105e47a1479f5d77f57da494d4b79687c94bd1d274ebe6100ce252eb5596",
+        "receipt_sha256": "fe2220e668380d28a0f266b8c799d30b0173765c66b901a00e4c6d87b458a06f",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 5,
+        "state": "returned",
+        "synthesis_sha256": "9954a74206b06b2510be63b2215f60a4c4c57ca74bd2ccf6982b517416c3fa7d",
+        "receipt_sha256": "7084413c5faeb14645a52fc09802d3c901bf828281ef4b45bb65450192473484",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 6,
+        "state": "returned",
+        "synthesis_sha256": "d288fdaf5e607255c4d49c63da24c08bf6373a9a3db7c9eec236ff56436b2456",
+        "receipt_sha256": "5682f10059763a1e41a9565a2221d42851d659b29cb860c6ec9ffc091bafed3b",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 7,
+        "state": "returned",
+        "synthesis_sha256": "4652f70ed6aad7cc5c6ac86e86ae90edc315018a55aac87ac4518389271b7d80",
+        "receipt_sha256": "e1154dfc9157c331d988c177c35a8a7d9eb09ff62831bbafc8e1d70de7ce1ac1",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 8,
+        "state": "returned",
+        "synthesis_sha256": "6df3e1c4f006a2b17ab44971fc0dd22c025bb604a2f2df53acae51edf83fb063",
+        "receipt_sha256": "721af7bf4b8e629b336d21aa95e65bb27a34fb29070d58d7b23a35641b116709",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      },
+      {
+        "batch": 9,
+        "state": "returned",
+        "synthesis_sha256": "b4df3e79761d7526dfc4e9cafabba90a26c47a5d494dd5ffc8516bed1cfa2bb9",
+        "receipt_sha256": "06894c81677392aba7e1a2c99fb2e977ddafa7fcf46feb759f58ab717a6810c1",
+        "error": null,
+        "local_quiescent": true,
+        "model": "cursor-grok-4.5-high"
+      }
+    ]
+  },
+  "terminal_state_review_only": true,
+  "accepted": false,
+  "scientific_execution": 0
+}

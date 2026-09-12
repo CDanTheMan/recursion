@@ -1,0 +1,40 @@
+{
+  "record": "final-closeout-grok-review-r2-disposition/v1",
+  "review_job": "final-closeout-0d963c8-r2",
+  "review_sha256": "1afa3050e59e1dd370e1004d82d2ca98e90c900ada76ed33751c632b5c0d38da",
+  "receipt_sha256": "5d71e58efc635d08ae499ac95b9f37d78c3afef31670165c7dd70e13fe5fd290",
+  "verdict": "repair",
+  "accepted": false,
+  "dispositions": [
+    {
+      "finding": "The PR body described a live post-deadline probe.",
+      "disposition": "accepted",
+      "repair": "The PR now states that the probe was not run, future work requires a fresh Lucas instruction, and the ended campaign authorizes no future packet."
+    },
+    {
+      "finding": "The first review disposition remained pending after the 0d963c8 gate and cleanup.",
+      "disposition": "accepted",
+      "repair": "The first disposition now cites the settled 0d963c8 gate and post-gate cleanup while reserving final self-hash binding for the external handoff."
+    },
+    {
+      "finding": "Gate baseline 235aaa7e was unnamed in the candidate chain.",
+      "disposition": "accepted",
+      "repair": "The handoff identifies it as the merge commit for PR #123 and verifies it is an ancestor of every campaign candidate."
+    },
+    {
+      "finding": "A tracked filename called the 48970bd audit current.",
+      "disposition": "accepted",
+      "repair": "The file is renamed source-evidence-48970bd-audit.json."
+    },
+    {
+      "finding": "Tracked brief and handoff centered the earlier dbc13b7 gate.",
+      "disposition": "accepted",
+      "repair": "They now layer and cite the later 0d963c8 gate; the new final self hash remains externally bound by design."
+    }
+  ],
+  "lead_state": "REPAIR_APPLIED_EXTERNAL_FINAL_BINDING_REQUIRED_BY_SELF_REFERENCE",
+  "scientific_execution": false,
+  "future_packets_authorized": false,
+  "publication_approval": false,
+  "merge_authority": "Lucas alone"
+}

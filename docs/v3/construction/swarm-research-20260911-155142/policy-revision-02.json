@@ -1,0 +1,18 @@
+{
+  "revision": 2,
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "campaign": "research-20260911-155142",
+  "recorded_utc": "2026-09-11T16:05:01.778084+00:00",
+  "immutable_start_utc": "2026-09-11T15:51:42Z",
+  "immutable_deadline_utc": "2026-09-11T23:51:42Z",
+  "inherited_charged_units": 3823610,
+  "cumulative_ceiling": 5000000,
+  "quota_reserve_percentage_points": 8,
+  "finalization_reserve_seconds": 10200,
+  "full_gate_admission_seconds": 4800,
+  "gate_state_reserve": 655520,
+  "reason": "Independent execution reviewer identified latest historical policy and measured final87 durations (3771.077387 and3576.111586s); initial7200s proposal superseded before any new research-state execution. Two4800s reservations plus600s finalization. Dynamic revisions remain prospective.",
+  "new_research_execution_admitted": false,
+  "historical_gate_portability": "BLOCKED: unchanged Windows receipt-path and host-identity checks cannot pass truthfully on Linux. Native local checks must not be called the full87 gate.",
+  "unknown_provider_reservations": "Four inherited held; current wave unsettled pending actual native completion."
+}

@@ -1,0 +1,15 @@
+{
+  "job": "repair-control-entry-v2",
+  "filing_sha256": "e951db17069bc552c8f222f8337f98ae2233cf0a61ee31534668304d70a16703",
+  "attempt_receipt_sha256": "ca9220148d824f194c33819a26e60405abbcd6514a7dbd3e97330c9996aff5a1",
+  "artifact_verification": "frozen r3b foundry.report checked ledger, transport, provider export, and every tool request/receipt binding",
+  "files": [
+    {
+      "path": "experiments/v3/swarm-research-20260911-155142/control_entry_v2.py",
+      "sha256": "3aa415ef839b0b0b9e591385134978051fd164531900c3528055eea7e0b85b8f",
+      "bytes": 25798
+    }
+  ],
+  "integrated": false,
+  "executed": false
+}

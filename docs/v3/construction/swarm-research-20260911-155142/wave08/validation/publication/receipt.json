@@ -1,0 +1,82 @@
+{
+  "record": "wave08-recovered-publication-validation/v1",
+  "observed_utc": "2026-09-11T20:40:26.532682+00:00",
+  "source": {
+    "publication_gate.py": "29ccf5d306337f5b9b71968bd5ef9143a01170009dbebfa94015de34243cace4",
+    "test_publication_gate.py": "6c31e20ca77325bef9acab8dcbad216b85653b913b5156a0c7f24904a9690374"
+  },
+  "origin": "unknown after forbidden native read and exec; broker writes recovered; acceptance not inferred",
+  "checks": [
+    {
+      "name": "windows-unittest",
+      "argv": [
+        "python",
+        "-B",
+        "-m",
+        "unittest",
+        "tools.construction_swarm.test_publication_gate"
+      ],
+      "exit_code": 1,
+      "log_sha256": "cb6f9b6fb36391bb3584020a41f6123fafd2b9b9d063079bcea4a21841684453",
+      "observed": "51 tests; 35 failures, 1 error"
+    },
+    {
+      "name": "windows-pycompile",
+      "argv": [
+        "python",
+        "-B",
+        "-m",
+        "py_compile",
+        "tools/construction_swarm/publication_gate.py",
+        "tools/construction_swarm/test_publication_gate.py"
+      ],
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "windows-ruff",
+      "argv": [
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "tools/construction_swarm/publication_gate.py",
+        "tools/construction_swarm/test_publication_gate.py"
+      ],
+      "exit_code": 1,
+      "log_sha256": "8a10c11e584a62ea404339398e2a6d13a9c01fa4a537acb2878e362e10418cb8",
+      "observed": "15 violations"
+    },
+    {
+      "name": "wsl-unittest",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tools.construction_swarm.test_publication_gate"
+      ],
+      "exit_code": 1,
+      "log_sha256": "bb3cc5765cad488e22309423d243578c1ba265f083fd637de3cc8551a5b68a21",
+      "observed": "51 tests; 26 failures"
+    },
+    {
+      "name": "wsl-pycompile",
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "py_compile",
+        "tools/construction_swarm/publication_gate.py",
+        "tools/construction_swarm/test_publication_gate.py"
+      ],
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "status": "FAIL",
+  "integrated": false,
+  "scientific_execution": false,
+  "scientific_admission": "BLOCKED_NO_EXECUTION_AUTHORIZED",
+  "merge_authority": "Lucas alone"
+}

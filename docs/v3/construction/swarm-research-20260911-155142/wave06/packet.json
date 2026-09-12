@@ -1,0 +1,18 @@
+{
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "scope": "Correct30 independently reviewed obligation proposals;18 independently authored control suites;30 dependent cross-reviews. Source-only, no scientific execution.",
+  "logical_jobs": 78,
+  "initial_jobs": 48,
+  "dependent_reviews": 30,
+  "provider": "swe-2-max",
+  "coordinator": "cursor-grok-4.5-high NON-FAST using qualified r3b eight-record batches",
+  "worker_duration": "remaining campaign window, no ten-minute cutoff",
+  "held_reservations_before": 131,
+  "requested_slots": 48,
+  "shared_ceiling": 200,
+  "remaining_after_reservation": 21,
+  "why_48": "Next substantive measured step after32 completed without rate-limit errors; below failed77 wave and uses real corrections, not occupancy filler.",
+  "research_units": 0,
+  "scientific_execution": false,
+  "gate": "Exact model/transport/filing/tool/cleanup verification; preserve failures/unknowns; Grok live and terminal synthesis; Sol root integration and independent method gates remain required."
+}

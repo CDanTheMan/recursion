@@ -1,0 +1,60 @@
+{
+  "campaign": "research-20260911-155142",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "start_utc": "2026-09-11T15:51:42Z",
+  "deadline_utc": "2026-09-11T23:51:42Z",
+  "source_commit": "235aaa7e76095ee18460d9b7ba7a6a8bad1005ac",
+  "review_branch": "codex/swarm-research-20260911-155142",
+  "native_workspace": "/opt/recursion-foundry/workspaces/research-20260911-155142",
+  "native_evidence": "/var/lib/recursion-foundry/campaigns/research-20260911-155142",
+  "authority": "Lucas explicit activation in current session; swarm-research-launch-20260911.md supersedes prior clock and delegation arrangement only",
+  "allowed_roots": [
+    "docs/v3/construction/swarm-research-20260911-155142/",
+    "experiments/v3/swarm-research-20260911-155142/"
+  ],
+  "framework_fix_roots": [
+    "tools/construction_swarm/",
+    "docs/v3/construction-swarm/"
+  ],
+  "models": {
+    "lead": "selected GPT-6 Astra High Standard unchanged",
+    "worker": "swe-2-max",
+    "coordinator": "cursor-grok-4.5-high NON-FAST",
+    "explicit_alternative": "opencode-go/muse-spark-1.3-contributor only when Cursor unsuitable/unavailable; no uncertain replay"
+  },
+  "inherited_charge": 3823610,
+  "budget_revision": 1,
+  "cumulative_limit": 5000000,
+  "initial_wave_model_state_reservation": 0,
+  "research_execution_admitted": false,
+  "rolling_reserve": {
+    "quota_percentage_points": 8,
+    "seconds": 7200,
+    "rationale": "Conservative initial reserve for two inherited 87-command gates, audits, two independent same-model reviews, publication and cleanup; revise from measured research throughput before heavy work."
+  },
+  "quota_observation": {
+    "checked_utc": "2026-09-11T15:52:00Z",
+    "codex_weekly_used_percent": 4,
+    "remaining_percent": 96,
+    "reset_redeemed": false
+  },
+  "retained_unknown_provider_slots": 4,
+  "initial_worker_slots": 4,
+  "machine_command_slots": 4,
+  "non_goals": [
+    "semantic changes",
+    "original reducer/guard/profile edits",
+    "formal freeze",
+    "source truth/Q1-Q6",
+    "whole-path composition",
+    "fairness",
+    "physical recovery",
+    "runtime integration",
+    "language/store/framework/provider selection",
+    "config/auth/autonomy/cron edits",
+    "merge",
+    "deployment",
+    "reset or capacity purchase"
+  ],
+  "validation_obligation": "No validated publication until two exact-candidate complete inherited gates (87 latest commands including all 50 Batch07 commands), two owned retained receipt/source audits and two independent same-model final reviews; infrastructure gates are not scientific acceptance."
+}

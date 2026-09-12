@@ -1,0 +1,348 @@
+{
+  "record": "wsl-primary-workspace-preservation-audit/v2",
+  "observed_utc": "2026-09-11T21:45:45.295701+00:00",
+  "workspace": "/opt/recursion-foundry/workspaces/research-20260911-155142",
+  "workspace_head": "dc6e8d02a2ae371f22e054ca4bea3e21163f5f85",
+  "review_head": "48970bdfad68b03f4a51679787b0406484f6b773",
+  "file_count": 41,
+  "exact_dirty_file_archive": "D:\\RecursionSwarm\\research-20260911-155142\\wsl-primary-dirty-files-exact.tar",
+  "exact_dirty_file_archive_sha256": "419f29ac8e6fb8255573f7f169b3ab0468fbe072c13223cda50d1c415af0ce0f",
+  "comparisons": [
+    {
+      "path": "experiments/v3/swarm-research-20260911-155142/boundary.py",
+      "wsl_sha256": "9fb98a85552fc89762bd776c72b3970231c1d0c57f66e25348b1be372a6b69cd",
+      "head_present": true,
+      "head_sha256": "625981cea2482652aab2e948ab5a0b889ba8c810b6f395e6d05889a92a575bfd",
+      "byte_exact_match": false,
+      "text_lines_match": true
+    },
+    {
+      "path": "experiments/v3/swarm-research-20260911-155142/inventory_audit.py",
+      "wsl_sha256": "5fb3afb3c5629e4da73adcf407d320b52fa576a6f21a67c90e79d4496d9faa4c",
+      "head_present": true,
+      "head_sha256": "5fb3afb3c5629e4da73adcf407d320b52fa576a6f21a67c90e79d4496d9faa4c",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/framework-v3-qualification-r3b.json",
+      "wsl_sha256": "f3460789c60bba6f731782c0f025e7e2fa79288e526ada7cd44ea9b5249cf1db",
+      "head_present": true,
+      "head_sha256": "f3460789c60bba6f731782c0f025e7e2fa79288e526ada7cd44ea9b5249cf1db",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/model-revision-01.json",
+      "wsl_sha256": "81a0624af95c15bdf9b9e342d706b9fa4d1b4c39ff048249f27d0dca259aaecf",
+      "head_present": true,
+      "head_sha256": "81a0624af95c15bdf9b9e342d706b9fa4d1b4c39ff048249f27d0dca259aaecf",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave05/live-revision-02-preflight-refusal.json",
+      "wsl_sha256": "3286cd459e687e194b6cebc00de82c57465dce26e003a4fcada15e4de28ce024",
+      "head_present": true,
+      "head_sha256": "3286cd459e687e194b6cebc00de82c57465dce26e003a4fcada15e4de28ce024",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave05/terminal.json",
+      "wsl_sha256": "419300153bb8c0148032e32de44e2910d051f1269bdba567afaf7b98e7ba393e",
+      "head_present": true,
+      "head_sha256": "419300153bb8c0148032e32de44e2910d051f1269bdba567afaf7b98e7ba393e",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/campaign-policy.json",
+      "wsl_sha256": "f393b0f2674e4240fe80f7490250c5b53dfe4d166b522d84e66dbd6f5b8dc5af",
+      "head_present": true,
+      "head_sha256": "7f418ffbdba234a64258393a516afa549a85b568ac72bb93a14b68d97eea5335",
+      "byte_exact_match": false,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/jobs.json",
+      "wsl_sha256": "afdb87ff971822a165da40e18af4e0680308110291a13d7f8805b0d1f258a247",
+      "head_present": true,
+      "head_sha256": "afdb87ff971822a165da40e18af4e0680308110291a13d7f8805b0d1f258a247",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/packet.json",
+      "wsl_sha256": "82cfe9fce19e3d111f685d0cb7cf8c9ee02eb4b39f7cfc992fcfc284d2134317",
+      "head_present": true,
+      "head_sha256": "82cfe9fce19e3d111f685d0cb7cf8c9ee02eb4b39f7cfc992fcfc284d2134317",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o01.json",
+      "wsl_sha256": "3d01c3de89a4f69945abceaa58713194cc7047e79c9e728a9821195c50ed94f0",
+      "head_present": true,
+      "head_sha256": "3d01c3de89a4f69945abceaa58713194cc7047e79c9e728a9821195c50ed94f0",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o02.json",
+      "wsl_sha256": "bbfc81af1ac047b2f20e10848c40f10d8fd0bf2a702b257f7fbb42b2c8b46773",
+      "head_present": true,
+      "head_sha256": "bbfc81af1ac047b2f20e10848c40f10d8fd0bf2a702b257f7fbb42b2c8b46773",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o04.json",
+      "wsl_sha256": "e1053a69292ed7b7e585872906f88852ee1940f7486aac0bf4dff06538f9c2f1",
+      "head_present": true,
+      "head_sha256": "e1053a69292ed7b7e585872906f88852ee1940f7486aac0bf4dff06538f9c2f1",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o05.json",
+      "wsl_sha256": "f3bf8dea76cc208d8ea38770740ee2472d4940f13376de1dd4902a7bf76db5bf",
+      "head_present": true,
+      "head_sha256": "f3bf8dea76cc208d8ea38770740ee2472d4940f13376de1dd4902a7bf76db5bf",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o06.json",
+      "wsl_sha256": "2895a7add5553cd8c5b67b63709134c56ebc3f3abc47a92c02895ccb506b6b8b",
+      "head_present": true,
+      "head_sha256": "2895a7add5553cd8c5b67b63709134c56ebc3f3abc47a92c02895ccb506b6b8b",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o07.json",
+      "wsl_sha256": "7bf93d1ede4f12223c4b66941ab8b2f7d679578d4e54814247fdc8c89c076644",
+      "head_present": true,
+      "head_sha256": "7bf93d1ede4f12223c4b66941ab8b2f7d679578d4e54814247fdc8c89c076644",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o08.json",
+      "wsl_sha256": "bf4e3e096f0e79eab4f7ec14040df1b75900de146ca3f785ce5ae4db19c8eebf",
+      "head_present": true,
+      "head_sha256": "bf4e3e096f0e79eab4f7ec14040df1b75900de146ca3f785ce5ae4db19c8eebf",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o09.json",
+      "wsl_sha256": "d48264963be04086ccd029330e176ae539d34515c5fdcdd1e4dcd94fb71261f7",
+      "head_present": true,
+      "head_sha256": "d48264963be04086ccd029330e176ae539d34515c5fdcdd1e4dcd94fb71261f7",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o10.json",
+      "wsl_sha256": "e346aa842d2061718f3ea855b46eaed65282460efa97b9ca894bda3fd149eede",
+      "head_present": true,
+      "head_sha256": "e346aa842d2061718f3ea855b46eaed65282460efa97b9ca894bda3fd149eede",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o11.json",
+      "wsl_sha256": "69d499accfcb377cd161ac3eb41a13a301e4ff3ec3dab3b716639c43bd80eedb",
+      "head_present": true,
+      "head_sha256": "69d499accfcb377cd161ac3eb41a13a301e4ff3ec3dab3b716639c43bd80eedb",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o12.json",
+      "wsl_sha256": "c10ccffda615f635dcf3aca97fd3a632287fc83e75281197728a9abbd5419197",
+      "head_present": true,
+      "head_sha256": "c10ccffda615f635dcf3aca97fd3a632287fc83e75281197728a9abbd5419197",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o13.json",
+      "wsl_sha256": "bc81eff02dfae9fa8daf8dc0acf572a30debfc42ac935b75c31f5ef8f6b425bf",
+      "head_present": true,
+      "head_sha256": "bc81eff02dfae9fa8daf8dc0acf572a30debfc42ac935b75c31f5ef8f6b425bf",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o14.json",
+      "wsl_sha256": "dce86890c23d0d64d8d5a0d2fc928f9797be6e3f99f93b5429f9e74db6a5b146",
+      "head_present": true,
+      "head_sha256": "dce86890c23d0d64d8d5a0d2fc928f9797be6e3f99f93b5429f9e74db6a5b146",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o15.json",
+      "wsl_sha256": "53b2fcbb8a84c6222c1a8185ebef035fd5795d7e709ec5fab1d30cf922812cd3",
+      "head_present": true,
+      "head_sha256": "53b2fcbb8a84c6222c1a8185ebef035fd5795d7e709ec5fab1d30cf922812cd3",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o16.json",
+      "wsl_sha256": "48b706e5f4f3b4e203726ac67b4cd3ab807f4fcf47d15da7ea66d638581d69b3",
+      "head_present": true,
+      "head_sha256": "48b706e5f4f3b4e203726ac67b4cd3ab807f4fcf47d15da7ea66d638581d69b3",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o17.json",
+      "wsl_sha256": "286e834cb39f79a9852e338939e51175dcf4eb5832d8a6409876867a977ef55d",
+      "head_present": true,
+      "head_sha256": "286e834cb39f79a9852e338939e51175dcf4eb5832d8a6409876867a977ef55d",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o18.json",
+      "wsl_sha256": "feac05a4186f445757750a8f54041a603c63d1878c393bfc4de7244ceb0451ba",
+      "head_present": true,
+      "head_sha256": "feac05a4186f445757750a8f54041a603c63d1878c393bfc4de7244ceb0451ba",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o19.json",
+      "wsl_sha256": "5b55a767811df24778b946b55ba4c3642bf73b8210f49e2591088666b81f2d43",
+      "head_present": true,
+      "head_sha256": "5b55a767811df24778b946b55ba4c3642bf73b8210f49e2591088666b81f2d43",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o20.json",
+      "wsl_sha256": "7d2efe0f5cdfc4f1593fc6950a12049987a7b9b1660f82b137cd7b84abd6b31e",
+      "head_present": true,
+      "head_sha256": "7d2efe0f5cdfc4f1593fc6950a12049987a7b9b1660f82b137cd7b84abd6b31e",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o21.json",
+      "wsl_sha256": "378bd87e54f773dffcb690b85e1264a5bb4a8a2459706e44665ea3859d5cdfb0",
+      "head_present": true,
+      "head_sha256": "378bd87e54f773dffcb690b85e1264a5bb4a8a2459706e44665ea3859d5cdfb0",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o22.json",
+      "wsl_sha256": "2cacb9fa7ad6f101d083fc9be697ea72b9212c919f283533441aa12b269931c8",
+      "head_present": true,
+      "head_sha256": "2cacb9fa7ad6f101d083fc9be697ea72b9212c919f283533441aa12b269931c8",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o23.json",
+      "wsl_sha256": "de5a56af1686741cb22bab8ca352505d38adaeecc0bbade8c04a49886d028f07",
+      "head_present": true,
+      "head_sha256": "de5a56af1686741cb22bab8ca352505d38adaeecc0bbade8c04a49886d028f07",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o24.json",
+      "wsl_sha256": "fb493dd07372aeda15862aadad63125ab0de677953477597213a8dd0c32e5d12",
+      "head_present": true,
+      "head_sha256": "fb493dd07372aeda15862aadad63125ab0de677953477597213a8dd0c32e5d12",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o25.json",
+      "wsl_sha256": "33ce2e1b7ab59e868886255ec58ba14631b51b80060751a4f043285cc00229a0",
+      "head_present": true,
+      "head_sha256": "33ce2e1b7ab59e868886255ec58ba14631b51b80060751a4f043285cc00229a0",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o26.json",
+      "wsl_sha256": "ca0cc0f788262e5a0a5d309d170b0052ee6fd90ddb57ca3512bebe2681061445",
+      "head_present": true,
+      "head_sha256": "ca0cc0f788262e5a0a5d309d170b0052ee6fd90ddb57ca3512bebe2681061445",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o27.json",
+      "wsl_sha256": "be180f80859a8f78c2ff160ffc4e8f07c6e56fede3a3d30e7b8256a1e4bfc023",
+      "head_present": true,
+      "head_sha256": "be180f80859a8f78c2ff160ffc4e8f07c6e56fede3a3d30e7b8256a1e4bfc023",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o29.json",
+      "wsl_sha256": "040f374175a6f392cc9aee6d024273d1bce9cfa68814fe136052791feba2ce3e",
+      "head_present": true,
+      "head_sha256": "040f374175a6f392cc9aee6d024273d1bce9cfa68814fe136052791feba2ce3e",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o30.json",
+      "wsl_sha256": "300f207cd956a9cf22720ffcf8309aadbd81b2b87d279020946a5f1549e2577a",
+      "head_present": true,
+      "head_sha256": "300f207cd956a9cf22720ffcf8309aadbd81b2b87d279020946a5f1549e2577a",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o31.json",
+      "wsl_sha256": "c8276bc104ac41c9c5d86cee34a8e1cde04d10d9c79c7cfb0ad37f042608df69",
+      "head_present": true,
+      "head_sha256": "c8276bc104ac41c9c5d86cee34a8e1cde04d10d9c79c7cfb0ad37f042608df69",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "docs/v3/construction/swarm-research-20260911-155142/wave06/reviews/o32.json",
+      "wsl_sha256": "2cc581235e2e722dcece562764459c0eaa2adf062e69eb69b1c90489e0fb2e31",
+      "head_present": true,
+      "head_sha256": "2cc581235e2e722dcece562764459c0eaa2adf062e69eb69b1c90489e0fb2e31",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "experiments/v3/swarm-research-20260911-155142/boundary_audit.py",
+      "wsl_sha256": "f7e53e22609edc783498139787926c361cfcc7fba2bd86a2c301de2b4cb7d429",
+      "head_present": true,
+      "head_sha256": "f7e53e22609edc783498139787926c361cfcc7fba2bd86a2c301de2b4cb7d429",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    },
+    {
+      "path": "experiments/v3/swarm-research-20260911-155142/boundary_controls.py",
+      "wsl_sha256": "26d1148aac122af245d0815256a2a7a9fe84010f8dfd7e8c6bb182b8cab4b6e5",
+      "head_present": true,
+      "head_sha256": "26d1148aac122af245d0815256a2a7a9fe84010f8dfd7e8c6bb182b8cab4b6e5",
+      "byte_exact_match": true,
+      "text_lines_match": true
+    }
+  ],
+  "all_dirty_files_present_in_review_head": true,
+  "all_dirty_files_textually_preserved_in_review_head": true,
+  "byte_mismatch_paths": [
+    "experiments/v3/swarm-research-20260911-155142/boundary.py",
+    "docs/v3/construction/swarm-research-20260911-155142/wave06/campaign-policy.json"
+  ],
+  "text_mismatch_paths": [],
+  "disposition": "Exact pre-cleanup file bytes retained in the external tar; textual contents independently compared with the review head."
+}

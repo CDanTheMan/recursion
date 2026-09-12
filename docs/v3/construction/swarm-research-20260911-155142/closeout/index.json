@@ -1,0 +1,52 @@
+{
+  "record": "swarm-research-closeout-index/v1",
+  "observed_utc": "2026-09-11T21:58:00Z",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "source_evidence_candidate": "48970bdfad68b03f4a51679787b0406484f6b773",
+  "first_closeout_candidate": "dbc13b70a9f31ed8350ff76827fcd1831082f0ca",
+  "post_review_closeout_candidate": "0d963c8d807128200c8ba75e67959059a7d841e7",
+  "pull_request": "https://github.com/NotSkittlz/recursion/pull/124",
+  "draft": true,
+  "accepted_review_branch_commits": [
+    "7d1cb22403d4a63e28b7628701eef889e2beefcf",
+    "65b0929d45dfd6a55ba20e54d84eca30c4b83a31",
+    "48970bdfad68b03f4a51679787b0406484f6b773"
+  ],
+  "candidate_gate": {
+    "status": "PASS",
+    "candidate": "0d963c8d807128200c8ba75e67959059a7d841e7",
+    "baseline": "235aaa7e76095ee18460d9b7ba7a6a8bad1005ac",
+    "baseline_identity": "Merge commit for PR #123; ancestor of every campaign candidate.",
+    "receipt_sha256": "71d36380f1db342233c22d534aeb3ea6ac010fd7988dfdc991a30b5c534ef14c",
+    "source_archive_sha256": "5c3a9b0da7f84ed6c881b82a8d129fb1b1c20a2782e2d954989805878a2f892a"
+  },
+  "external_audits": {
+    "source_evidence_candidate_sha256": "fda4b65ad53d630234a87c8bfedee813d8956cef17028af934325ebd5cc1603a",
+    "first_closeout_candidate_sha256": "134f0bf0c2e1858b2a747fcb982eec7bed898d58230b1b1a1c77b36104f2d0bc",
+    "post_review_closeout_candidate_sha256": "8ed8264c752b1693ab4ceef495c6947da881dd329fe383df9a96921a3bea8856",
+    "wsl_workspace_preservation_sha256": "f83d06562d008ca4c3b5663f37f9480865f872c1dda8683e291a86e74bbb96fb",
+    "wsl_workspace_exact_archive_sha256": "419f29ac8e6fb8255573f7f169b3ab0468fbe072c13223cda50d1c415af0ce0f",
+    "tracked_pre_gate_wsl_quiescence_sha256": "f436b9b623431c405484ee25d5c92416a511052ac58d9c22a034867f5608ef0f",
+    "tracked_pre_gate_windows_quiescence_sha256": "45c66df1163eea9852eb8ba38a83f9a46d56ac86b130a50fe52e74841e2ea136",
+    "external_post_gate_wsl_quiescence_sha256": "b5bf058c3925544d520eca0a8784a9c5c0591d72a37320b3ad00a0a7cf60a6d2",
+    "external_post_gate_windows_quiescence_sha256": "79e63eb5497ecee4144c6fb150691087eb9e12e261fefa1c4840ecd026a268b3"
+  },
+  "native_reservations": {
+    "held": 181,
+    "ceiling": 200,
+    "available": 19,
+    "uncertain_released_or_replayed": 0
+  },
+  "usage": {
+    "checked_utc": "2026-09-11T21:44:01Z",
+    "used_percent": 13,
+    "remaining_percent": 87,
+    "record_sha256": "532efc94ee03a7a289f33b798d8bad77061752984612c039a43e5e89e802bf79",
+    "reset_credits_used": 0,
+    "new_metered_spend": 0
+  },
+  "scientific_execution": false,
+  "scientific_admission": "BLOCKED_NO_EXECUTION_AUTHORIZED",
+  "future_packets_authorized": false,
+  "merge_authority": "Lucas alone"
+}
