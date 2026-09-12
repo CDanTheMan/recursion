@@ -1,0 +1,48 @@
+{
+  "accepted": false,
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "source_commit": "d6d8f19aa682bf3e4d3186de2ad34b974a4d4df3",
+  "follows": [
+    "https://github.com/NotSkittlz/recursion/pull/122",
+    "https://github.com/NotSkittlz/recursion/pull/124",
+    "https://github.com/NotSkittlz/recursion/pull/125"
+  ],
+  "qualification_methods": [
+    "docs/v3/construction-swarm/TOOL-VALIDATION.md native-capacity-8/30/100",
+    "known-answer foundry_probe groups 0-5",
+    "broker receipt correspondence",
+    "local_quiescent after cgroup cleanup",
+    "accepted remains false until Lucas merges"
+  ],
+  "campaigns": [
+    {
+      "run_id": "foundry-rdt-water-probe",
+      "returned": 0,
+      "failed": 1,
+      "cognition_answered": true,
+      "rate_limited": false,
+      "error": "provider completed; final filing invalid: unbound evidence citation",
+      "note": "Probe 0 passed inside run_command; collector refused commentary after exact tool:N@sha256 IDs."
+    },
+    {
+      "run_id": "foundry-rdt-wave11",
+      "returned": 8,
+      "failed": 0,
+      "compact_sha256": "c380590dee55ced4b64d954553e238e2c8727a2e1b978c9153c55cb78980aa5f"
+    },
+    {
+      "run_id": "foundry-rdt-wave12",
+      "returned": 29,
+      "failed": 1,
+      "failed_job": "research-exactly-one-json",
+      "error": "provider completed; final filing invalid: exactly one JSON filing required",
+      "compact_sha256": "3973f49727bfc7876ab60e82dbcce591c46aafc2d55a554d48a6c85e88d6a334"
+    }
+  ],
+  "limits": {
+    "next_devin_width": 30,
+    "do_not_admit_50_until_returning_30_reviewed": true,
+    "reset_credits_used": 0,
+    "muse_identity": "opencode-go/muse-spark-1.3-contributor"
+  }
+}
