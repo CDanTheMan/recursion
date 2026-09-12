@@ -56,6 +56,17 @@ class NightRdt20260912Tests(unittest.TestCase):
             '00adf22ad00177c6198e4b20511cd8ff2ad7415e4d612388ef932d9a53a7b1b9',
         )
 
+    def test_wave14_json_fence_matches_parser_refusal(self):
+        wave14 = self.census['campaigns'][4]
+        self.assertEqual(wave14['run_id'], 'foundry-rdt-wave14')
+        self.assertEqual(wave14['returned'], 29)
+        self.assertEqual(wave14['failed'], 1)
+        self.assertEqual(wave14['failed_job'], 'research-output-bytes')
+        self.assertFalse(wave14['rate_limited'])
+        self.assertIn('exactly one JSON filing required', wave14['error'])
+        with self.assertRaises(Refused):
+            parsed_json('```json\n{"a":1}\n```\n```json\n{"b":2}\n```')
+
     def test_do_not_step_to_fifty_from_this_census(self):
         self.assertEqual(self.census['limits']['next_devin_width'], 30)
         self.assertTrue(self.census['limits']['do_not_admit_50_until_returning_30_reviewed'])

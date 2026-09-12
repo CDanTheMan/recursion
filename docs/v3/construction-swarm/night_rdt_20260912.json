@@ -44,6 +44,15 @@
       "failed": 0,
       "rate_limited": false,
       "compact_sha256": "00adf22ad00177c6198e4b20511cd8ff2ad7415e4d612388ef932d9a53a7b1b9"
+    },
+    {
+      "run_id": "foundry-rdt-wave14",
+      "returned": 29,
+      "failed": 1,
+      "failed_job": "research-output-bytes",
+      "error": "provider completed; final filing invalid: exactly one JSON filing required",
+      "rate_limited": false,
+      "compact_sha256": "430833c355fc57fba5ae8969b703e0f72e3bf130e43d2ab716ed15dc8b4733d6"
     }
   ],
   "limits": {
