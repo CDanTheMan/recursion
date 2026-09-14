@@ -7,6 +7,11 @@ authority: non-normative until ratified
 
 # Recursion v3 evidence-grounded design workspace
 
+> Current development entry point (2026-09-13): [START-HERE](START-HERE.md).
+> The dated material below preserves its original campaign scope and evidence.
+> Earlier next-step instructions, branch-specific gates and expired campaign windows
+> do not define a new task or establish current runtime status.
+
 ## Mark 3 comparative architecture campaign - 2026-09-07
 
 [Comparison dossier](foundation-research/mark2-research/mark3-comparison/architectures.md),
@@ -181,7 +186,7 @@ The main assistant directly creates and monitors ARM executives. There is no sep
    transcript archive is internal-review provenance and is excluded from public release
    artifacts; any public provenance is generated separately and reviewed after redaction.
 
-## Immediate next step
+## Historical next step: M1A campaign
 
 The reconstructed [architecture proof](ARCHITECTURE-PROOF.md) and persistent
 [R1-R17 matrix](R1-R17-EVIDENCE.md) use eight Luna discovery packets and two targeted

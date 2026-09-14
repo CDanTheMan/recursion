@@ -6,6 +6,14 @@ other systems read. Treat mistakes as expensive.
 Read `CONTROL_PLANE.md` first — it says who decides. Read `ANCHOR.md` before any planning
 task — it says what is in scope.
 
+## Current development target: Recursion v3
+
+After the control plane and anchor, read [docs/v3/START-HERE.md](docs/v3/START-HERE.md)
+before selecting a development task. V1/v2 are historical implementation and regression
+references. A legacy goal ID or old handoff does not authorize work on that version.
+The current source-only repair task and its exact gate are linked from START-HERE.
+Existing authority, protected paths and review boundaries below still apply.
+
 ## Your role (2026-08-06, D-010)
 
 **Hermes is the executive control plane. You are a bounded executor.** You receive one
