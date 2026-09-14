@@ -20,6 +20,8 @@ these reader dependencies at `TASK_BASE`:
 | `tools/construction_swarm/runner.py` | `16c69e6c3aad4b2a9b97910a751594f8d2b01678` |
 | `tools/construction_swarm/contracts.py` | `aff5cc8f443272be3315e4f8bfba6734990eb50e` |
 | `tools/construction_swarm/p2_access.py` | `6d41f0195b74d103269133c4279c1b002e3c8669` |
+| `tools/construction_swarm/foundry_tools.py` | `523766a6600d779259baee5973e3a9ae3464e87e` |
+| `tools/construction_swarm/foundry_client.py` | `b7ba82058dd6d4ee39fbe8f458bac8e6a68d2c87` |
 
 The existing integration and handoff gates are unchanged. This successor adds no
 canonical registry and edits neither foundry nor P2.
@@ -63,9 +65,10 @@ itself.
   evidence never becomes failure, return or release.
 - Freshness is based on the latest durable foundry event timestamp. P2 marks an old or
   absent timestamp stale/unavailable; the adapter does not refresh it to wall-clock time.
-- Event replay uses only a dense, retained sequence beginning at SQLite `events.seq=1`
-  within the pinned run identity. Gaps, missing history, invalid cursors or a replaced run
-  refuse with snapshot/replay required. No cross-run or canonical cursor is invented.
+- SQLite `events.seq` and the latest event are observation facts, but unchanged P2 replay
+  accepts only an integer and cannot bind that integer to a run across service restart.
+  Therefore this adapter exposes no `last_event_cursor` and refuses every `events` replay
+  request with `snapshot_required`. No cross-run or canonical cursor is invented.
 - Artifact handles are derived, never caller paths. A handle is exposed only after the
   original ledger result digest, retained receipt, receipt file and all receipt manifest
   digests verify. Missing, malformed or mismatched evidence is unavailable/refused.
@@ -83,7 +86,7 @@ treated as corruption.
 
 Limits are 32 MiB per database, 64 MiB aggregate evidence verification per request,
 32 MiB per evidence file (matching the foundry export ceiling), 1 MiB returned artifact
-slices, 256 jobs, 2,048 attempts,
+slices, 3 MiB tool receipts (matching `Broker.call`), 256 jobs, 2,048 attempts,
 4,096 events, 100 projects, and the inherited P2 request/response, reader and timeout
 bounds. Tests use temporary fixtures under 32 MiB, no child over 15 seconds, a focused
 gate ceiling of 120 seconds and zero inference/provider calls.
@@ -99,7 +102,8 @@ The focused gate must prove:
    unavailable without changing input bytes;
 5. transport grants and adapter mappings preserve project isolation;
 6. old durable event timestamps produce stale envelopes;
-7. valid per-run `events.seq` replay works, while gaps and unsupported cursors refuse;
+7. actual `events.seq` remains observable only as a non-cursor fact and all unbound P2
+   integer replay requests refuse across both current and restarted adapters;
 8. verified digest-bound artifacts read correctly, and missing/tampered digests refuse;
 9. the explicit entry point reaches only the existing read service, never foundry
    initialization/run, schedulers, workers or providers; and

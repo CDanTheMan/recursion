@@ -13,9 +13,11 @@ from pathlib import Path
 from unittest import mock
 
 from .contracts import digest, encoded
+from .foundry_tools import Broker
 from .ledger import Ledger
 from .p2_access import AccessGrant, AccessRefused, AccessService, GrantStore
-from .p2_foundry_observation import FoundryObservationAdapter, main
+from . import p2_foundry_observation as observation_module
+from .p2_foundry_observation import FoundryObservationAdapter, _Budget, _stable_bytes, main
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +35,8 @@ DEPENDENCY_BLOBS = {
     "tools/construction_swarm/runner.py": "16c69e6c3aad4b2a9b97910a751594f8d2b01678",
     "tools/construction_swarm/contracts.py": "aff5cc8f443272be3315e4f8bfba6734990eb50e",
     "tools/construction_swarm/p2_access.py": "6d41f0195b74d103269133c4279c1b002e3c8669",
+    "tools/construction_swarm/foundry_tools.py": "523766a6600d779259baee5973e3a9ae3464e87e",
+    "tools/construction_swarm/foundry_client.py": "b7ba82058dd6d4ee39fbe8f458bac8e6a68d2c87",
 }
 SOURCE_A = "1" * 40
 SOURCE_B = "2" * 40
@@ -79,22 +83,29 @@ def _write(path, data):
     path.write_bytes(data)
 
 
-def _returned(ledger, root, job_id, *, accepted=False, content=None):
+def _returned(ledger, root, job_id, *, accepted=False, content=None, producer_large_tool=False):
     number = ledger.reserve(job_id)
     attempt = root / "attempts" / job_id / str(number)
     filing = encoded(content or {"job_id": job_id, "summary": "worker returned"})
     packet = encoded({"job": job_id, "attempt": number})
     transport = encoded({"exit_code": 0, "reason": None, "local_quiescent": True})
     export = encoded({"agent": {"model_name": "SWE-2 Max"}, "steps": []})
-    request = encoded({"name": "list_files", "arguments": {}, "number": 1,
-                       "snapshot_sha256": digest(b"fixture-snapshot")})
-    tool_receipt = encoded({"request_sha256": digest(request), "accepted": True})
     _write(attempt / "filing.json", filing)
     _write(attempt / "packet.json", packet)
     _write(attempt / "transport.json", transport)
     _write(attempt / "client-output" / "export.json", export)
-    _write(attempt / "tools" / "1" / "request.json", request)
-    _write(attempt / "tools" / "1" / "receipt.json", tool_receipt)
+    if producer_large_tool:
+        broker = Broker(attempt / "tools", {"large.txt": "é" * 190000}, [], {},
+                        allowed_tools=["read_file"])
+        broker.call("read_file", {"path": "large.txt"})
+        tool_receipts = broker.receipts
+    else:
+        request = encoded({"name": "list_files", "arguments": {}, "number": 1,
+                           "snapshot_sha256": digest(b"fixture-snapshot")})
+        tool_receipt = encoded({"request_sha256": digest(request), "accepted": True})
+        _write(attempt / "tools" / "1" / "request.json", request)
+        _write(attempt / "tools" / "1" / "receipt.json", tool_receipt)
+        tool_receipts = [{"number": 1, "sha256": digest(tool_receipt), "name": "list_files"}]
     receipt = {
         "job": job_id,
         "attempt": number,
@@ -105,7 +116,7 @@ def _returned(ledger, root, job_id, *, accepted=False, content=None):
         "transport_sha256": digest(transport),
         "export_sha256": digest(export),
         "filing_sha256": digest(filing),
-        "tool_receipts": [{"number": 1, "sha256": digest(tool_receipt), "name": "list_files"}],
+        "tool_receipts": tool_receipts,
     }
     _write(attempt / "receipt.json", encoded(receipt))
     ledger.finish(job_id, number, "returned", receipt, digest(filing))
@@ -263,12 +274,21 @@ class FoundryObservationTests(unittest.TestCase):
         self.assertTrue(envelope["freshness"]["stale"])
         self.assertEqual(envelope["canonical_observed_at"], "2020-01-01T00:00:00Z")
 
-    def test_real_event_sequence_is_the_only_cursor(self):
-        events = self.read_only(self.adapter, "events", "alpha", {"after_cursor": 0, "limit": 100})
-        cursors = [item["cursor"] for item in events["data"]["items"]]
-        self.assertEqual(cursors, list(range(1, events["last_event_cursor"] + 1)))
-        with self.assertRaisesRegex(AccessRefused, "cursor is outside retained history"):
-            self.read_only(self.adapter, "events", "alpha", {"after_cursor": 999, "limit": 10})
+    def test_unbound_integer_cursor_replay_is_always_refused(self):
+        status = self.read_only(self.adapter, "status", "alpha")
+        self.assertIsNone(status["last_event_cursor"])
+        self.assertIn("foundry.event_replay", status["unavailable_fields"])
+        for cursor in (0, 9, 999):
+            with self.subTest(cursor=cursor), self.assertRaisesRegex(
+                    AccessRefused, "cannot bind a foundry run identity"):
+                self.read_only(self.adapter, "events", "alpha",
+                               {"after_cursor": cursor, "limit": 100})
+
+        second_root = _make_run(self.base, "cursor-second-run", SOURCE_B, full=False)
+        restarted = FoundryObservationAdapter({"alpha": second_root})
+        with self.assertRaisesRegex(AccessRefused, "cannot bind a foundry run identity"):
+            self.read_only(restarted, "events", "alpha", {"after_cursor": 9, "limit": 10},
+                           roots=[second_root])
 
         gap_root = _make_run(self.base, "gap-run", SOURCE_A, full=False)
         db = sqlite3.connect(gap_root / "ledger.sqlite")
@@ -278,7 +298,7 @@ class FoundryObservationTests(unittest.TestCase):
         db.commit()
         db.close()
         gap = FoundryObservationAdapter({"gap": gap_root})
-        with self.assertRaisesRegex(AccessRefused, "durable event history is not replayable"):
+        with self.assertRaisesRegex(AccessRefused, "cannot bind a foundry run identity"):
             self.read_only(gap, "events", "gap", {"after_cursor": 0}, roots=[gap_root])
 
     def test_live_wal_snapshot_is_read_without_touching_source_sidecars(self):
@@ -289,9 +309,8 @@ class FoundryObservationTests(unittest.TestCase):
                 writer.event("live-observation", {"state": "in-flight"})
             self.assertTrue((wal_root / "ledger.sqlite-wal").is_file())
             adapter = FoundryObservationAdapter({"wal": wal_root})
-            view = self.read_only(adapter, "events", "wal", {"after_cursor": 0, "limit": 10},
-                                  roots=[wal_root])
-            self.assertEqual(view["data"]["items"][-1]["kind"], "live-observation")
+            view = self.read_only(adapter, "status", "wal", roots=[wal_root])
+            self.assertEqual(view["data"]["latest_durable_event"]["kind"], "live-observation")
         finally:
             writer.close()
 
@@ -318,6 +337,77 @@ class FoundryObservationTests(unittest.TestCase):
                               roots=[missing_root])["data"]["item"]
         self.assertEqual(item["result"]["reason"], "manifest_digest_missing")
         self.assertIsNone(item["result"]["artifact_handle"])
+
+    def test_actual_large_tool_receipt_remains_observable(self):
+        large_root = _make_run(self.base, "large-tool-run", SOURCE_A, full=False)
+        ledger = Ledger(large_root)
+        try:
+            attempt, _ = _returned(ledger, large_root, "returned", producer_large_tool=True)
+        finally:
+            ledger.close()
+        receipt_size = (attempt / "tools" / "1" / "receipt.json").stat().st_size
+        self.assertGreater(receipt_size, 1024 * 1024)
+        self.assertLessEqual(receipt_size, 3 * 1024 * 1024)
+        adapter = FoundryObservationAdapter({"large": large_root})
+        item = self.read_only(adapter, "task", "large", {"task_id": "returned"},
+                              roots=[large_root])["data"]["item"]
+        self.assertEqual(item["result"]["availability"], "verified")
+        self.assertIsNotNone(item["result"]["artifact_handle"])
+
+    def test_hostile_counters_refuse_without_unbounded_range_allocation(self):
+        attempts_root = _make_run(self.base, "huge-attempts", SOURCE_A, full=False)
+        db = sqlite3.connect(attempts_root / "ledger.sqlite")
+        db.execute("UPDATE jobs SET attempts=? WHERE id='queued'", (1_000_000_000,))
+        db.commit()
+        db.close()
+        attempts = FoundryObservationAdapter({"attempts": attempts_root})
+        with self.assertRaisesRegex(AccessRefused, "job state is malformed"):
+            self.read_only(attempts, "status", "attempts", roots=[attempts_root])
+
+        events_root = _make_run(self.base, "huge-events", SOURCE_A, full=False)
+        db = sqlite3.connect(events_root / "ledger.sqlite")
+        db.execute("UPDATE events SET seq=? WHERE seq=1", (1_000_000_000,))
+        db.commit()
+        db.close()
+        events = FoundryObservationAdapter({"events": events_root})
+        with self.assertRaisesRegex(AccessRefused, "event sequence is outside"):
+            self.read_only(events, "status", "events", roots=[events_root])
+
+    @unittest.skipUnless(hasattr(os, "O_NONBLOCK"), "nonblocking descriptor flag requires POSIX")
+    def test_fifo_replacement_and_growth_cannot_block_or_bypass_budget(self):
+        target = self.base / "race.bin"
+        target.write_bytes(b"12345678")
+        real_open = os.open
+
+        def substituted_pipe(path, flags):
+            if Path(path) == target:
+                self.assertTrue(flags & os.O_NONBLOCK)
+                return read_descriptor
+            return real_open(path, flags)
+
+        for reader in (
+            lambda: _stable_bytes(target, 16),
+            lambda: self.adapter._read_file(target, _Budget(16), limit=16),
+        ):
+            read_descriptor, write_descriptor = os.pipe()
+            try:
+                with mock.patch.object(observation_module.os, "open", side_effect=substituted_pipe), \
+                        self.assertRaises(AccessRefused):
+                    reader()
+            finally:
+                os.close(write_descriptor)
+
+        budget = _Budget(16)
+
+        def grow_before_open(path, flags):
+            if Path(path) == target:
+                target.write_bytes(b"x" * 4104)
+            return real_open(path, flags)
+
+        with mock.patch.object(observation_module.os, "open", side_effect=grow_before_open), \
+                self.assertRaisesRegex(AccessRefused, "replaced during read"):
+            self.adapter._read_file(target, budget, limit=16)
+        self.assertEqual(budget.remaining, 16)
 
     def test_replaced_run_identity_is_refused(self):
         self.read_only(self.adapter, "status", "alpha")

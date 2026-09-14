@@ -38,11 +38,14 @@ MAX_DATABASE_BYTES = 32 * 1024 * 1024
 MAX_EVIDENCE_BYTES = 64 * 1024 * 1024
 MAX_EVIDENCE_FILE_BYTES = 32 * 1024 * 1024
 MAX_RECORD_BYTES = 1024 * 1024
+MAX_TOOL_RECEIPT_BYTES = 3 * 1024 * 1024
 MAX_JOBS = 256
 MAX_ATTEMPTS = 2048
 MAX_EVENTS = 4096
 SHA256 = re.compile(r"[0-9a-f]{64}")
 PROJECT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
+JOB_ID = re.compile(r"[a-z][a-z0-9_-]{0,63}")
+NONBLOCK = getattr(os, "O_NONBLOCK", 0)
 
 EXPECTED_SCHEMA = {
     "meta": ("key", "value"),
@@ -135,7 +138,7 @@ def _stable_bytes(path, limit):
         before = Path(path).lstat()
         if not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode) or before.st_size > limit:
             _refuse("foundry_unavailable", "foundry ledger file exceeds its bounded regular-file contract")
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        descriptor = os.open(path, os.O_RDONLY | NONBLOCK | getattr(os, "O_BINARY", 0))
         opened = os.fstat(descriptor)
         if ((opened.st_dev, opened.st_ino, opened.st_size) !=
                 (before.st_dev, before.st_ino, before.st_size)):
@@ -326,14 +329,23 @@ class FoundryObservationAdapter:
                 _refuse("foundry_unavailable", "foundry job inventory differs from the admitted plan")
             admitted = {}
             for job in plan_jobs:
-                if not isinstance(job, dict) or not isinstance(job.get("id"), str) or job["id"] in admitted:
+                if (not isinstance(job, dict) or not isinstance(job.get("id"), str) or
+                        JOB_ID.fullmatch(job["id"]) is None or job["id"] in admitted or
+                        not isinstance(job.get("domain"), str) or len(job["domain"]) > 64 or
+                        not isinstance(job.get("kind"), str) or len(job["kind"]) > 64 or
+                        not isinstance(job.get("depends_on"), list) or
+                        len(job["depends_on"]) > MAX_JOBS):
                     _refuse("foundry_unavailable", "foundry plan job is malformed")
                 admitted[job["id"]] = job
+            if any(not isinstance(dependency, str) or dependency not in admitted
+                   for job in admitted.values() for dependency in job["depends_on"]):
+                _refuse("foundry_unavailable", "foundry dependency identity is malformed")
             for row in rows:
                 spec = _parse_json_text(row["spec"], "foundry job specification")
                 if row["id"] not in admitted or spec != admitted[row["id"]]:
                     _refuse("foundry_unavailable", "foundry job differs from the admitted plan")
-                if row["state"] not in JOB_STATES or type(row["attempts"]) is not int or row["attempts"] < 0:
+                if (row["state"] not in JOB_STATES or type(row["attempts"]) is not int or
+                        not 0 <= row["attempts"] <= MAX_ATTEMPTS):
                     _refuse("foundry_unavailable", "foundry job state is malformed")
                 row["spec"] = spec
 
@@ -345,7 +357,8 @@ class FoundryObservationAdapter:
                 _refuse("foundry_unavailable", "foundry attempt inventory exceeds observation bound")
             attempts = {job_id: {} for job_id in admitted}
             for row in attempt_rows:
-                if row["job"] not in attempts or type(row["number"]) is not int or row["number"] <= 0:
+                if (row["job"] not in attempts or type(row["number"]) is not int or
+                        not 1 <= row["number"] <= MAX_ATTEMPTS):
                     _refuse("foundry_unavailable", "foundry attempt identity is malformed")
                 if row["state"] not in ATTEMPT_STATES or not isinstance(row["started"], str):
                     _refuse("foundry_unavailable", "foundry attempt state is malformed")
@@ -360,7 +373,8 @@ class FoundryObservationAdapter:
                 attempts[row["job"]][row["number"]] = row
             for row in rows:
                 numbers = sorted(attempts[row["id"]])
-                if numbers != list(range(1, row["attempts"] + 1)):
+                if (len(numbers) != row["attempts"] or
+                        any(number != expected for expected, number in enumerate(numbers, 1))):
                     _refuse("foundry_unavailable", "foundry attempts are not a complete admitted prefix")
 
             events = [dict(row) for row in connection.execute(
@@ -368,8 +382,14 @@ class FoundryObservationAdapter:
             )]
             if len(events) > MAX_EVENTS:
                 _refuse("foundry_unavailable", "foundry event inventory exceeds observation bound")
-            sequences = [row["seq"] for row in events]
-            cursor_supported = bool(sequences) and sequences == list(range(1, sequences[-1] + 1))
+            if any(type(row["seq"]) is not int or not 1 <= row["seq"] <= MAX_EVENTS
+                   for row in events):
+                _refuse("foundry_unavailable", "foundry event sequence is outside observation bounds")
+            if any(not isinstance(row["at"], str) or len(row["at"]) > 64 or
+                   not isinstance(row["event"], str) or not 0 < len(row["event"]) <= 128 or
+                   not isinstance(row["detail"], str) or
+                   len(row["detail"].encode("utf-8")) > MAX_RECORD_BYTES for row in events):
+                _refuse("foundry_unavailable", "foundry event record exceeds observation bounds")
             observed_at = events[-1]["at"] if events and isinstance(events[-1]["at"], str) else None
             if observed_at is not None:
                 try:
@@ -387,8 +407,8 @@ class FoundryObservationAdapter:
                 attempts=attempts,
                 events=tuple(events),
                 observed_at=observed_at,
-                last_cursor=sequences[-1] if cursor_supported else None,
-                cursor_supported=cursor_supported,
+                last_cursor=None,
+                cursor_supported=False,
             )
         except AccessRefused:
             raise
@@ -500,16 +520,20 @@ class FoundryObservationAdapter:
             if before.st_size > limit:
                 _refuse("artifact_refused", "foundry evidence exceeds file read bound",
                         reason="evidence_oversized")
-            budget.charge(before.st_size)
-            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+            flags = os.O_RDONLY | NONBLOCK | getattr(os, "O_BINARY", 0)
             if hasattr(os, "O_NOFOLLOW"):
                 flags |= os.O_NOFOLLOW
             descriptor = os.open(path, flags)
             opened = os.fstat(descriptor)
-            if ((opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino) or
+            if ((opened.st_dev, opened.st_ino, opened.st_size) !=
+                    (before.st_dev, before.st_ino, before.st_size) or
                     not stat.S_ISREG(opened.st_mode)):
                 _refuse("artifact_refused", "foundry evidence was replaced during read",
                         reason="evidence_replaced")
+            if opened.st_size > limit:
+                _refuse("artifact_refused", "foundry evidence exceeds file read bound",
+                        reason="evidence_oversized")
+            budget.charge(opened.st_size)
             chunks = []
             remaining = opened.st_size
             while remaining:
@@ -604,7 +628,7 @@ class FoundryObservationAdapter:
                 tool_root = ("tools", str(tool["number"]))
                 tool_receipt, _ = self._json_file(
                     self._evidence_path(snapshot.root, job["id"], number, *tool_root, "receipt.json"),
-                    budget, expected=tool["sha256"],
+                    budget, expected=tool["sha256"], limit=MAX_TOOL_RECEIPT_BYTES,
                 )
                 request_hash = tool_receipt.get("request_sha256") if isinstance(tool_receipt, dict) else None
                 if not _valid_sha(request_hash):
@@ -699,38 +723,25 @@ class FoundryObservationAdapter:
             "counts": {key: value for key, value in counts.items() if value},
             "retained_holds": len(held),
             "held_attempts": held,
+            "latest_durable_event": {
+                "seq": snapshot.events[-1]["seq"],
+                "at": snapshot.events[-1]["at"],
+                "kind": snapshot.events[-1]["event"],
+            } if snapshot.events else None,
             "canonical_authority": None,
         }
 
     def _events(self, snapshot, params):
-        if not snapshot.cursor_supported:
-            _refuse("replay_unsupported", "durable event history is not replayable",
-                    snapshot_required=True)
         after = params.get("after_cursor")
         if type(after) is not int or after < 0:
             _refuse("malformed_request", "after_cursor is required")
-        if after > snapshot.last_cursor:
-            _refuse("replay_gap", "cursor is outside retained history", snapshot_required=True,
-                    first_available_cursor=1, last_event_cursor=snapshot.last_cursor)
-        limit = self._limit(params)
-        items = []
-        for event in snapshot.events:
-            if event["seq"] <= after:
-                continue
-            try:
-                detail = _parse_json_text(event["detail"], "foundry event detail")
-            except AccessRefused as exc:
-                raise AccessRefused("replay_unsupported", "durable event record is malformed",
-                                    snapshot_required=True) from exc
-            items.append({"cursor": event["seq"], "at": event["at"],
-                          "kind": event["event"], "detail": detail,
-                          "run_id": snapshot.run_id})
-            if len(items) == limit:
-                break
-        return {"project": snapshot.project, "run_id": snapshot.run_id,
-                "cursor_scope": "foundry.events.seq", "items": items,
-                "next_cursor": items[-1]["cursor"] if items else after,
-                "snapshot_required": False}
+        self._limit(params)
+        _refuse(
+            "replay_unsupported",
+            "P2 integer cursors cannot bind a foundry run identity across service restart",
+            snapshot_required=True,
+            run_id=snapshot.run_id,
+        )
 
     def _artifact(self, snapshot, params):
         handle = params.get("handle")
