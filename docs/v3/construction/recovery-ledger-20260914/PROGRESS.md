@@ -126,6 +126,23 @@ reset bindings. The seven-event W1/W2 counterexample is now a positive refusal c
 the unit program and independent gate. Same-unit component claims also cannot understate the
 boundary upper bound or settled actual.
 
+Fourth committed candidate: `221eb036b88b417a9c19ba62976d8ba757f7c207`.
+
+- Handoff source check: exit 0, `HANDOFF_SOURCE_PASS`, 49 unchanged top-level specs.
+- Test command: exit 0, 16 methods / 15 cases / 21 literal prefixes / six behavioral
+  controls.
+- Exact-candidate gate: exit 0, `RECOVERY_LEDGER_GATE_PASS`, three component guards,
+  three reset guards, 13 source bindings and 103,821 artifact bytes.
+
+Independent Astra review returned `approve within the inert packet scope` with no actionable
+findings. It reran all three commands on the clean exact candidate and independently checked
+the W1/W2 reset-scope counterexample, duplicate/conflict/refusal behavior, multiple unknown
+resets, same-unit component underclaims, immutable successor component inventory and old-
+boundary settlement carry. It also confirmed that the gate rejects a clear-all-resets mutant,
+missing or skipped test evidence, missing controls, incorrect result counts, duplicate pass
+markers and a wrong candidate. Review instrumentation counted 139 sequences and at most eight
+stored events per sequence, within the declared 256-sequence and 32-event limits.
+
 ## Limits and negative evidence
 
 - Inert Python event/replay prototype only; no product language or store selected.
