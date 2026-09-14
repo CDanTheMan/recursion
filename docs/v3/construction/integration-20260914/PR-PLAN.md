@@ -24,4 +24,6 @@ Description drafts:
 
 Publishing uses the repository's existing approved publisher route. scripts/publish.sh requires a canonical loop/work task ref, an active registered clone, a passed canonical task, configured publisher key, push permission and no PAUSE. This document does not create registry state or satisfy those operational conditions. Existing codex/ refs are source references, not an exception to the publisher rule. The earlier Windows exception covered one different branch only.
 
+Read-only SSH observation on 2026-09-14 confirmed that gs-recursion's /opt/recursion/state/PAUSE exists and its publisher script is present. Publication is therefore blocked through that route; this session has not changed PAUSE or push flags. The prior branch-specific Windows exception does not cover these five refs. A new explicit bounded exception or an authorized publisher-state change is required before publication. Do not infer either from a review PASS.
+
 No PR has been opened by this local integration. Prepare exact review refs/bundles and descriptions before any publication approval or publisher action; never bypass the route, change autonomy flags, raw-push or merge on Lucas's behalf.

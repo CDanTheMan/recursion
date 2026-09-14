@@ -26,11 +26,25 @@ NEW gate: python -X utf8 -B -m unittest -v tools.construction_swarm.test_p2_foun
 
 Required cases: coherent completed and in-flight views, returned versus independently accepted distinction, held/unknown attempt visibility, missing and partially written records, project isolation, stale snapshots, unsupported cursor refusal, correct immutable artifact binding and refusal of missing/tampered digests. Verify input directory bytes are unchanged after each read and no provider/scheduler/mutation path is invoked. Use temporary fixtures; at most 32 MiB, 15 seconds per child, 120 seconds for the focused gate, zero inference. Also rerun P1/P2 and source/scope checks, then independent Astra review. Any existing completed-run smoke is read-only and separately labelled observed or unrun; it grants no service activation or access to another project's records.
 
-## Astra: preserve the product research lane
+## Astra: construct the missing DQ execution controller
 
 The initial delegated-Q and recovery candidates are complete within their inert scopes. The next DQ task is controller/accounting integration and evidence qualification before DQ-16 execution; the next recovery task is a separately specified physical-persistence boundary. Neither is supplied by the fleet's P2 host controller or the product's inert ledger alone.
 
-Select one precise successor proposition and author its finite executable packet, original-oracle bindings, rejection controls, additive resource/accounting map and independent review requirements. Read the inherited closure and actual available controller/receipt interfaces before choosing allowed paths. Do not run a historical campaign or substitute a generic approved JSON flag for a trusted execution boundary. The new packet must name its implementation gate before scientific execution or delegation is admitted. This is a planning handoff, not an already defined scientific execution grant.
+Build the missing controller integration as an inert candidate. Read the DQ SPEC, its ScientificKernel interface and the actual inherited controller/receipt contracts first. Preserve the original reducers and DQ files. Do not claim that a process timeout or the product recovery ledger supplies inner-call metering, historical charge reconciliation or scientific admission.
+
+Allowed new files:
+- experiments/v3/dq-execution-controller-20260914/admission.py
+- experiments/v3/dq-execution-controller-20260914/runner.py
+- experiments/v3/dq-execution-controller-20260914/test_controller.py
+- docs/v3/construction/dq-execution-controller-20260914/SPEC.md
+- docs/v3/construction/dq-execution-controller-20260914/plan.json
+- docs/v3/construction/dq-execution-controller-20260914/PROGRESS.md
+
+NEW gate: python -X utf8 -B experiments/v3/dq-execution-controller-20260914/test_controller.py
+
+Implement typed, source-bound prerequisite validation and a controller seam with fake reducers. Require exact candidate/plan/controller bindings, independently sourced grant/review/accounting evidence, current resource/account/PAUSE/lock observations and unreconciled-history handling. Specify which existing authority authenticates each fact; self-authored approved flags or missing receipts must never grant execution. Exercise a meaningful valid fake envelope as well as stale-source, forged/missing review, expired deadline, unknown prior charge, double-reservation, failed-attempt charging, inner-call undercount and child-timeout/cleanup controls. Charge construction, checker, auditor and both scientific review reruns additively; preserve uncertainty after incomplete cleanup. A fake envelope can run only fake reducers and cannot reach ScientificKernel imports.
+
+Construction gate budget: zero providers and inherited scientific state visits, at most 1,024 fake scenarios, 15 seconds per owned child, 60 seconds per focused command and 32 MiB artifacts. Commit the SPEC and literal controls before the runner, then coherent implementation slices. Obtain two independent reviews of the exact candidate. Actual historical receipt reconciliation and host observations may remain missing; report each explicitly. Deliver an executable controller candidate and exact remaining admission requirements. DQ-16 may run only after a separately reviewed finite execution grant and actual prerequisite evidence, never by extending this construction packet.
 
 ## Path from these lanes to continuous development
 
