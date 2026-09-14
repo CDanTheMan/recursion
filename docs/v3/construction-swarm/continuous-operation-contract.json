@@ -262,8 +262,8 @@
         "CW-01",
         "CW-02"
       ],
-      "trigger": "Crash after attempt acceptance but before canonical-task acknowledgement; replay the outbox twice.",
-      "expected": "Exactly one attempt and one canonical transition; missing acknowledgement blocks dependent work; no competing task registry.",
+      "trigger": "Crash after attempt acceptance but before canonical-task acknowledgement; replay the outbox twice; amend the canonical task revision before a result is coupled.",
+      "expected": "Exactly one attempt and one canonical transition; missing acknowledgement blocks dependent work; stale task-revision receipts conflict without advancing the new revision; no competing task registry.",
       "status": "specified_not_run"
     },
     {
@@ -282,8 +282,8 @@
       "requirements": [
         "CW-03"
       ],
-      "trigger": "On the actual Windows account, test boot, sign-out, lock, closing every editor, WSL shutdown, sleep and wake.",
-      "expected": "Record which startup modes work; healthy host recovers within target; outage is explicit; no duplicate controller; sleep is never called uptime.",
+      "trigger": "On the actual Windows account, test boot, sign-out, lock, closing every editor, WSL shutdown, sleep and wake; force two concurrent watchdog/controller launches after reboot and WSL shutdown.",
+      "expected": "Record which startup modes work; healthy host recovers within target; outage is explicit; exactly one fenced leader can admit work and the loser refuses effects; sleep is never called uptime.",
       "status": "specified_not_run"
     },
     {
@@ -312,8 +312,8 @@
       "requirements": [
         "CW-06"
       ],
-      "trigger": "Two clients claim one task and offer five children each; then a leased client disappears and returns late.",
-      "expected": "One task lease; every admitted child has a counted reservation; unknown cleanup retains holds; late results cannot advance newer incarnation.",
+      "trigger": "Two clients claim one task and offer five children each, including disallowed tools, ambient MCP/host shells and writable credential mounts; then a leased client disappears, Hermes revises the task and the client returns late.",
+      "expected": "One task lease; each admitted child has counted reservations and enforced tool/isolation bounds; forbidden offers or calls produce refusal/denial receipts; unknown cleanup retains holds; stale submission, artifact adoption and verification cannot advance the new canonical revision.",
       "status": "specified_not_run"
     },
     {
@@ -363,7 +363,7 @@
         "CW-11"
       ],
       "trigger": "Offer more local/remote agents during command saturation, low memory, stale quota, retained holds and review backlog.",
-      "expected": "Admission uses binding global/host/account constraints; four command slots remain; verifier/control reserve survives; excess offers receive reasons.",
+      "expected": "Admission uses binding global/host/account constraints; four command slots remain; verifier/control reserve survives; more than two review-pending candidates per active verifier refuses new implementation with a backlog reason and directs available capacity to review/synthesis; excess offers receive reasons.",
       "status": "specified_not_run"
     },
     {
@@ -522,8 +522,8 @@
         "CW-02",
         "CW-14"
       ],
-      "trigger": "Restore an interrupted ledger/artifact backup and simulate ext4 or D: exhaustion and a missing artifact.",
-      "expected": "No admitted duplicate/unknown effect; source/evidence gaps visible; admission stops with reserved closeout space; restore evidence binds actual bytes.",
+      "trigger": "Restore an interrupted ledger/artifact backup from outside the live VHDX into an isolated restore target; simulate loss of the live VHDX, ext4 or D: exhaustion and a missing artifact.",
+      "expected": "Reconcile exactly one fenced ledger before admission; no admitted duplicate/unknown effect; source/evidence gaps visible; admission stops with reserved closeout space; restore receipts bind exact ledger/artifact digests and off-VHDX backup provenance.",
       "status": "specified_not_run"
     }
   ]

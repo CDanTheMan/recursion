@@ -71,6 +71,10 @@ execution-attempt, resource-reservation and artifact facts correlated to those t
 dashboard is a projection, never another writable task registry. A durable outbox couples
 execution transitions back to canonical tasks with idempotent receipts. Missing coupling
 blocks downstream admission; a successful local attempt cannot silently mark a task done.
+Bind each lease and receipt to the canonical task revision and source/requirement digests.
+A revision change during execution requires revalidation at result submission, artifact
+adoption and verification. Preserve stale results as attributed evidence, but return a
+revision conflict and block advancement until Hermes explicitly re-admits the work.
 
 **CW-02 — Durable, fenced execution.** Exactly one leader may issue attempt leases, using
 a monotonically increasing incarnation/fence token checked at every effect boundary. Commit
@@ -90,7 +94,9 @@ does not certify the blocked scientific controller by reusing its name or files.
 component starts the intended per-user distro and maintains a supervised foreground WSL
 service connection. Linux service management restarts failed components. Closing Cursor,
 Codex or a terminal must not terminate the scheduler. Duplicate host launches elect one
-leader. Systemd alone does not keep WSL alive according to [Microsoft's documentation](https://learn.microsoft.com/en-us/windows/wsl/systemd).
+leader through a specified deterministic election mechanism with persisted incarnation
+fencing; losing controllers cannot issue effects. Qualification forces concurrent launches
+after reboot and WSL shutdown. Systemd alone does not keep WSL alive according to [Microsoft's documentation](https://learn.microsoft.com/en-us/windows/wsl/systemd).
 Qualification must cover the actual Windows account, sign-out, reboot, lock and sleep policy;
 no unattended-start claim follows from a successful interactive shell launch.
 
@@ -168,6 +174,10 @@ launch. The offer reserves nothing until admitted. Work in the WSL sandbox uses 
 cgroup and command pools as SWE-2; remote workers need separately qualified isolation and
 their own host capacity records. An uncontained desktop result is an untrusted proposal,
 which must be imported and verified in the sandbox before adoption.
+Before launch, enforce the child's explicit allowed-tool subset and reject ambient host
+shells, undeclared MCP servers, recursive delegation and writable credential mounts.
+Retain refusal/denial receipts and qualify these boundaries for contributed routes too;
+the SWE-2 canary alone does not qualify a Cursor/Codex child.
 
 Use one attempt worktree per worker. Shared modules have a single integration owner;
 disjoint work may proceed concurrently. Two clients racing to claim a task produce one
