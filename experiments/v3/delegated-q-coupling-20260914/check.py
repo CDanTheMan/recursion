@@ -3,6 +3,7 @@ import argparse
 import ast
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -138,7 +139,10 @@ def source_gate(candidate, spec):
         require(kind == 'blob' and mode in ('100644', '100755'), 'ordinary source file closure')
         path = ROOT / name
         require(not path.is_symlink(), 'no source symlink')
-        raw = path.read_bytes()
+        # Windows checkout supports long paths per-command; the interpreter may
+        # still need its explicit extended-length prefix for preserved deep files.
+        readable = Path('\\\\?\\' + str(path)) if os.name == 'nt' else path
+        raw = readable.read_bytes()
         valid = False
         for data in (raw, raw.replace(b'\r\n', b'\n')):
             blob = b'blob ' + str(len(data)).encode() + b'\0' + data

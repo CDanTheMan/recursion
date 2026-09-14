@@ -21,3 +21,15 @@ conditional. No historical gate/clock has been reused.
 Incidental read failures retained: attempted experiments/.../batch-07/manifest.json
 does not exist (the manifest is under docs/.../batch-07); rg of an unused guessed
 typed-consultation/domain.py path also failed. Neither was an acceptance gate.
+
+Initial implementation candidate: 4ae1b4d6e4621fd3c0365b1f6f241824ccd7b5e9.
+`python -X utf8 -B experiments/v3/delegated-q-coupling-20260914/test_contract.py`
+passed 30 negative controls and three valid fixtures (25 certificate inspections,
+0.453 seconds; no inherited imports/state visits or provider calls).
+Preflight with `--candidate HEAD` correctly refused a non-full SHA. Its retained
+receipt is C:/Users/Lucas/AppData/Local/Temp/dq-coupling-20260914-invalid-candidate-01/receipt.json.
+Preflight at the full initial candidate failed on Windows deep-path reading in
+the unchanged historical closure (2.938 seconds). Receipt retained at
+C:/Users/Lucas/AppData/Local/Temp/dq-coupling-20260914-preflight-01/receipt.json.
+Fixed the local byte reader to use Windows extended-length paths; no historical
+file or acceptance relation changed. These failures remain charged attempts.
