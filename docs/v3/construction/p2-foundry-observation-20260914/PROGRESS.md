@@ -90,7 +90,7 @@ or service path ran.
 
 On the same exact candidate, the existing handoff-preservation check exited 0 with
 `HANDOFF_SOURCE_PASS`, 49 unchanged v3 specifications and zero provider calls. The
-additive focused source check confirmed exact `TASK_BASE`, the five dependency blobs, a
+additive focused source check confirmed exact `TASK_BASE`, the dependency blobs, a
 clean branch and exactly the four allowed new paths. `git diff --check TASK_BASE HEAD`
 also exited 0.
 
@@ -115,7 +115,41 @@ clean native clone:
 - P1 regression: exit 0, 18 tests in 1.911 seconds;
 - P2 regression: exit 0, 19 tests in 5.623 seconds.
 
-Independent exact-candidate Astra review remains pending.
+Independent Astra review of successor candidate
+`3219ec98cb71e7e44f82807b2686b5c4ac4aebd3` reran every gate successfully but
+returned `repair`. Its bounded probes found five counterexamples retained as failed
+evidence:
+
+- hostile billion-sized attempt/event integers caused unbounded `range` allocation;
+- regular-file-to-FIFO replacement could block both database and artifact opens;
+- same-inode growth between `lstat` and `open` bypassed the file/budget charge;
+- a valid 1,126,707-byte producer-generated tool receipt exceeded an accidental 1 MiB
+  verifier default; and
+- an integer cursor from one run could be silently reused after adapter restart for a
+  different run.
+
+The reviewer used fixtures below 1.2 MiB, two-second bounded children and a 192 MiB
+address-space cap. It changed no files and made no provider or service call.
+
+The remediation bounds stored counters before comparison without allocating from them,
+opens source records nonblocking, rechecks descriptor size before charging/reading, uses
+the producer's 3 MiB tool-receipt ceiling, and adds producer-generated and adversarial
+controls. Because unchanged P2 cursor parameters contain only an integer and no durable
+run binding, all foundry `events` replay now refuses with `snapshot_required`; the latest
+durable event remains a status observation, not a replay cursor. `foundry_tools.py` and
+`foundry_client.py` source blobs are now also pinned.
+
+Remediated candidate `0d6e324c6e4d82cfe9c0f9ee7692d35ed704e1c8` passed from the
+clean native clone:
+
+- focused observation gate: exit 0, 16 tests in 1.385 seconds;
+- P1 regression: exit 0, 18 tests in 1.862 seconds;
+- P2 regression: exit 0, 19 tests in 5.586 seconds;
+- handoff preservation: exit 0, `HANDOFF_SOURCE_PASS`, 49 unchanged specifications;
+- source/scope and `git diff --check`: exit 0, exact four paths and seven pinned
+  dependency blobs.
+
+Final independent exact-candidate Astra review remains pending.
 
 ## Limits and negative evidence
 
