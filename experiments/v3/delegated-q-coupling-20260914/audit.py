@@ -54,11 +54,13 @@ def restore(trace, side, expected_profile, actions, kernel):
     fields = set(kernel.fields) | {'done', 'decision'}
     journal = set(kernel.journal)
     def frame(state):
+        demand(type(state['done']) is int and state['done'] >= 0 and type(state['decision']) is str, 'typed outer bookkeeping')
         if side == 'source':
             demand(set(state) == fields | journal, 'all source fields')
         else:
             demand(set(state) == {'core', 'journal', 'done', 'decision', 'invocations'}, 'all adapter fields')
             demand(set(state['core']) == fields and set(state['journal']) == journal, 'all Q and journal fields')
+            demand(type(state['core']['done']) is int and state['core']['done'] >= 0 and type(state['core']['decision']) is str, 'typed Q bookkeeping')
             demand(type(state['invocations']) is tuple, 'typed invocation history')
     states = [copy.deepcopy(trace['initial'])]
     frame(states[0])

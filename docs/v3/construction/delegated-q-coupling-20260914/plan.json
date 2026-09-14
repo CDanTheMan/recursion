@@ -950,6 +950,7 @@
     "construction": {
       "state_visits_per_representation": 1120,
       "state_visits_all_representations": 2240,
+      "typed_initial_reference_states": 32,
       "reducer_wrapper_calls": 2176,
       "transition_audit_calls": 1088,
       "relation_checks": 560,
@@ -958,6 +959,7 @@
     },
     "certificate_audit": {
       "restored_state_visits": 1120,
+      "typed_initial_reference_states": 32,
       "transition_audit_calls": 1088,
       "relation_checks": 560,
       "timeout_seconds": 20,
@@ -965,7 +967,7 @@
     },
     "scientific_bundles": 3,
     "independent_scientific_reviewer_reruns": 2,
-    "aggregate_new_state_visits": 10080,
+    "aggregate_new_state_visits": 10272,
     "aggregate_transition_audit_calls": 6528,
     "aggregate_reducer_wrapper_calls": 6528,
     "aggregate_seconds": 168,

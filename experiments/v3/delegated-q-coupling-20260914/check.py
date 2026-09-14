@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -80,10 +81,11 @@ def expected_plan():
     prefixes = events + histories
     construction = dict(state_visits_per_representation=2 * prefixes,
                         state_visits_all_representations=4 * prefixes,
+                        typed_initial_reference_states=2 * histories,
                         reducer_wrapper_calls=4 * events, transition_audit_calls=2 * events,
                         relation_checks=prefixes, timeout_seconds=2 * histories + 4,
                         output_bytes=(histories + 1) * 1048576)
-    audit = dict(restored_state_visits=2 * prefixes, transition_audit_calls=2 * events,
+    audit = dict(restored_state_visits=2 * prefixes, typed_initial_reference_states=2 * histories, transition_audit_calls=2 * events,
                  relation_checks=prefixes, timeout_seconds=histories + 4, output_bytes=1048576)
     return dict(format='delegated-q-plan/1', TASK_BASE=BASE,
                 parent='goal-recursion-v2-execution-fabric',
@@ -94,7 +96,7 @@ def expected_plan():
                 accounting=dict(histories=histories, events=events, paired_prefixes=prefixes,
                                 construction=construction, certificate_audit=audit,
                                 scientific_bundles=3, independent_scientific_reviewer_reruns=2,
-                                aggregate_new_state_visits=3 * (4 * prefixes + 2 * prefixes),
+                                aggregate_new_state_visits=3 * (4 * prefixes + 2 * prefixes + 4 * histories),
                                 aggregate_transition_audit_calls=3 * 4 * events,
                                 aggregate_reducer_wrapper_calls=3 * 4 * events,
                                 aggregate_seconds=3 * (construction['timeout_seconds'] + audit['timeout_seconds']),
@@ -110,7 +112,7 @@ def expected_plan():
 
 
 def validate_plan(value):
-    require(value == expected_plan(), 'exact prospective domain, full fields, closure and additive accounting')
+    require(json.dumps(value, sort_keys=True, allow_nan=False) == json.dumps(expected_plan(), sort_keys=True, allow_nan=False), 'exact typed prospective domain, full fields, closure and additive accounting')
     require(len(value['fields']['common']) == len(set(value['fields']['common'])), 'unique common fields')
     require(len(value['cases']) == 16 and value['accounting']['paired_prefixes'] == 560, 'complete finite domain')
     for case in value['cases']:
@@ -161,6 +163,55 @@ def refuse_scientific_admission(mode, receipt=None):
     raise ValueError(mode + ': no fresh trusted controller/finite grant/accounting proof; historical receipts and charge reconciliation missing; two exact candidate reviews and live resource/account observations required. No scientific import or execution occurred.')
 
 
+def arm_fake_deadline(output, seconds=59):
+    """Own this inert gate and its subprocesses; terminate before the 60s cap.
+
+    This is a short local fake/source gate guard, not scientific admission or the
+    historical controller's resource/accounting proof. Windows nested job membership
+    contains only this Python process and descendants, never its Codex parent.
+    """
+    require(0 < seconds <= 59, 'finite fake gate deadline')
+    if os.name == 'nt':
+        import ctypes
+        from ctypes import wintypes
+        api = ctypes.WinDLL('kernel32', use_last_error=True)
+        api.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+        api.CreateJobObjectW.restype = wintypes.HANDLE
+        api.GetCurrentProcess.argtypes = []
+        api.GetCurrentProcess.restype = wintypes.HANDLE
+        api.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        api.AssignProcessToJobObject.restype = wintypes.BOOL
+        api.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        api.TerminateJobObject.restype = wintypes.BOOL
+        job = api.CreateJobObjectW(None, None)
+        require(bool(job) and bool(api.AssignProcessToJobObject(job, api.GetCurrentProcess())),
+                'cannot own fake gate process job: ' + str(ctypes.get_last_error()))
+        terminate = lambda: api.TerminateJobObject(job, 124)
+    else:
+        import signal
+        os.setpgid(0, 0)
+        require(os.getpgrp() == os.getpid(), 'own fake gate process group')
+        terminate = lambda: os.killpg(os.getpid(), signal.SIGKILL)
+    def expired():
+        # Termination must not wait on a slow output filesystem or stdout pipe.
+        killer = threading.Timer(0.25, lambda: (terminate(), os._exit(124)))
+        killer.daemon = True
+        killer.start()
+        record = dict(status='FAKE_GATE_TIMEOUT', deadline_seconds=seconds,
+                      inherited_state_visits=0, provider_calls=0, failed_attempt_retained=True)
+        try:
+            output.mkdir(parents=True, exist_ok=True)
+            (output / 'deadline-failure.json').write_text(json.dumps(record) + '\n', encoding='utf8')
+            print(json.dumps(record), flush=True)
+        finally:
+            terminate()
+            os._exit(124)
+    timer = threading.Timer(seconds, expired)
+    timer.daemon = True
+    timer.start()
+    return timer
+
+
 def main():
     start = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -172,6 +223,7 @@ def main():
     output = args.output.resolve()
     require(not output.is_relative_to(ROOT.resolve()) and not output.exists(), 'fresh external output directory')
     output.mkdir(parents=True, exist_ok=False)
+    deadline = arm_fake_deadline(output)
     record = dict(candidate=args.candidate, mode=args.mode, status='PREFLIGHT_FAILED',
                   provider_calls=0, inherited_state_visits=0, proposition='unexecuted')
     exit_code = 2
@@ -195,6 +247,7 @@ def main():
         require(len(content.encode()) < 33554432, 'output byte bound')
         (output / 'receipt.json').write_text(content, encoding='utf8')
         print(json.dumps(record, sort_keys=True))
+        deadline.cancel()
     return exit_code
 
 

@@ -79,6 +79,10 @@ One construction pass visits 1,120 S+adapter states per representation, 2,240 ov
 inclusive/split, performs 2,176 reducer wrapper calls and 1,088 transition audits.
 Independent certificate audit reconstructs 1,120 states and performs another 1,088
 transition audits plus 560 relation audits. Two independent scientific reviewer
+passes also include typed original initialization: 32 separately charged reference
+states for construction and 32 for certificate audit. This adds 192 states across
+the three bundles, for 10,272 aggregate new visits including restored/reference
+states; this sum never replaces its separately reported dimensions. Two reviewer
 reruns each reserve a full construction and certificate audit; three such bundles
 are charged additively (including failures), with no deduplication/refund.
 Implementation/fake review is separate from those prospective scientific reruns.
@@ -112,3 +116,9 @@ to 60 seconds, 32 MiB output, zero provider calls, zero inherited state visits a
 at most 1,024 fake certificates. Gate receipts bind candidate and full closure;
 preflight runs the fake suite and cannot skip it. A changed/dirty candidate,
 incomplete domain, missing input, failed control or stale binding fails closed.
+An owned local Windows process job (POSIX process group elsewhere) enforces the
+inert gate deadline at 59 seconds, including descendants; a short fake timeout
+control verifies termination and retained failure evidence. Logging cannot delay
+termination beyond the separate 0.25-second kill fallback. This guard supplies no
+scientific resource or accounting admission. Initial original state comparison and
+plan validation are exact-type checks; Python's bool/int equality is insufficient.

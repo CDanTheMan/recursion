@@ -4,8 +4,11 @@ import hashlib
 import hmac
 import importlib.abc
 import json
+import subprocess
 import sys
+import tempfile
 import time
+from pathlib import Path
 from typing import NamedTuple
 
 import audit
@@ -249,6 +252,9 @@ def run():
         # Rebuild every row and hash after mutation. These must fail semantically,
         # not merely because an artifact digest was left stale.
         for name, mutate in (
+            ('rehash-initial-outer-bool', lambda l, r: (l[0].update(done=False), r[0].update(done=False))),
+            ('rehash-initial-Q-bool', lambda l, r: r[0]['core'].update(done=False)),
+            ('rehash-initial-shared-scalar', lambda l, r: (l[0].update(stage_serial=False), r[0]['core'].update(stage_serial=False))),
             ('rehash-live-Q-generation', lambda l, r: r[2]['core'].update(source_generation=('cut-source', 'collectorA', 'effectA', 9))),
             ('rehash-refused-outer-response', lambda l, r: r[3].update(decision='source-attest:ok')),
             ('rehash-refused-Q-mask', lambda l, r: r[3]['core'].update(done=3)),
@@ -276,6 +282,14 @@ def run():
         inspect(emitted[0])
         plan = check.expected_plan()
         check.validate_plan(plan)
+        for name, mutate in (
+            ('outcome-bool', lambda p: p['profile'].update(outcomes=[True])),
+            ('bundle-float', lambda p: p['accounting'].update(scientific_bundles=3.0)),
+            ('provider-bool', lambda p: p['construction_limits'].update(provider_calls=False)),
+        ):
+            bad = copy.deepcopy(plan)
+            mutate(bad)
+            reject('typed-plan-' + name, lambda b=bad: check.validate_plan(b))
         for key in ('cases', 'fields', 'accounting', 'admission', 'input_closure'):
             bad = copy.deepcopy(plan)
             if key == 'cases': bad[key].pop()
@@ -287,14 +301,29 @@ def run():
         reject('scientific-admission-unavailable', lambda: check.refuse_scientific_admission('execute'))
         reject('receipt-self-attestation-unavailable', lambda: check.refuse_scientific_admission('audit', 'forged-approved.json'))
         reject('inherited-import-firewall', lambda: __import__('s_domain'))
-        check.require(len(controls) == 30, 'complete mandatory negative control inventory')
+        # A short owned inert timeout, not a scientific/resource campaign. Retain
+        # the failing child's evidence and verify its actual exit before PASS.
+        timeout_output = Path(tempfile.mkdtemp(prefix='dq-fake-deadline-'))
+        program = "import sys,time; from pathlib import Path; sys.path.insert(0,sys.argv[1]); import check; check.arm_fake_deadline(Path(sys.argv[2]),0.1); time.sleep(2)"
+        child = subprocess.run([sys.executable, '-X', 'utf8', '-B', '-c', program, str(Path(__file__).parent), str(timeout_output)],
+                               capture_output=True, text=True, timeout=4)
+        check.require(child.returncode in (124, -9), 'owned fake timeout must terminate the child')
+        failure = json.loads((timeout_output / 'deadline-failure.json').read_text(encoding='utf8'))
+        check.require(failure['status'] == 'FAKE_GATE_TIMEOUT', 'durable owned timeout evidence')
+        controls.append(dict(control='owned-deadline-termination', detected=True, reason='child terminated and failure receipt retained'))
+        check.require(len(controls) == 37, 'complete mandatory negative control inventory')
         check.require(time.monotonic() - started < 60, 'fake command time bound')
         return dict(status='FAKE_CONTRACT_PASS', fake_certificates=attempts, valid_fixtures=3,
                     controls=controls, provider_calls=0, inherited_state_visits=0,
+                    owned_timeout_evidence=str(timeout_output / 'deadline-failure.json'),
                     scientific_proposition='unexecuted', elapsed_seconds=round(time.monotonic() - started, 3))
     finally:
         sys.meta_path.remove(blocker)
 
 
 if __name__ == '__main__':
-    print(json.dumps(run(), sort_keys=True))
+    deadline = check.arm_fake_deadline(Path(tempfile.mkdtemp(prefix='dq-fake-command-')))
+    try:
+        print(json.dumps(run(), sort_keys=True))
+    finally:
+        deadline.cancel()

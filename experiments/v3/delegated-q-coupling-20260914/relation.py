@@ -98,6 +98,10 @@ class ScientificKernel:
         return self.d.s.initial(unit), self.d.initial(unit)
 
     def initial_audit(self, source, adapter, unit):
+        # Frozen auditors use Python == at some initialization sites (1 == True).
+        # Add typed equality without changing them; charge both reference states.
+        expected_source, expected_adapter = self.initial(unit)
+        require(exact(source, expected_source) and exact(adapter, expected_adapter), 'complete typed original initialization')
         self.t.sc.initialization(source, unit)
         self.t.audit.initialization(adapter, unit)
 
