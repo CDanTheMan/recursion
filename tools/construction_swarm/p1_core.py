@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,10 +53,27 @@ def request_digest(request):
 def _connection(filename):
     db = sqlite3.connect(filename, timeout=10, isolation_level=None)
     db.row_factory = sqlite3.Row
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("PRAGMA synchronous=FULL")
-    db.execute("PRAGMA foreign_keys=ON")
-    return db
+    try:
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                mode = db.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+                _require(mode.lower() == "wal", "WAL durability mode unavailable")
+                break
+            except sqlite3.OperationalError as exc:
+                # Concurrent first opens can fail the journal-mode lock upgrade
+                # immediately despite busy_timeout. Retry only this setup step;
+                # no task, provider or outbox effect has occurred yet.
+                code = getattr(exc, "sqlite_errorcode", 0)
+                if code & 0xff != sqlite3.SQLITE_BUSY or time.monotonic() >= deadline:
+                    raise
+                time.sleep(.01)
+        db.execute("PRAGMA synchronous=FULL")
+        db.execute("PRAGMA foreign_keys=ON")
+        return db
+    except BaseException:
+        db.close()
+        raise
 
 
 def _require(value, reason):

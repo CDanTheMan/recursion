@@ -116,6 +116,10 @@ class P1CoreTests(unittest.TestCase):
         try:
             deadline = time.monotonic() + 10
             while not all(ready.exists() for _, ready, _, _ in commands) and time.monotonic() < deadline:
+                for owner, _, _, process in commands:
+                    if process.poll() is not None:
+                        stdout, stderr = process.communicate()
+                        self.fail(f"{owner} exited before election barrier: {stdout!r} {stderr!r}")
                 time.sleep(.01)
             self.assertTrue(all(ready.exists() for _, ready, _, _ in commands), "children did not reach race barrier")
             start.write_text("go", encoding="utf-8")

@@ -130,3 +130,13 @@ only pending outbox delivery; original receipt IDs and already-delivered history
 intact. New pending/delivered regression cases failed before the fix. The complete suite
 passes 18 tests after both slices. This remains P1 fake-boundary evidence; it does not
 establish the proposed P2–P7 service, admission or live-worker qualification.
+
+2026-09-14 repair slice 3: the independent Linux review encountered an election
+startup failure, then passed on rerun. Its scheduling-flake interpretation was
+not accepted as closure: a separate 30-pair simultaneous-open probe reproduced
+22 SQLite `database is locked` initialization failures at `journal_mode=WAL`.
+Database initialization now retries only SQLITE_BUSY during that setup step,
+with a ten-second deadline and connection cleanup on failure. No execution effect
+is retried. The same Linux probe then had zero failures; all 18 Windows tests pass.
+The election test now reports early child stderr instead of masking it as a barrier
+timeout. A fresh review of this third slice is required before final completion.
