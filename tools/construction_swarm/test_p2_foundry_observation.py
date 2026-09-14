@@ -265,6 +265,20 @@ class FoundryObservationTests(unittest.TestCase):
         with self.assertRaisesRegex(AccessRefused, "durable event history is not replayable"):
             self.read_only(gap, "events", "gap", {"after_cursor": 0}, roots=[gap_root])
 
+    def test_live_wal_snapshot_is_read_without_touching_source_sidecars(self):
+        wal_root = _make_run(self.base, "wal-run", SOURCE_A, full=False)
+        writer = Ledger(wal_root)
+        try:
+            with writer.db:
+                writer.event("live-observation", {"state": "in-flight"})
+            self.assertTrue((wal_root / "ledger.sqlite-wal").is_file())
+            adapter = FoundryObservationAdapter({"wal": wal_root})
+            view = self.read_only(adapter, "events", "wal", {"after_cursor": 0, "limit": 10},
+                                  roots=[wal_root])
+            self.assertEqual(view["data"]["items"][-1]["kind"], "live-observation")
+        finally:
+            writer.close()
+
     def test_artifact_view_requires_original_manifest_digests(self):
         task = self.read_only(self.adapter, "task", "alpha", {"task_id": "returned"})["data"]["item"]
         handle = task["result"]["artifact_handle"]

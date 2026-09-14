@@ -112,6 +112,23 @@ def _identity(path, *, directory=False):
     return information.st_dev, information.st_ino
 
 
+def _file_signature(path):
+    try:
+        information = Path(path).lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AccessRefused("foundry_unavailable", "foundry records changed during observation") from exc
+    if not stat.S_ISREG(information.st_mode) or stat.S_ISLNK(information.st_mode):
+        _refuse("foundry_unavailable", "foundry ledger sidecar is not a regular file")
+    return (information.st_dev, information.st_ino, information.st_size, information.st_mtime_ns)
+
+
+def _ledger_signature(database):
+    wal = Path(database).with_name(Path(database).name + "-wal")
+    return _file_signature(database), _file_signature(wal)
+
+
 def _stable_bytes(path, limit):
     descriptor = None
     try:
@@ -266,10 +283,11 @@ class FoundryObservationAdapter:
         temporary = None
         try:
             wal = database.with_name(database.name + "-wal")
-            wal_present = wal.exists()
+            source_signature = _ledger_signature(database)
+            wal_present = source_signature[1] is not None
             database_bytes = _stable_bytes(database, MAX_DATABASE_BYTES)
             wal_bytes = _stable_bytes(wal, MAX_DATABASE_BYTES - len(database_bytes)) if wal_present else None
-            if wal.exists() != wal_present:
+            if _ledger_signature(database) != source_signature:
                 _refuse("foundry_unavailable", "foundry records changed during observation")
             temporary = tempfile.TemporaryDirectory(prefix="foundry-observation-snapshot-")
             copied = Path(temporary.name) / "ledger.sqlite"
@@ -712,9 +730,12 @@ class FoundryObservationAdapter:
         budget = _Budget()
         match = None
         for job in snapshot.jobs:
-            item = self._task_view(snapshot, job, budget)
-            if item["result"]["artifact_handle"] == handle:
-                match = (job, self._current_attempt(snapshot, job), item)
+            attempt = self._current_attempt(snapshot, job)
+            if (attempt and attempt["state"] == "returned" and _valid_sha(job["result_hash"]) and
+                    handle == f"foundry:{snapshot.plan_hash}:{job['id']}:{attempt['number']}:{job['result_hash']}"):
+                item = self._task_view(snapshot, job, budget)
+                if item["result"]["artifact_handle"] == handle:
+                    match = (job, attempt, item)
                 break
         if match is None:
             _refuse("artifact_refused", "artifact handle is unavailable")
