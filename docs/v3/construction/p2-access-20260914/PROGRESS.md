@@ -114,4 +114,9 @@ The acceptance suite now includes 15 native cases, including exact regressions f
 counterexample. Post-remediation observation: focused gate exit 0, all 15 WSL cases in 4.208 seconds
 and Windows wrapper in 8.016 seconds; P1 exit 0, all 18 cases in 1.919 seconds.
 
-Final exact-candidate Astra rerun is pending after this evidence update is committed.
+After committing remediation evidence, the complete gate was run again: focused gate exit 0, all
+15 WSL cases in 4.150 seconds and Windows wrapper in 7.477 seconds; P1 exit 0, all 18 cases in
+1.831 seconds; `git diff --check TASK_BASE HEAD` exit 0; exact six-path comparison `SCOPE_PASS`.
+
+The final exact-candidate Astra receipt is reported with the handoff rather than inserted here:
+inserting a receipt into this tracked file would create a different, unreviewed candidate.
