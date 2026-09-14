@@ -45,7 +45,11 @@ This is the same digest chain checked by `foundry.report`, with additional read 
 aggregate byte ceilings. A worker return is the current attempt's durable `returned`
 state. Independently accepted output additionally requires the job's `accepted` state
 and a matching durable `head-decision` event whose reference is retained. Neither fact
-is canonical Hermes acceptance.
+is canonical Hermes acceptance. Job/current-attempt combinations must be reachable through
+the bound `Ledger` reserve, finish, retry, recovery, reconciliation and decision transitions;
+contradictory combinations refuse the snapshot rather than asserting acceptance or releasing
+an unknown hold. Legitimate failed-attempt retry and unknown-attempt reconciliation remain
+observable.
 
 ## Read projection
 
@@ -62,7 +66,9 @@ itself.
   fields. Route quota, spend, leases outside this ledger, goal progress, canonical task
   state, canonical acceptance, canonical revision and Hermes authority remain unavailable.
 - `running` and `unknown` current attempts remain visible as held. Missing terminal
-  evidence never becomes failure, return or release.
+  evidence never becomes failure, return or release. A malformed job/attempt state conflict
+  refuses the observation; it cannot turn an `unknown` job into a known effect or make an
+  `accepted` job independent of a returned current attempt.
 - Freshness is based on the latest durable foundry event timestamp. P2 marks an old or
   absent timestamp stale/unavailable; the adapter does not refresh it to wall-clock time.
 - SQLite `events.seq` and the latest event are observation facts, but unchanged P2 replay
@@ -106,8 +112,11 @@ The focused gate must prove:
    integer replay requests refuse across both current and restarted adapters;
 8. verified digest-bound artifacts read correctly, and missing/tampered digests refuse;
 9. the explicit entry point reaches only the existing read service, never foundry
-   initialization/run, schedulers, workers or providers; and
-10. the exact `TASK_BASE`, five dependency blobs, clean tree and four-path scope hold.
+   initialization/run, schedulers, workers or providers;
+10. contradictory accepted/unknown and unknown/failed job/current-attempt pairs, plus a
+    missing current attempt, refuse without mutating input; valid retry, recovery and
+    reconciliation states remain observable; and
+11. the exact `TASK_BASE`, seven dependency blobs, clean tree and four-path scope hold.
 
 Required commands:
 

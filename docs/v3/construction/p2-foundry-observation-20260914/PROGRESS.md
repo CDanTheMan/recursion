@@ -149,7 +149,32 @@ clean native clone:
 - source/scope and `git diff --check`: exit 0, exact four paths and seven pinned
   dependency blobs.
 
-Final independent exact-candidate Astra review remains pending.
+Documentation candidate `d2837b59c2063788c5aaf417ea88331714f7332d` repeated those
+gates in the clean native clone: focused 16 in 2.161 seconds, P1 18 in 2.690 seconds,
+P2 19 in 5.597 seconds, handoff `HANDOFF_SOURCE_PASS` with 49 specifications, and an
+empty `git diff --check`. Independent Astra review reproduced every prior repair and 15
+digest/identity mutations, but returned `repair` after finding another malformed-ledger
+counterexample:
+
+- an `accepted` job whose current attempt was changed to `unknown` still asserted
+  `independently_accepted=true`; and
+- an `unknown` job whose current attempt was changed to `failed` exposed a known effect
+  and released its observation hold even though the source ledger retains capacity by
+  job state.
+
+Both source fixture trees remained byte-identical. The reviewer also verified bounded
+refusal during a committed-WAL copy race, followed by a stable successful observation.
+The newly frozen state-coherence control then failed exactly those two contradiction
+cases while the missing-current-attempt control already refused as an incomplete prefix;
+that local red run executed one test with two failures and exit 1.
+
+The repair binds every job state to the source-supported current-attempt state before any
+projection. Contradictory pairs now refuse the complete snapshot, so they can neither
+assert acceptance nor release a hold. Added positive controls preserve a failed-attempt
+retry, recovery of its second running attempt to retained `unknown`, and explicit
+reconciliation to `cancelled`. The 17 behavioral tests passed locally after the repair
+(one POSIX-only FIFO control skipped on Windows). Exact native gates and a successor
+exact-commit Astra verdict remain pending.
 
 ## Limits and negative evidence
 
