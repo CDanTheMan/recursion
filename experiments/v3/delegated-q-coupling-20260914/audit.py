@@ -29,6 +29,25 @@ def same(left, right):
     return representation(left) == representation(right)
 
 
+def type_frame(before, after):
+    """Strengthen value-only inherited frames on this fixed typed domain.
+
+    No retained numeric leaf changes its int/bool type in DQ-16. A value-equal
+    subtree must retain its complete type structure. Changed/growing containers
+    still undergo the original complete transition postconditions below.
+    """
+    if type(before) in (int, bool) and type(after) in (int, bool):
+        demand(type(before) is type(after), 'numeric transition type alias')
+    if before == after:
+        demand(same(before, after), 'value-equal transition must preserve exact types')
+    if type(before) is dict and type(after) is dict:
+        for key in before.keys() & after.keys():
+            type_frame(before[key], after[key])
+    elif isinstance(before, (tuple, list)) and isinstance(after, (tuple, list)):
+        for old, new in zip(before, after):
+            type_frame(old, new)
+
+
 def decode(node, envelope_type):
     demand(type(node) is list and len(node) == 2, 'typed transport node')
     tag, body = node
@@ -116,6 +135,8 @@ def inspect(cert, binding, entry, profile, kernel):
         call, response = None, True
         if prefix:
             i = prefix - 1
+            type_frame(ss[i], ss[prefix])
+            type_frame(aa[i], aa[prefix])
             call = kernel.transition(ss[i], aa[i], ss[prefix], aa[prefix], actions[i], profile, entry['unit'], 1)
             demand(type(call) is bool, 'actual call audit result')
             expected_calls = aa[i]['invocations'] + ((actions[i],) if call else ())

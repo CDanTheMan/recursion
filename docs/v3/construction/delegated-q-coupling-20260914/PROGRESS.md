@@ -74,3 +74,18 @@ final reviews again. DQ-16 remains unexecuted; the existing conditional source
 argument is not promoted to proof. Future execution requires the SPEC's fresh
 controller integration/admission, resource/account observations, finite envelope,
 historical receipt/charge reconciliation and renewed exact candidate reviews.
+
+Second reviewed bundle: d6bfc8c976b20d220ba42c48315d0e81d4ea1324.
+Root preflight passed 3.343 seconds (preflight-03/receipt.json under the same temp
+prefix); root standalone fake passed 1.016 seconds. Review 2 passed this candidate:
+C:/Users/Lucas/AppData/Local/Temp/dq-coupling-review2-02/receipt.json (3.984 seconds).
+Review 1 preflight passed 3.437 seconds and standalone 1.079 seconds:
+C:/Users/Lucas/AppData/Local/Temp/dq-coupling-review1-02/receipt.json. It identified
+a remaining static P2: change publisher_boot from 1 to True on both S and Q at
+the first delegated poststate; value-only inherited frames and equality between
+the two forged sides can agree. No scientific execution of this probe occurred.
+Added recursive type preservation to each audited transition and a rehashed
+two-sided poststate regression. This traverses already restored states and adds
+no model/reference state creation. Final controls are now 38 with 29 fake
+certificate inspections. Both reviewers must inspect the resulting new exact SHA;
+the earlier review 2 PASS is retained but does not approve a changed candidate.

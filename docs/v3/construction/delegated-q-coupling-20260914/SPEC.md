@@ -122,3 +122,8 @@ control verifies termination and retained failure evidence. Logging cannot delay
 termination beyond the separate 0.25-second kill fallback. This guard supplies no
 scientific resource or accounting admission. Initial original state comparison and
 plan validation are exact-type checks; Python's bool/int equality is insufficient.
+Every audited transition additionally preserves types throughout value-equal
+subtrees and rejects int/bool changes at retained numeric leaves. DQ-16 never
+changes those numeric types; ordinary value changes and growing containers still
+need the original full postconditions. This closes two-sided post-initialization
+equality-alias forgeries; type-sensitive hashes alone cannot reject such forgeries.

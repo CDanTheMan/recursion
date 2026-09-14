@@ -60,7 +60,7 @@ class FakeKernel:
     def initial(self, unit):
         core = dict.fromkeys(self.fields, ())
         core.update(done=0, decision='initial', source_name='',
-                    source_generation=('cut-source', 'collectorA', 'effectA', 0), stage_serial=0)
+                    source_generation=('cut-source', 'collectorA', 'effectA', 0), stage_serial=0, publisher_boot=1)
         ledger = dict.fromkeys(self.journal, ())
         ledger.update(source_generation=core['source_generation'], source_revision=0)
         return dict(core, **ledger), dict(core=core, journal=ledger, done=0, decision='initial', invocations=())
@@ -69,7 +69,7 @@ class FakeKernel:
         # Independent initial expectations, checking even fields unused by the toy actions.
         for state in (source, adapter['core']):
             for key in self.fields:
-                expected = {'source_name': '', 'source_generation': ('cut-source', 'collectorA', 'effectA', 0), 'stage_serial': 0}.get(key, ())
+                expected = {'source_name': '', 'source_generation': ('cut-source', 'collectorA', 'effectA', 0), 'stage_serial': 0, 'publisher_boot': 1}.get(key, ())
                 audit.demand(audit.same(state[key], expected), 'inert initial common field ' + key)
             audit.demand(state['done'] == 0 and state['decision'] == 'initial', 'initial bookkeeping')
         for key in self.journal:
@@ -255,6 +255,7 @@ def run():
             ('rehash-initial-outer-bool', lambda l, r: (l[0].update(done=False), r[0].update(done=False))),
             ('rehash-initial-Q-bool', lambda l, r: r[0]['core'].update(done=False)),
             ('rehash-initial-shared-scalar', lambda l, r: (l[0].update(stage_serial=False), r[0]['core'].update(stage_serial=False))),
+            ('rehash-both-sides-poststate-type-alias', lambda l, r: [(l[i].update(publisher_boot=True), r[i]['core'].update(publisher_boot=True)) for i in range(1, len(l))]),
             ('rehash-live-Q-generation', lambda l, r: r[2]['core'].update(source_generation=('cut-source', 'collectorA', 'effectA', 9))),
             ('rehash-refused-outer-response', lambda l, r: r[3].update(decision='source-attest:ok')),
             ('rehash-refused-Q-mask', lambda l, r: r[3]['core'].update(done=3)),
@@ -311,7 +312,7 @@ def run():
         failure = json.loads((timeout_output / 'deadline-failure.json').read_text(encoding='utf8'))
         check.require(failure['status'] == 'FAKE_GATE_TIMEOUT', 'durable owned timeout evidence')
         controls.append(dict(control='owned-deadline-termination', detected=True, reason='child terminated and failure receipt retained'))
-        check.require(len(controls) == 37, 'complete mandatory negative control inventory')
+        check.require(len(controls) == 38, 'complete mandatory negative control inventory')
         check.require(time.monotonic() - started < 60, 'fake command time bound')
         return dict(status='FAKE_CONTRACT_PASS', fake_certificates=attempts, valid_fixtures=3,
                     controls=controls, provider_calls=0, inherited_state_visits=0,
