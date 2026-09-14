@@ -17,11 +17,16 @@ unavailable marker, observation time, canonical observation/revision, freshness,
 and unavailable fields. Pages, requests, responses and artifact reads are bounded. Event history
 gaps return `replay_gap` with `snapshot_required=true`. Artifact handles are project-scoped and
 absolute paths, `..`, symlinks, non-files and files beyond the configured limit are refused.
+Artifact roots are pinned as directory descriptors; every path component is opened relative to a
+pinned descriptor with no-follow flags. Size, manifest SHA-256, returned bytes and pagination all
+come from the same opened file descriptor, so a pathname swap cannot redirect or version-mix a read.
 
-Status has a separate two-slot bounded path from the bounded general read slots. A disconnected
-client can return only the same-operation cached snapshot when explicitly enabled; it is relabelled
-`stale_disconnected` and adds `service.connection` to unavailable fields. Reconnection always asks
-the service again and replaces the cache.
+Status has a separate two-slot bounded path from the bounded general read slots. Accepted
+connections and handshake/read lifetimes are also bounded. A disconnected client can return only
+the same-operation cached snapshot when explicitly enabled; the cache key also binds the credential
+digest and absolute service endpoint. The result is relabelled `stale_disconnected` and adds
+`service.connection` to unavailable fields. Reconnection always asks the service again, clears a
+relevant authorization refusal and replaces the cache.
 
 There is deliberately no real canonical adapter in this packet. Starting without the test fixture
 adapter returns `None`, never zero/healthy, for unknown canonical fields and identifies both
@@ -74,8 +79,9 @@ From a second WSL shell:
 python3 -X utf8 -B -m tools.construction_swarm.p2_cli --socket /run/user/1000/recursion-construction-read.sock --token-file /var/lib/recursion-foundry/access/clients/native.token status --project recursion-v3
 ```
 
-`--allow-stale` requires `--cache PATH`; without a same-operation cached response, service loss is
-`service_unavailable`. Artifact content is base64 and must be paged using `next_offset`.
+`--allow-stale` requires `--cache PATH`; without a same-operation, same-credential, same-endpoint
+cached response, service loss is `service_unavailable`. Artifact content is base64 and must be paged
+using `next_offset`; every artifact manifest record must bind the handle to its expected SHA-256.
 
 ## Separately enabled client smoke commands — unrun
 
@@ -114,7 +120,7 @@ python -X utf8 -B -m unittest -v tools.construction_swarm.test_p2_access
 python -X utf8 -B -m unittest -v tools.construction_swarm.test_p1_core
 ```
 
-On the qualified Windows host, the first command uses `wsl.exe` to run the eleven real Unix-socket
+On the qualified Windows host, the first command uses `wsl.exe` to run the fifteen real Unix-socket
 cases under WSL2. Each service, CLI and MCP child has a bounded timeout and is cleaned by its owning
 test. On a native Linux host the same command runs those cases directly.
 

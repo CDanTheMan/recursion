@@ -72,7 +72,7 @@ Observed: exit 0; all 18 cases passed in 1.776 seconds.
   CPython 3.12.10. Native Windows CPython reported no `socket.AF_UNIX`, so no native-Windows socket
   behavior is claimed.
 - WSL transport/runtime: WSL 2.7.3.0, Ubuntu 24.04.4 LTS, kernel
-  6.6.114.1-microsoft-standard-WSL2, Python 3.12.3. All eleven service cases ran here.
+  6.6.114.1-microsoft-standard-WSL2, Python 3.12.3. All initial eleven service cases ran here.
 - Native non-WSL Linux, macOS, actual Codex MCP and actual Cursor MCP were not run.
 - Boot, sign-out, lock, editor closure, `wsl --shutdown`, sleep/wake and reboot were not run.
 
@@ -90,5 +90,28 @@ Observed: exit 0; all 18 cases passed in 1.776 seconds.
 
 ## Independent review
 
-Pending exact-candidate Astra review. Final candidate SHA, review evidence, findings/remediation and
-post-review reruns will be appended before handoff.
+Independent Astra reviewed the exact clean candidate
+`3dd590d5a6693fdeb3f3f0da98ab3b7be0554cd4` without editing it. Astra reran the focused gate
+(11 WSL cases in 2.468 seconds; Windows wrapper 5.378 seconds), P1 (18 in 1.957 seconds),
+`diff --check` and exact allowed-path comparison; all passed. The review nevertheless reproduced
+six failures, so that candidate was not accepted:
+
+1. a file-to-symlink race between artifact validation and open;
+2. cross-credential reuse of an offline stale cache;
+3. unbounded accepted idle connections/handshake threads;
+4. successful event reads for ahead cursors and empty retained history;
+5. no expected artifact-manifest digest enforcement; and
+6. silent connection close when the fixture ledger disappeared.
+
+Commit `e9d1be2` remediates all six. Artifact roots and path components are descriptor-pinned and
+no-follow; content size, expected digest and returned bytes are verified from one descriptor.
+Caches bind credential digest plus absolute endpoint and clear on relevant live refusals. Accepted
+connections and request lifetimes are bounded. Event adapters require an explicit consistent
+retention watermark and refuse both old and ahead cursors. Adapter filesystem loss becomes a
+structured `canonical_unavailable` response. Strict JSON also refuses duplicate/non-finite input.
+
+The acceptance suite now includes 15 native cases, including exact regressions for each review
+counterexample. Post-remediation observation: focused gate exit 0, all 15 WSL cases in 4.208 seconds
+and Windows wrapper in 8.016 seconds; P1 exit 0, all 18 cases in 1.919 seconds.
+
+Final exact-candidate Astra rerun is pending after this evidence update is committed.
