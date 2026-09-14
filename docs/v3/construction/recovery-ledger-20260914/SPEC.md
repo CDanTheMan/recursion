@@ -49,7 +49,8 @@ used_component + C_component + R_component + x_component <= ceiling_component
 No component amount is converted or summed with another component. A claim whose literal
 unit, quantum or window differs from its configured component is refused. Two recovery
 boundaries with unlike units remain distinct even when their integer counts happen to be
-equal.
+equal. When a component and boundary use the same unit and quantum, their upper bounds and
+settled actuals must be equal; an underclaimed same-unit parent or pool is refused.
 
 ## Events and replay
 
@@ -64,8 +65,9 @@ The accepted event types are:
   only the verified unused remainder;
 - `normal_use_verified` — separately attributes additional normal work for a later
   boundary and does not change the current `N` or `B`;
-- `provider_counter_reset` — records a reconciled or unknown provider reset without
-  clearing `C` or `R`; unknown identity blocks later admission;
+- `provider_counter_reset` — records an explicit `reset_id` bound to one boundary/window,
+  without clearing `C` or `R`; an unknown identity blocks later admission until that same
+  reset id and scope are reconciled;
 - `process_restarted` — an audit event with no counter-reset semantics.
 
 Every event has a non-empty `event_id`. Exact duplicate events are replay no-ops;
@@ -79,7 +81,7 @@ cannot be settled again under a new identity.
 Serialization is canonical UTF-8 JSON containing the accepted event sequence. Reopening
 replays that sequence from zero and must reproduce the projection. Serialization does not
 claim atomic writes, fsync, process-crash behavior, corruption recovery or physical
-durability.
+durability. Observation lists each unresolved reset id and its boundary/window binding.
 
 ## Later boundaries and normal work
 

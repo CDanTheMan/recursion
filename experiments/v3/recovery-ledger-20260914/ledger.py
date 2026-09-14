@@ -221,7 +221,13 @@ class Ledger:
                 raise ValidationError("initial boundary cannot cite normal additions")
             if account_key in self._accounts:
                 raise ConflictError("allowance lineage already has an initial boundary")
-            account = {"C": 0, "R": 0, "blockers": set(), "current_boundary_id": boundary_id}
+            account = {
+                "C": 0,
+                "R": 0,
+                "blockers": set(),
+                "resets": {},
+                "current_boundary_id": boundary_id,
+            }
         else:
             previous = _identifier(previous, "previous_boundary_id")
             if previous not in self._boundaries:
@@ -370,6 +376,19 @@ class Ledger:
             claims[component_id] = _integer(row["amount"], name + ".amount")
         if set(claims) != set(boundary["component_ids"]):
             raise ValidationError("component claim inventory differs from frozen boundary")
+        for component_id, component_amount in claims.items():
+            component = self._components[component_id]
+            if (
+                component["unit"],
+                component["quantum"],
+            ) == (
+                boundary["binding"]["unit"],
+                boundary["binding"]["quantum"],
+            ) and component_amount != amount:
+                raise ValidationError(
+                    "same-unit component amount differs from boundary amount: "
+                    + component_id
+                )
         return boundary_id, boundary, self._accounts[boundary["account_key"]], amount, claims
 
     def _apply_reservation(self, event):
@@ -401,7 +420,11 @@ class Ledger:
         )
         if account["current_boundary_id"] != boundary_id:
             raise AdmissionError("reservation targets a superseded boundary")
-        if boundary["blockers"] or account["blockers"]:
+        if (
+            boundary["blockers"]
+            or account["blockers"]
+            or any(row["status"] == "unknown" for row in account["resets"].values())
+        ):
             raise AdmissionError("boundary accounting is unknown")
         if account["C"] + account["R"] + upper > boundary["B"]:
             raise AdmissionError("recovery allowance exceeded")
@@ -556,7 +579,14 @@ class Ledger:
     def _apply_reset(self, event):
         _exact_keys(
             event,
-            ("event_id", "type", "boundary_id", "binding", "identity_status"),
+            (
+                "event_id",
+                "type",
+                "reset_id",
+                "boundary_id",
+                "binding",
+                "identity_status",
+            ),
             "provider_counter_reset",
         )
         boundary_id = _identifier(event["boundary_id"], "boundary_id")
@@ -565,11 +595,28 @@ class Ledger:
             raise ValidationError("unknown boundary")
         _same_binding(event["binding"], boundary["binding"])
         account = self._accounts[boundary["account_key"]]
+        reset_id = _identifier(event["reset_id"], "reset_id")
+        scope = (boundary_id, boundary["binding"]["window_id"])
+        prior = account["resets"].get(reset_id)
+        if prior is not None and prior["scope"] != scope:
+            raise ConflictError("reset_id reused for a different boundary/window")
         status = event["identity_status"]
         if status == "unknown":
-            account["blockers"].add("unknown-counter-reset-identity")
+            if prior is not None:
+                if prior["status"] == "unknown":
+                    return "duplicate"
+                raise ConflictError("reconciled reset cannot become unknown")
+            account["resets"][reset_id] = {"scope": scope, "status": "unknown"}
         elif status == "reconciled":
-            account["blockers"].discard("unknown-counter-reset-identity")
+            if prior is not None:
+                if prior["status"] == "reconciled":
+                    return "duplicate"
+                prior["status"] = "reconciled"
+            else:
+                account["resets"][reset_id] = {
+                    "scope": scope,
+                    "status": "reconciled",
+                }
         else:
             raise ValidationError("identity_status must be reconciled or unknown")
         return "applied"
@@ -585,6 +632,18 @@ class Ledger:
             raise ValidationError("unknown boundary")
         account = self._accounts[boundary["account_key"]]
         blockers = sorted(boundary["blockers"] | account["blockers"])
+        if any(row["status"] == "unknown" for row in account["resets"].values()):
+            blockers.append("unknown-counter-reset-identity")
+            blockers.sort()
+        unresolved_resets = [
+            {
+                "reset_id": reset_id,
+                "boundary_id": row["scope"][0],
+                "window_id": row["scope"][1],
+            }
+            for reset_id, row in sorted(account["resets"].items())
+            if row["status"] == "unknown"
+        ]
         available = None
         if not blockers and boundary["B"] is not None:
             available = max(0, boundary["B"] - account["C"] - account["R"])
@@ -619,6 +678,7 @@ class Ledger:
             "available": available,
             "pending_normal_use": pending,
             "blockers": blockers,
+            "unresolved_resets": unresolved_resets,
             "reservations": reservations,
         }
 

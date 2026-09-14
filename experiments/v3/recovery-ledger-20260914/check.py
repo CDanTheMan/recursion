@@ -378,8 +378,130 @@ def component_guard_audit(module):
         pass
     else:
         raise GateFailure("missing required component claims were admitted")
+    underclaimed = module["reserve"](
+        "gate-component-underclaim",
+        "gate-r-component-underclaim",
+        "component",
+        module["TOKENS"],
+        6,
+        (
+            module["claim"]("parent-cap", "tokens", 1, "provider-window-1", 5),
+            module["claim"]("pool-cap", "tokens", 1, "provider-window-1", 5),
+            module["claim"](
+                "resource-cap", "quota-points", 1, "quota-window-1", 3
+            ),
+        ),
+    )
+    try:
+        module["replay"](module["COMPONENT_EVENTS"][:4] + (underclaimed,))
+    except module["ValidationError"]:
+        pass
+    else:
+        raise GateFailure("same-unit component upper bound was underclaimed")
     require(tuple(detected) == ("parent", "pool", "resource"), "component guards incomplete")
     return detected
+
+
+def reset_scope_audit(module):
+    window_one = module["binding"](
+        "gate-reset-task", "gate-reset-goal", "tokens", 1, "window-1"
+    )
+    window_two = module["binding"](
+        "gate-reset-task", "gate-reset-goal", "tokens", 1, "window-2"
+    )
+    events = (
+        module["freeze"]("gate-cross-1", "gate-cross-old", window_one, 100, 1, 10),
+        module["reset"](
+            "gate-cross-2",
+            "gate-cross-old",
+            window_one,
+            "unknown",
+            reset_id="gate-reset-old",
+        ),
+        module["normal"](
+            "gate-cross-3", "gate-cross-normal", "gate-cross-old", window_one, 50
+        ),
+        module["freeze"](
+            "gate-cross-4",
+            "gate-cross-new",
+            window_two,
+            150,
+            1,
+            10,
+            previous="gate-cross-old",
+            sources=("gate-cross-normal",),
+        ),
+        module["reset"](
+            "gate-cross-5",
+            "gate-cross-new",
+            window_two,
+            "unknown",
+            reset_id="gate-reset-new",
+        ),
+        module["reset"](
+            "gate-cross-6",
+            "gate-cross-old",
+            window_one,
+            "reconciled",
+            reset_id="gate-reset-old",
+        ),
+    )
+    state = module["replay"](events)
+    require(
+        "unknown-counter-reset-identity" in state.observe("gate-cross-new")["blockers"],
+        "older reset reconciliation cleared newer uncertainty",
+    )
+    try:
+        state.append(
+            module["reserve"](
+                "gate-cross-7",
+                "gate-r-cross-blocked",
+                "gate-cross-new",
+                window_two,
+                1,
+            )
+        )
+    except module["AdmissionError"]:
+        pass
+    else:
+        raise GateFailure("newer unknown reset did not block admission")
+    try:
+        state.append(
+            module["reset"](
+                "gate-cross-wrong-scope",
+                "gate-cross-old",
+                window_one,
+                "reconciled",
+                reset_id="gate-reset-new",
+            )
+        )
+    except module["ConflictError"]:
+        pass
+    else:
+        raise GateFailure("reset identity reconciled under a different boundary/window")
+    state.append(
+        module["reset"](
+            "gate-cross-8",
+            "gate-cross-new",
+            window_two,
+            "reconciled",
+            reset_id="gate-reset-new",
+        )
+    )
+    require(
+        state.append(
+            module["reserve"](
+                "gate-cross-9",
+                "gate-r-cross-admitted",
+                "gate-cross-new",
+                window_two,
+                1,
+            )
+        )
+        == "applied",
+        "matching reset reconciliation did not restore admission",
+    )
+    return 3
 
 
 def subprocess_gate(module):
@@ -432,6 +554,7 @@ def main():
     prefixes = prefix_audit(module)
     mutations = independent_mutations(module)
     component_guards = component_guard_audit(module)
+    reset_guards = reset_scope_audit(module)
     subprocess_gate(module)
     print(
         "RECOVERY_LEDGER_GATE_PASS "
@@ -445,6 +568,7 @@ def main():
                 "mutations": len(mutations),
                 "prefixes": prefixes,
                 "provider_calls": 0,
+                "reset_guards": reset_guards,
                 "source_bindings": len(SOURCE_SHA256),
             },
             sort_keys=True,

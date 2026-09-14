@@ -102,10 +102,11 @@ def restart(event_id):
     return {"event_id": event_id, "type": "process_restarted"}
 
 
-def reset(event_id, boundary_id, bind, identity_status):
+def reset(event_id, boundary_id, bind, identity_status, reset_id=None):
     return {
         "event_id": event_id,
         "type": "provider_counter_reset",
+        "reset_id": reset_id or ("reset-" + boundary_id),
         "boundary_id": boundary_id,
         "binding": copy.deepcopy(bind),
         "identity_status": identity_status,
@@ -579,21 +580,114 @@ class RecoveryLedgerTests(unittest.TestCase):
             reserve("preserve-2", "r-done", "preserve", TOKENS, 2),
             settle("preserve-3", "s-done", "r-done", "preserve", TOKENS, 2),
             reserve("preserve-4", "r-held", "preserve", TOKENS, 6),
-            reset("preserve-5", "preserve", TOKENS, "reconciled"),
+            reset(
+                "preserve-5",
+                "preserve",
+                TOKENS,
+                "reconciled",
+                reset_id="preserve-reset-1",
+            ),
             restart("preserve-6"),
         )
         state = replay(events)
         self.assertEqual(boundary_signature(state, "preserve")[2:5], (2, 6, 2))
         self.assertEqual(boundary_signature(Ledger.from_json(state.to_json()), "preserve")[2:5], (2, 6, 2))
-        state.append(reset("preserve-7", "preserve", TOKENS, "unknown"))
+        state.append(
+            reset(
+                "preserve-7",
+                "preserve",
+                TOKENS,
+                "unknown",
+                reset_id="preserve-reset-2",
+            )
+        )
         self.assertEqual(boundary_signature(state, "preserve")[2:5], (2, 6, None))
         assert_raises(
             AdmissionError,
             state.append,
             reserve("preserve-8", "r-reset-blocked", "preserve", TOKENS, 1),
         )
-        state.append(reset("preserve-9", "preserve", TOKENS, "reconciled"))
+        state.append(
+            reset(
+                "preserve-9",
+                "preserve",
+                TOKENS,
+                "reconciled",
+                reset_id="preserve-reset-2",
+            )
+        )
         self.assertEqual(boundary_signature(state, "preserve")[2:5], (2, 6, 2))
+
+        window_two = binding("task-reset", "goal-reset", "tokens", 1, "window-2")
+        window_one = binding("task-reset", "goal-reset", "tokens", 1, "window-1")
+        cross_window = replay(
+            (
+                freeze("cross-1", "cross-old", window_one, 100, 1, 10),
+                reset(
+                    "cross-2",
+                    "cross-old",
+                    window_one,
+                    "unknown",
+                    reset_id="cross-reset-old",
+                ),
+                normal("cross-3", "cross-normal-50", "cross-old", window_one, 50),
+                freeze(
+                    "cross-4",
+                    "cross-new",
+                    window_two,
+                    150,
+                    1,
+                    10,
+                    previous="cross-old",
+                    sources=("cross-normal-50",),
+                ),
+                reset(
+                    "cross-5",
+                    "cross-new",
+                    window_two,
+                    "unknown",
+                    reset_id="cross-reset-new",
+                ),
+                reset(
+                    "cross-6",
+                    "cross-old",
+                    window_one,
+                    "reconciled",
+                    reset_id="cross-reset-old",
+                ),
+            )
+        )
+        self.assertIn(
+            "unknown-counter-reset-identity",
+            cross_window.observe("cross-new")["blockers"],
+        )
+        self.assertEqual(
+            cross_window.observe("cross-new")["unresolved_resets"],
+            [
+                {
+                    "reset_id": "cross-reset-new",
+                    "boundary_id": "cross-new",
+                    "window_id": "window-2",
+                }
+            ],
+        )
+        assert_raises(
+            AdmissionError,
+            cross_window.append,
+            reserve("cross-7", "r-cross-blocked", "cross-new", window_two, 1),
+        )
+        cross_window.append(
+            reset(
+                "cross-8",
+                "cross-new",
+                window_two,
+                "reconciled",
+                reset_id="cross-reset-new",
+            )
+        )
+        self.assertEqual(cross_window.append(
+            reserve("cross-9", "r-cross-admitted", "cross-new", window_two, 1)
+        ), "applied")
 
     def test_recovery_cost_not_normal_use(self):
         state = replay(PARTIAL_EVENTS)
@@ -636,7 +730,13 @@ class RecoveryLedgerTests(unittest.TestCase):
         held = replay(
             UNKNOWN_EVENTS
             + (
-                reset("carry-unknown-reset", "unknown", TOKENS, "unknown"),
+                reset(
+                    "carry-unknown-reset",
+                    "unknown",
+                    TOKENS,
+                    "unknown",
+                    reset_id="carry-unknown-reset-id",
+                ),
                 normal("carry-unknown-normal", "carry-unknown-50", "unknown", TOKENS, 50),
                 freeze(
                     "carry-unknown-next",
@@ -848,6 +948,23 @@ class RecoveryLedgerTests(unittest.TestCase):
             (),
         )
         assert_raises(ValidationError, replay, COMPONENT_EVENTS + (omitted,))
+        underclaimed = reserve(
+            "component-underclaim",
+            "r-component-underclaim",
+            "component",
+            TOKENS,
+            6,
+            (
+                claim("parent-cap", "tokens", 1, "provider-window-1", 5),
+                claim("pool-cap", "tokens", 1, "provider-window-1", 5),
+                claim("resource-cap", "quota-points", 1, "quota-window-1", 3),
+            ),
+        )
+        assert_raises(
+            ValidationError,
+            replay,
+            COMPONENT_EVENTS[:4] + (underclaimed,),
+        )
 
     def test_unlike_units_never_combine(self):
         state = replay(UNLIKE_EVENTS)

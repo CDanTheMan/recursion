@@ -107,6 +107,25 @@ Parent, pool and resource each have a decisive exhaustion probe, and both the te
 and exact-candidate gate run independent faulty-transition subclasses for all six required
 mutations. The original reviewed candidate and `repair` verdict remain recorded above.
 
+Third committed candidate: `e8b78b22a8c9cc88f49fb379066c446a23257c11`.
+
+- Handoff source check: exit 0, `HANDOFF_SOURCE_PASS`.
+- Test command: exit 0, all 16 methods and required inventories.
+- Exact-candidate gate: exit 0, three component guards, six behavioral mutations,
+  21 prefixes, 13 source bindings and 92,952 artifact bytes.
+
+Astra confirmed the four prior counterexamples were repaired, including settlement of an old
+reservation into the current cumulative account and reopen preservation. Its fresh review
+still returned `repair`: one account-wide reset blocker did not retain reset identity. A
+reconciliation against old window W1 could clear newer unknown reset W2.
+
+The second remediation gives every reset an explicit `reset_id` and exact boundary/window
+scope. Unknown reset records remain independently outstanding; a reconciliation clears only
+the matching id and scope, conflicting scope reuse refuses, and observation lists unresolved
+reset bindings. The seven-event W1/W2 counterexample is now a positive refusal check in both
+the unit program and independent gate. Same-unit component claims also cannot understate the
+boundary upper bound or settled actual.
+
 ## Limits and negative evidence
 
 - Inert Python event/replay prototype only; no product language or store selected.
