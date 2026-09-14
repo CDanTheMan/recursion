@@ -1,7 +1,6 @@
 """Exact-candidate acceptance gate for the inert recovery-ledger experiment."""
 
 import argparse
-import copy
 import hashlib
 import json
 import os
@@ -154,10 +153,12 @@ def load_tests():
     require(tuple(module["REQUIRED_CASES"]) == REQUIRED_CASES, "required case inventory changed")
     require(tuple(module["TEST_METHOD_TO_CASE"].values()) == REQUIRED_CASES, "test-to-case mapping changed")
     require(tuple(module["MUTATION_NAMES"]) == REQUIRED_MUTATIONS, "mutation inventory changed")
+    require(tuple(module["MUTANT_CLASSES"]) == REQUIRED_MUTATIONS, "behavioral mutant inventory changed")
     require(module["PREFIX_COUNT"] == 21, "selected prefix count changed")
     require(len(module["PREFIX_CASES"]) == 6, "selected sequence inventory changed")
-    require(len(module["DECLARED_SEQUENCES"]) <= 1024, "sequence budget exceeded")
-    require(module["MAX_SEQUENCE_EVENTS"] <= 32, "event budget exceeded")
+    require(len(module["DECLARED_SEQUENCES"]) == 6, "selected sequence inventory changed")
+    require(module["DECLARED_SEQUENCE_LIMIT"] == 256 <= 1024, "sequence budget exceeded")
+    require(module["MAX_SEQUENCE_EVENTS"] == 32, "event budget changed")
     return module
 
 
@@ -178,64 +179,207 @@ def prefix_audit(module):
 
 
 def independent_mutations(module):
-    labels = []
+    Base = module["Ledger"]
 
-    state = module["replay"](module["UNKNOWN_EVENTS"])
-    correct = module["selected_signature"](state, ("unknown",), ())
-    mutated = copy.deepcopy(correct)
-    row = list(mutated[0][0][1])
-    row[3] = 0
-    mutated = ((("unknown", tuple(row)),), ())
-    if digest(mutated) != PREFIX_DIGESTS["unknown-reset-restart/5"]:
-        labels.append("erase-R-on-restart")
+    class EraseR(Base):
+        def _apply_restart(self, event):
+            result = super()._apply_restart(event)
+            for account in self._accounts.values():
+                account["R"] = 0
+            return result
 
+    class EraseC(Base):
+        def _apply_reset(self, event):
+            result = super()._apply_reset(event)
+            account = self._accounts[self._boundaries[event["boundary_id"]]["account_key"]]
+            account["C"] = 0
+            return result
+
+    class DuplicateCharge(Base):
+        def _apply_settlement(self, event):
+            result = super()._apply_settlement(event)
+            if result == "duplicate":
+                reservation = self._reservations[event["reservation_id"]]
+                account = self._accounts[
+                    self._boundaries[reservation["boundary_id"]]["account_key"]
+                ]
+                account["C"] += event["actual"]
+            return result
+
+    class Ceil(Base):
+        def _apply_boundary(self, event):
+            result = super()._apply_boundary(event)
+            if result == "applied":
+                boundary = self._boundaries[event["boundary_id"]]
+                if boundary["N"] is not None:
+                    boundary["B"] = (
+                        boundary["p"] * boundary["N"] + boundary["q"] - 1
+                    ) // boundary["q"]
+            return result
+
+    class RecoveryIsNormal(Base):
+        def _apply_settlement(self, event):
+            result = super()._apply_settlement(event)
+            if result == "applied":
+                boundary = self._boundaries[event["boundary_id"]]
+                boundary["N"] += event["actual"]
+                boundary["B"] = boundary["p"] * boundary["N"] // boundary["q"]
+            return result
+
+    class MixUnits(Base):
+        def _apply_reservation(self, event):
+            result = super()._apply_reservation(event)
+            if result == "applied":
+                source = self._boundaries[event["boundary_id"]]
+                for key, account in self._accounts.items():
+                    if key != source["account_key"] and key[1] == source["binding"]["goal_id"]:
+                        account["R"] += event["upper_bound"]
+            return result
+
+    mutants = {
+        "erase-R-on-restart": (EraseR, "unknown-reset-restart", None),
+        "ceil-instead-of-floor": (Ceil, "floor-non-integral", None),
+        "count-recovery-as-normal-use": (RecoveryIsNormal, "reserve-partial-settle", None),
+        "mix-unlike-units": (MixUnits, "unlike-units-distinct", None),
+    }
+
+    def replay_with(ledger_class, events):
+        state = ledger_class()
+        for event in events:
+            state.append(event)
+        return state
+
+    def prefix_rejects(ledger_class, case_name):
+        case = module["PREFIX_CASES"][case_name]
+        try:
+            for end, expected in enumerate(case["expected"], 1):
+                state = replay_with(ledger_class, case["events"][:end])
+                actual = module["selected_signature"](state, case["boundaries"], case["caps"])
+                if actual != expected:
+                    return True
+        except (module["AdmissionError"], module["ConflictError"], module["ValidationError"]):
+            return True
+        return False
+
+    detected = []
+    if prefix_rejects(EraseR, "unknown-reset-restart"):
+        detected.append("erase-R-on-restart")
+
+    partial_expected = module["PREFIX_CASES"]["reserve-partial-settle"]["expected"][-1][0][0][1]
     reset_events = module["PARTIAL_EVENTS"] + (
         module["reset"]("gate-reset", "partial", module["TOKENS"], "reconciled"),
     )
-    correct = module["boundary_signature"](module["replay"](reset_events), "partial")
-    row = list(correct)
-    row[2] = 0
-    if tuple(row) != correct:
-        labels.append("erase-C-on-provider-reset")
+    if module["boundary_signature"](replay_with(EraseC, reset_events), "partial") != partial_expected:
+        detected.append("erase-C-on-provider-reset")
 
     duplicate = module["settle"](
         "gate-duplicate", "s-partial", "r-partial", "partial", module["TOKENS"], 3
     )
-    correct = module["boundary_signature"](
-        module["replay"](module["PARTIAL_EVENTS"] + (duplicate,)), "partial"
-    )
-    row = list(correct)
-    row[2] = 6
-    if tuple(row) != correct:
-        labels.append("charge-duplicate-settlement")
+    if module["boundary_signature"](
+        replay_with(DuplicateCharge, module["PARTIAL_EVENTS"] + (duplicate,)), "partial"
+    ) != partial_expected:
+        detected.append("charge-duplicate-settlement")
 
-    correct = module["boundary_signature"](module["replay"](module["FLOOR_EVENTS"]), "floor")
-    row = list(correct)
-    row[1] = 4
-    if digest(((("floor", tuple(row)),), ())) != PREFIX_DIGESTS["floor-non-integral/1"]:
-        labels.append("ceil-instead-of-floor")
+    for name in (
+        "ceil-instead-of-floor",
+        "count-recovery-as-normal-use",
+        "mix-unlike-units",
+    ):
+        ledger_class, case_name, _ = mutants[name]
+        if prefix_rejects(ledger_class, case_name):
+            detected.append(name)
 
-    correct = module["boundary_signature"](module["replay"](module["PARTIAL_EVENTS"]), "partial")
-    row = list(correct)
-    row[0] = 103
-    if tuple(row) != correct:
-        labels.append("count-recovery-as-normal-use")
+    require(tuple(detected) == REQUIRED_MUTATIONS, "independent behavioral mutations incomplete")
+    require(tuple(module["run_mutation_controls"]()) == REQUIRED_MUTATIONS, "test mutation controls incomplete")
+    return detected
 
-    correct = module["selected_signature"](
-        module["replay"](module["UNLIKE_EVENTS"]),
-        ("token-boundary", "cent-boundary"),
+
+def component_guard_audit(module):
+    detected = []
+    for target_kind in ("parent", "pool", "resource"):
+        prefix = "gate-guard-" + target_kind
+        component_ids = (prefix + "-parent", prefix + "-pool", prefix + "-resource")
+        ceilings = {
+            "parent": 6 if target_kind == "parent" else 20,
+            "pool": 6 if target_kind == "pool" else 20,
+            "resource": 6 if target_kind == "resource" else 20,
+        }
+        events = []
+        for index, kind in enumerate(("parent", "pool", "resource"), 1):
+            events.append(
+                module["cap"](
+                    prefix + "-cap-" + str(index),
+                    prefix + "-" + kind,
+                    kind,
+                    prefix + "-scope-" + kind,
+                    "tokens",
+                    1,
+                    "provider-window-1",
+                    ceilings[kind],
+                )
+            )
+        events.append(
+            module["freeze"](
+                prefix + "-freeze",
+                prefix + "-boundary",
+                module["TOKENS"],
+                200,
+                1,
+                10,
+                required_components=component_ids,
+            )
+        )
+        claims = tuple(
+            module["claim"](item, "tokens", 1, "provider-window-1", 6)
+            for item in component_ids
+        )
+        events.append(
+            module["reserve"](
+                prefix + "-reserve",
+                prefix + "-r-six",
+                prefix + "-boundary",
+                module["TOKENS"],
+                6,
+                claims,
+            )
+        )
+        state = module["replay"](tuple(events))
+        one_claims = tuple(
+            module["claim"](item, "tokens", 1, "provider-window-1", 1)
+            for item in component_ids
+        )
+        try:
+            state.append(
+                module["reserve"](
+                    prefix + "-over",
+                    prefix + "-r-over",
+                    prefix + "-boundary",
+                    module["TOKENS"],
+                    1,
+                    one_claims,
+                )
+            )
+        except module["AdmissionError"]:
+            detected.append(target_kind)
+        else:
+            raise GateFailure("component guard did not refuse exhausted " + target_kind)
+
+    omitted = module["reserve"](
+        "gate-component-omit",
+        "gate-r-component-omit",
+        "component",
+        module["TOKENS"],
+        1,
         (),
     )
-    rows = list(correct[0])
-    token = list(rows[0][1])
-    token[3] = 8
-    rows[0] = (rows[0][0], tuple(token))
-    if (tuple(rows), ()) != correct:
-        labels.append("mix-unlike-units")
-
-    require(tuple(labels) == REQUIRED_MUTATIONS, "independent mutation controls incomplete")
-    require(tuple(module["run_mutation_controls"]()) == REQUIRED_MUTATIONS, "test mutation controls incomplete")
-    return labels
+    try:
+        module["replay"](module["COMPONENT_EVENTS"] + (omitted,))
+    except module["ValidationError"]:
+        pass
+    else:
+        raise GateFailure("missing required component claims were admitted")
+    require(tuple(detected) == ("parent", "pool", "resource"), "component guards incomplete")
+    return detected
 
 
 def subprocess_gate(module):
@@ -267,11 +411,12 @@ def subprocess_gate(module):
         payload
         == {
             "cases": 15,
-            "max_events": 5,
+            "max_events_limit": 32,
             "mutations": 6,
             "prefixes": 21,
             "provider_calls": 0,
-            "sequences": 6,
+            "selected_sequences": 6,
+            "sequence_limit": 256,
         },
         "test pass marker payload differs",
     )
@@ -286,6 +431,7 @@ def main():
     module = load_tests()
     prefixes = prefix_audit(module)
     mutations = independent_mutations(module)
+    component_guards = component_guard_audit(module)
     subprocess_gate(module)
     print(
         "RECOVERY_LEDGER_GATE_PASS "
@@ -295,6 +441,7 @@ def main():
                 "base": BASE,
                 "candidate": args.candidate,
                 "cases": len(REQUIRED_CASES),
+                "component_guards": len(component_guards),
                 "mutations": len(mutations),
                 "prefixes": prefixes,
                 "provider_calls": 0,

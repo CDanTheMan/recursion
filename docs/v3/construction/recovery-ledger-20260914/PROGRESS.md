@@ -83,6 +83,30 @@ First committed candidate: `0b8f20d6465eea89d47db4b28886747f052627b6`.
 That candidate is retained as failed. The trailing blank lines were removed; no oracle,
 case or acceptance requirement was weakened.
 
+Second committed candidate: `0a9be03314d11f3208b9db6bf95f6abbe40f2ab5`.
+
+- Handoff source check: exit 0, `HANDOFF_SOURCE_PASS`, 49 unchanged top-level specs.
+- Test command: exit 0, 16 methods / 15 cases / 21 prefixes / six controls.
+- Exact-candidate gate: exit 0, `RECOVERY_LEDGER_GATE_PASS`, 13 input bindings and
+  73,389 artifact bytes.
+
+Independent Astra review reran all three commands successfully on that clean exact
+candidate but returned `repair`. Its in-memory counterexamples found:
+
+- a second root or successor boundary reset cumulative `C/R` and reset uncertainty;
+- a reservation could omit configured parent/pool/resource components;
+- a semantic duplicate under a new event id left that id available for conflicting reuse;
+- disabling parent/pool guards survived the original tests, and the six controls changed
+  projected output rather than faulty transition behavior.
+
+Remediation keeps one cumulative account per task/goal/unit/quantum lineage, makes only the
+current successor admissible, carries `C/R` and unknown identity across later boundaries,
+and rejects a second root. Each boundary now freezes the complete required component-id
+inventory. Semantic duplicate deliveries retain their new event ids in serialized evidence.
+Parent, pool and resource each have a decisive exhaustion probe, and both the test program
+and exact-candidate gate run independent faulty-transition subclasses for all six required
+mutations. The original reviewed candidate and `repair` verdict remain recorded above.
+
 ## Limits and negative evidence
 
 - Inert Python event/replay prototype only; no product language or store selected.

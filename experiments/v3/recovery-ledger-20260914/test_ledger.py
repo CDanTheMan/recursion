@@ -36,7 +36,17 @@ TOKENS = binding("task-a", "goal-a", "tokens", 1, "provider-window-1")
 CENTS = binding("task-b", "goal-a", "usd-minor", 1, "billing-window-1")
 
 
-def freeze(event_id, boundary_id, bind, normal_use, p, q, previous=None, sources=()):
+def freeze(
+    event_id,
+    boundary_id,
+    bind,
+    normal_use,
+    p,
+    q,
+    previous=None,
+    sources=(),
+    required_components=(),
+):
     return {
         "event_id": event_id,
         "type": "boundary_frozen",
@@ -46,6 +56,7 @@ def freeze(event_id, boundary_id, bind, normal_use, p, q, previous=None, sources
         "fraction": {"p": p, "q": q},
         "previous_boundary_id": previous,
         "normal_source_ids": list(sources),
+        "component_ids": list(required_components),
     }
 
 
@@ -180,7 +191,15 @@ COMPONENT_EVENTS = (
     cap("component-1", "parent-cap", "parent", "goal-a", "tokens", 1, "provider-window-1", 20),
     cap("component-2", "pool-cap", "pool", "pool-a", "tokens", 1, "provider-window-1", 7),
     cap("component-3", "resource-cap", "resource", "route-a", "quota-points", 1, "quota-window-1", 3),
-    freeze("component-4", "component", TOKENS, 100, 1, 10),
+    freeze(
+        "component-4",
+        "component",
+        TOKENS,
+        100,
+        1,
+        10,
+        required_components=("parent-cap", "pool-cap", "resource-cap"),
+    ),
     reserve("component-5", "r-component", "component", TOKENS, 6, COMPONENT_CLAIMS),
 )
 
@@ -358,55 +377,121 @@ def assert_raises(error, fn, *args):
     raise AssertionError("expected " + error.__name__)
 
 
+class EraseROnRestart(Ledger):
+    def _apply_restart(self, event):
+        result = super()._apply_restart(event)
+        for account in self._accounts.values():
+            account["R"] = 0
+        return result
+
+
+class EraseCOnReset(Ledger):
+    def _apply_reset(self, event):
+        result = super()._apply_reset(event)
+        account = self._accounts[self._boundaries[event["boundary_id"]]["account_key"]]
+        account["C"] = 0
+        return result
+
+
+class ChargeDuplicateSettlement(Ledger):
+    def _apply_settlement(self, event):
+        result = super()._apply_settlement(event)
+        if result == "duplicate":
+            reservation = self._reservations[event["reservation_id"]]
+            account = self._accounts[
+                self._boundaries[reservation["boundary_id"]]["account_key"]
+            ]
+            account["C"] += event["actual"]
+        return result
+
+
+class CeilAllowance(Ledger):
+    def _apply_boundary(self, event):
+        result = super()._apply_boundary(event)
+        if result == "applied":
+            boundary = self._boundaries[event["boundary_id"]]
+            if boundary["N"] is not None:
+                boundary["B"] = (
+                    boundary["p"] * boundary["N"] + boundary["q"] - 1
+                ) // boundary["q"]
+        return result
+
+
+class CountRecoveryAsNormal(Ledger):
+    def _apply_settlement(self, event):
+        result = super()._apply_settlement(event)
+        if result == "applied":
+            boundary = self._boundaries[event["boundary_id"]]
+            boundary["N"] += event["actual"]
+            boundary["B"] = boundary["p"] * boundary["N"] // boundary["q"]
+        return result
+
+
+class MixUnlikeUnits(Ledger):
+    def _apply_reservation(self, event):
+        result = super()._apply_reservation(event)
+        if result == "applied":
+            source = self._boundaries[event["boundary_id"]]
+            for key, account in self._accounts.items():
+                if key != source["account_key"] and key[1] == source["binding"]["goal_id"]:
+                    account["R"] += event["upper_bound"]
+        return result
+
+
+MUTANT_CLASSES = {
+    "erase-R-on-restart": EraseROnRestart,
+    "erase-C-on-provider-reset": EraseCOnReset,
+    "charge-duplicate-settlement": ChargeDuplicateSettlement,
+    "ceil-instead-of-floor": CeilAllowance,
+    "count-recovery-as-normal-use": CountRecoveryAsNormal,
+    "mix-unlike-units": MixUnlikeUnits,
+}
+
+
+def replay_with(ledger_class, events):
+    instance = ledger_class()
+    for event in events:
+        instance.append(event)
+    return instance
+
+
+def mutant_prefix_rejected(ledger_class, case_name):
+    case = PREFIX_CASES[case_name]
+    try:
+        for end, expected in enumerate(case["expected"], 1):
+            state = replay_with(ledger_class, case["events"][:end])
+            actual = selected_signature(state, case["boundaries"], case["caps"])
+            if actual != expected:
+                return True
+    except (AdmissionError, ConflictError, ValidationError):
+        return True
+    return False
+
+
 def run_mutation_controls():
     detected = []
-
-    unknown_state = replay(UNKNOWN_EVENTS)
-    correct = selected_signature(unknown_state, ("unknown",), ())
-    mutated = copy.deepcopy(correct)
-    row = list(mutated[0][0][1])
-    row[3] = 0
-    mutated = ((("unknown", tuple(row)),), ())
-    if mutated != PREFIX_CASES["unknown-reset-restart"]["expected"][-1]:
+    if mutant_prefix_rejected(EraseROnRestart, "unknown-reset-restart"):
         detected.append("erase-R-on-restart")
 
     reset_events = PARTIAL_EVENTS + (reset("mut-reset", "partial", TOKENS, "reconciled"),)
-    state = replay(reset_events)
-    correct = boundary_signature(state, "partial")
-    row = list(correct)
-    row[2] = 0
-    if tuple(row) != correct:
+    expected_partial = PREFIX_CASES["reserve-partial-settle"]["expected"][-1][0][0][1]
+    state = replay_with(EraseCOnReset, reset_events)
+    if boundary_signature(state, "partial") != expected_partial:
         detected.append("erase-C-on-provider-reset")
 
     duplicate = settle("partial-duplicate", "s-partial", "r-partial", "partial", TOKENS, 3)
-    state = replay(PARTIAL_EVENTS + (duplicate,))
-    correct = boundary_signature(state, "partial")
-    row = list(correct)
-    row[2] = 6
-    if tuple(row) != correct:
+    state = replay_with(ChargeDuplicateSettlement, PARTIAL_EVENTS + (duplicate,))
+    if boundary_signature(state, "partial") != expected_partial:
         detected.append("charge-duplicate-settlement")
 
-    correct = boundary_signature(replay(FLOOR_EVENTS), "floor")
-    row = list(correct)
-    row[1] = 4
-    if tuple(row) != PREFIX_CASES["floor-non-integral"]["expected"][0][0][0][1]:
+    if mutant_prefix_rejected(CeilAllowance, "floor-non-integral"):
         detected.append("ceil-instead-of-floor")
-
-    correct = boundary_signature(replay(PARTIAL_EVENTS), "partial")
-    row = list(correct)
-    row[0] = 103
-    if tuple(row) != correct:
+    if mutant_prefix_rejected(CountRecoveryAsNormal, "reserve-partial-settle"):
         detected.append("count-recovery-as-normal-use")
-
-    correct = selected_signature(replay(UNLIKE_EVENTS), ("token-boundary", "cent-boundary"), ())
-    rows = list(correct[0])
-    token = list(rows[0][1])
-    token[3] = 8
-    rows[0] = (rows[0][0], tuple(token))
-    if (tuple(rows), ()) != correct:
+    if mutant_prefix_rejected(MixUnlikeUnits, "unlike-units-distinct"):
         detected.append("mix-unlike-units")
 
-    if tuple(detected) != MUTATION_NAMES:
+    if tuple(MUTANT_CLASSES) != MUTATION_NAMES or tuple(detected) != MUTATION_NAMES:
         raise AssertionError((MUTATION_NAMES, detected))
     return tuple(detected)
 
@@ -457,6 +542,12 @@ class RecoveryLedgerTests(unittest.TestCase):
         duplicate = settle("dup-new-event", "s-partial", "r-partial", "partial", TOKENS, 3)
         state = replay(PARTIAL_EVENTS + (duplicate,))
         self.assertEqual(boundary_signature(state, "partial")[2:4], (3, 0))
+        self.assertIn('"event_id":"dup-new-event"', state.to_json())
+        assert_raises(
+            ConflictError,
+            state.append,
+            reserve("dup-new-event", "r-alias", "partial", TOKENS, 1),
+        )
 
     def test_conflicting_duplicate_refuses(self):
         state = replay(PARTIAL_EVENTS)
@@ -512,10 +603,67 @@ class RecoveryLedgerTests(unittest.TestCase):
         state = replay(NORMAL_EVENTS)
         self.assertEqual(boundary_signature(state, "normal-old")[:2], (100, 10))
         self.assertEqual(boundary_signature(state, "normal-new")[:2], (150, 15))
+        carried_events = PARTIAL_EVENTS + (
+            normal("carry-1", "carry-normal-50", "partial", TOKENS, 50),
+            freeze(
+                "carry-2",
+                "partial-successor",
+                TOKENS,
+                150,
+                1,
+                10,
+                previous="partial",
+                sources=("carry-normal-50",),
+            ),
+        )
+        carried = replay(carried_events)
+        self.assertEqual(
+            boundary_signature(carried, "partial-successor")[:5],
+            (150, 15, 3, 0, 12),
+        )
+        carried.append(
+            reserve("carry-3", "r-carried", "partial-successor", TOKENS, 12)
+        )
+        assert_raises(
+            AdmissionError,
+            carried.append,
+            reserve("carry-4", "r-carried-over", "partial-successor", TOKENS, 1),
+        )
+
+        duplicate_root = freeze("carry-root", "duplicate-root", TOKENS, 100, 1, 10)
+        assert_raises(ConflictError, replay, (PARTIAL_EVENTS[0], duplicate_root))
+
+        held = replay(
+            UNKNOWN_EVENTS
+            + (
+                reset("carry-unknown-reset", "unknown", TOKENS, "unknown"),
+                normal("carry-unknown-normal", "carry-unknown-50", "unknown", TOKENS, 50),
+                freeze(
+                    "carry-unknown-next",
+                    "unknown-successor",
+                    TOKENS,
+                    150,
+                    1,
+                    10,
+                    previous="unknown",
+                    sources=("carry-unknown-50",),
+                ),
+            )
+        )
+        self.assertEqual(boundary_signature(held, "unknown-successor")[2:4], (0, 7))
+        self.assertIn(
+            "unknown-counter-reset-identity",
+            held.observe("unknown-successor")["blockers"],
+        )
+        assert_raises(
+            AdmissionError,
+            held.append,
+            reserve("carry-unknown-block", "r-carry-unknown", "unknown-successor", TOKENS, 1),
+        )
 
     def test_unknown_baseline_window_blocks(self):
         unknown_baseline = freeze("block-1", "block-baseline", TOKENS, None, 1, 10)
-        unknown_window_binding = binding("task-a", "goal-a", "tokens", 1, None)
+        unknown_window_binding = binding("task-window", "goal-a", "tokens", 1, None)
         unknown_window = freeze("block-2", "block-window", unknown_window_binding, 100, 1, 10)
         state = replay((unknown_baseline, unknown_window))
         self.assertEqual(state.observe("block-baseline")["blockers"], ["unknown-baseline"])
@@ -524,6 +672,45 @@ class RecoveryLedgerTests(unittest.TestCase):
             AdmissionError,
             state.append,
             reserve("block-3", "r-block", "block-baseline", TOKENS, 1),
+        )
+        state.append(
+            normal(
+                "block-4",
+                "block-window-normal",
+                "block-window",
+                unknown_window_binding,
+                50,
+            )
+        )
+        resolved_window_binding = binding(
+            "task-window", "goal-a", "tokens", 1, "provider-window-resolved"
+        )
+        state.append(
+            freeze(
+                "block-5",
+                "block-window-successor",
+                resolved_window_binding,
+                150,
+                1,
+                10,
+                previous="block-window",
+                sources=("block-window-normal",),
+            )
+        )
+        self.assertIn(
+            "unknown-window",
+            state.observe("block-window-successor")["blockers"],
+        )
+        assert_raises(
+            AdmissionError,
+            state.append,
+            reserve(
+                "block-6",
+                "r-block-window",
+                "block-window-successor",
+                resolved_window_binding,
+                1,
+            ),
         )
 
     def test_invalid_integers_fraction_quantum(self):
@@ -585,6 +772,83 @@ class RecoveryLedgerTests(unittest.TestCase):
         self.assertEqual(state.append(duplicate), "duplicate")
         self.assertEqual(cap_signature(state, "pool-cap")[3:6], (4, 0, 3))
 
+        # Each component kind gets its own decisive bottleneck.  Disabling either
+        # parent or pool enforcement must no longer survive behind resource refusal.
+        for target_kind in ("parent", "pool", "resource"):
+            prefix = "guard-" + target_kind
+            component_ids = (prefix + "-parent", prefix + "-pool", prefix + "-resource")
+            ceilings = {
+                "parent": 6 if target_kind == "parent" else 20,
+                "pool": 6 if target_kind == "pool" else 20,
+                "resource": 6 if target_kind == "resource" else 20,
+            }
+            events = []
+            for index, kind in enumerate(("parent", "pool", "resource"), 1):
+                events.append(
+                    cap(
+                        prefix + "-cap-" + str(index),
+                        prefix + "-" + kind,
+                        kind,
+                        prefix + "-scope-" + kind,
+                        "tokens",
+                        1,
+                        "provider-window-1",
+                        ceilings[kind],
+                    )
+                )
+            events.append(
+                freeze(
+                    prefix + "-freeze",
+                    prefix + "-boundary",
+                    TOKENS,
+                    200,
+                    1,
+                    10,
+                    required_components=component_ids,
+                )
+            )
+            first_claims = tuple(
+                claim(item, "tokens", 1, "provider-window-1", 6)
+                for item in component_ids
+            )
+            events.append(
+                reserve(
+                    prefix + "-reserve",
+                    prefix + "-r-six",
+                    prefix + "-boundary",
+                    TOKENS,
+                    6,
+                    first_claims,
+                )
+            )
+            guarded = replay(tuple(events))
+            one_claims = tuple(
+                claim(item, "tokens", 1, "provider-window-1", 1)
+                for item in component_ids
+            )
+            assert_raises(
+                AdmissionError,
+                guarded.append,
+                reserve(
+                    prefix + "-over",
+                    prefix + "-r-over",
+                    prefix + "-boundary",
+                    TOKENS,
+                    1,
+                    one_claims,
+                ),
+            )
+
+        omitted = reserve(
+            "component-omit",
+            "r-component-omit",
+            "component",
+            TOKENS,
+            1,
+            (),
+        )
+        assert_raises(ValidationError, replay, COMPONENT_EVENTS + (omitted,))
+
     def test_unlike_units_never_combine(self):
         state = replay(UNLIKE_EVENTS)
         self.assertEqual(state.observe("token-boundary")["R"], 4)
@@ -622,7 +886,8 @@ TEST_METHOD_TO_CASE = {
 
 DECLARED_SEQUENCES = tuple(case["events"] for case in PREFIX_CASES.values())
 PREFIX_COUNT = sum(len(case["events"]) for case in PREFIX_CASES.values())
-MAX_SEQUENCE_EVENTS = max(len(events) for events in DECLARED_SEQUENCES)
+DECLARED_SEQUENCE_LIMIT = 256
+MAX_SEQUENCE_EVENTS = 32
 
 
 def main():
@@ -642,8 +907,9 @@ def main():
                 "cases": len(REQUIRED_CASES),
                 "prefixes": PREFIX_COUNT,
                 "mutations": len(mutations),
-                "sequences": len(DECLARED_SEQUENCES),
-                "max_events": MAX_SEQUENCE_EVENTS,
+                "selected_sequences": len(DECLARED_SEQUENCES),
+                "sequence_limit": DECLARED_SEQUENCE_LIMIT,
+                "max_events_limit": MAX_SEQUENCE_EVENTS,
                 "provider_calls": 0,
             },
             sort_keys=True,

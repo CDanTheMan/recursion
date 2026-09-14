@@ -108,6 +108,7 @@ class Ledger:
         self._events = []
         self._event_fingerprints = {}
         self._boundaries = {}
+        self._accounts = {}
         self._components = {}
         self._reservations = {}
         self._settlements = {}
@@ -120,8 +121,6 @@ class Ledger:
         return tuple(sorted(self._components))
 
     def append(self, raw_event):
-        if len(self._events) >= MAX_EVENTS:
-            raise ValidationError("event sequence exceeds " + str(MAX_EVENTS))
         if type(raw_event) is not dict:
             raise ValidationError("event must be an object")
         event = copy.deepcopy(raw_event)
@@ -133,6 +132,8 @@ class Ledger:
             if prior == fingerprint:
                 return "duplicate"
             raise ConflictError("event_id reused with different content: " + event_id)
+        if len(self._events) >= MAX_EVENTS:
+            raise ValidationError("event sequence exceeds " + str(MAX_EVENTS))
 
         handlers = {
             "boundary_frozen": self._apply_boundary,
@@ -149,6 +150,11 @@ class Ledger:
             raise ValidationError("unknown event type: " + event_type)
         disposition = handler(event)
         if disposition == "duplicate":
+            # A semantic duplicate delivered under a new event identity is still
+            # evidence.  Bind that identity so it cannot later name other content,
+            # and serialize it so reopening preserves the conflict boundary.
+            self._events.append(event)
+            self._event_fingerprints[event_id] = fingerprint
             return disposition
         self._events.append(event)
         self._event_fingerprints[event_id] = fingerprint
@@ -166,6 +172,7 @@ class Ledger:
                 "fraction",
                 "previous_boundary_id",
                 "normal_source_ids",
+                "component_ids",
             ),
             "boundary_frozen",
         )
@@ -186,6 +193,15 @@ class Ledger:
         source_ids = tuple(_identifier(item, "normal_source_id") for item in sources)
         if len(source_ids) != len(set(source_ids)):
             raise ValidationError("normal_source_ids must be unique")
+        components = event["component_ids"]
+        if type(components) is not list:
+            raise ValidationError("component_ids must be a list")
+        component_ids = tuple(_identifier(item, "component_id") for item in components)
+        if len(component_ids) != len(set(component_ids)):
+            raise ValidationError("component_ids must be unique")
+        for component_id in component_ids:
+            if component_id not in self._components:
+                raise ValidationError("unknown required component: " + component_id)
 
         normalized = _canonical(_without_event_id(event))
         if boundary_id in self._boundaries:
@@ -193,10 +209,19 @@ class Ledger:
                 return "duplicate"
             raise ConflictError("boundary_id reused with different content: " + boundary_id)
 
+        account_key = (
+            binding["task_id"],
+            binding["goal_id"],
+            binding["unit"],
+            binding["quantum"],
+        )
         consumed_sources = []
         if previous is None:
             if source_ids:
                 raise ValidationError("initial boundary cannot cite normal additions")
+            if account_key in self._accounts:
+                raise ConflictError("allowance lineage already has an initial boundary")
+            account = {"C": 0, "R": 0, "blockers": set(), "current_boundary_id": boundary_id}
         else:
             previous = _identifier(previous, "previous_boundary_id")
             if previous not in self._boundaries:
@@ -204,6 +229,13 @@ class Ledger:
             if not source_ids:
                 raise ValidationError("successor boundary requires attributed normal use")
             prior = self._boundaries[previous]
+            if prior["account_key"] != account_key:
+                raise ValidationError("successor changed allowance lineage")
+            account = self._accounts[account_key]
+            if account["current_boundary_id"] != previous:
+                raise ConflictError("successor must extend the current boundary")
+            if component_ids != prior["component_ids"]:
+                raise ValidationError("successor changed required component inventory")
             for key in ("task_id", "goal_id", "unit", "quantum"):
                 if binding[key] != prior["binding"][key]:
                     raise ValidationError("successor binding changed " + key)
@@ -225,17 +257,21 @@ class Ledger:
         if normal_use is None:
             blockers.add("unknown-baseline")
         if binding["window_id"] is None:
-            blockers.add("unknown-window")
+            account["blockers"].add("unknown-window")
         allowance = None if normal_use is None else (p * normal_use) // q
+        if previous is None:
+            self._accounts[account_key] = account
+        else:
+            account["current_boundary_id"] = boundary_id
         self._boundaries[boundary_id] = {
             "binding": binding,
             "N": normal_use,
             "p": p,
             "q": q,
             "B": allowance,
-            "C": 0,
-            "R": 0,
             "blockers": blockers,
+            "account_key": account_key,
+            "component_ids": component_ids,
             "fingerprint": normalized,
         }
         for source in consumed_sources:
@@ -332,7 +368,9 @@ class Ledger:
             ):
                 raise ValidationError("component claim binding mismatch")
             claims[component_id] = _integer(row["amount"], name + ".amount")
-        return boundary_id, boundary, amount, claims
+        if set(claims) != set(boundary["component_ids"]):
+            raise ValidationError("component claim inventory differs from frozen boundary")
+        return boundary_id, boundary, self._accounts[boundary["account_key"]], amount, claims
 
     def _apply_reservation(self, event):
         _exact_keys(
@@ -358,12 +396,14 @@ class Ledger:
             raise ConflictError("reservation_id reused with different content")
         if any(row["effect_id"] == effect_id for row in self._reservations.values()):
             raise ConflictError("effect_id already has a reservation")
-        boundary_id, boundary, upper, claims = self._validate_reservation_common(
+        boundary_id, boundary, account, upper, claims = self._validate_reservation_common(
             event, "reservation_created", "upper_bound"
         )
-        if boundary["blockers"]:
+        if account["current_boundary_id"] != boundary_id:
+            raise AdmissionError("reservation targets a superseded boundary")
+        if boundary["blockers"] or account["blockers"]:
             raise AdmissionError("boundary accounting is unknown")
-        if boundary["C"] + boundary["R"] + upper > boundary["B"]:
+        if account["C"] + account["R"] + upper > boundary["B"]:
             raise AdmissionError("recovery allowance exceeded")
         for component_id, amount in claims.items():
             component = self._components[component_id]
@@ -372,7 +412,7 @@ class Ledger:
             total = component["used"] + component["C"] + component["R"] + amount
             if total > component["ceiling"]:
                 raise AdmissionError("component ceiling exceeded: " + component_id)
-        boundary["R"] += upper
+        account["R"] += upper
         for component_id, amount in claims.items():
             self._components[component_id]["R"] += amount
         self._reservations[reservation_id] = {
@@ -449,7 +489,7 @@ class Ledger:
         reservation = self._reservations.get(reservation_id)
         if reservation is None:
             raise ValidationError("unknown reservation")
-        boundary_id, boundary, actual, actual_components = self._validate_reservation_common(
+        boundary_id, boundary, account, actual, actual_components = self._validate_reservation_common(
             event, "reservation_settled", "actual"
         )
         if boundary_id != reservation["boundary_id"] or event["effect_id"] != reservation["effect_id"]:
@@ -464,8 +504,8 @@ class Ledger:
             if amount > reservation["components"][component_id]:
                 raise ValidationError("component actual exceeds reserved upper bound")
 
-        boundary["R"] -= reservation["upper_bound"]
-        boundary["C"] += actual
+        account["R"] -= reservation["upper_bound"]
+        account["C"] += actual
         for component_id, reserved in reservation["components"].items():
             component = self._components[component_id]
             component["R"] -= reserved
@@ -501,6 +541,9 @@ class Ledger:
         if boundary is None:
             raise ValidationError("unknown boundary")
         _same_binding(event["binding"], boundary["binding"])
+        account = self._accounts[boundary["account_key"]]
+        if account["current_boundary_id"] != boundary_id:
+            raise ValidationError("normal use targets a superseded boundary")
         amount = _integer(event["amount"], "amount", 1)
         self._normal_sources[source_id] = {
             "boundary_id": boundary_id,
@@ -521,11 +564,12 @@ class Ledger:
         if boundary is None:
             raise ValidationError("unknown boundary")
         _same_binding(event["binding"], boundary["binding"])
+        account = self._accounts[boundary["account_key"]]
         status = event["identity_status"]
         if status == "unknown":
-            boundary["blockers"].add("unknown-counter-reset-identity")
+            account["blockers"].add("unknown-counter-reset-identity")
         elif status == "reconciled":
-            boundary["blockers"].discard("unknown-counter-reset-identity")
+            account["blockers"].discard("unknown-counter-reset-identity")
         else:
             raise ValidationError("identity_status must be reconciled or unknown")
         return "applied"
@@ -539,14 +583,16 @@ class Ledger:
         boundary = self._boundaries.get(boundary_id)
         if boundary is None:
             raise ValidationError("unknown boundary")
-        blockers = sorted(boundary["blockers"])
+        account = self._accounts[boundary["account_key"]]
+        blockers = sorted(boundary["blockers"] | account["blockers"])
         available = None
         if not blockers and boundary["B"] is not None:
-            available = max(0, boundary["B"] - boundary["C"] - boundary["R"])
+            available = max(0, boundary["B"] - account["C"] - account["R"])
         reservations = []
         for reservation_id in sorted(self._reservations):
             row = self._reservations[reservation_id]
-            if row["boundary_id"] == boundary_id:
+            reservation_boundary = self._boundaries[row["boundary_id"]]
+            if reservation_boundary["account_key"] == boundary["account_key"]:
                 reservations.append(
                     {
                         "reservation_id": reservation_id,
@@ -568,8 +614,8 @@ class Ledger:
             "p": boundary["p"],
             "q": boundary["q"],
             "B": boundary["B"],
-            "C": boundary["C"],
-            "R": boundary["R"],
+            "C": account["C"],
+            "R": account["R"],
             "available": available,
             "pending_normal_use": pending,
             "blockers": blockers,
