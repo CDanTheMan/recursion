@@ -254,7 +254,11 @@ def subprocess_gate(module):
     require(result.returncode == 0, "test subprocess failed:\n" + result.stdout)
     require("skipped" not in result.stdout.lower(), "test subprocess skipped a case")
     for method in module["TEST_METHOD_TO_CASE"]:
-        require(method + " " in result.stdout and " ... ok" in result.stdout, "test method missing: " + method)
+        require(
+            re.search(r"^" + re.escape(method) + r" \(.*\) \.\.\. ok$", result.stdout, re.MULTILINE)
+            is not None,
+            "passing test method missing: " + method,
+        )
     marker = "RECOVERY_LEDGER_TEST_PASS "
     lines = [line for line in result.stdout.splitlines() if line.startswith(marker)]
     require(len(lines) == 1, "test pass marker missing or duplicated")
@@ -307,4 +311,3 @@ if __name__ == "__main__":
     except (GateFailure, KeyError, TypeError, ValueError, OSError, subprocess.SubprocessError) as exc:
         print("RECOVERY_LEDGER_GATE_FAIL " + str(exc), file=sys.stderr)
         sys.exit(1)
-

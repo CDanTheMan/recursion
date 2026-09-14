@@ -61,6 +61,28 @@ This is the expected missing-implementation failure, not a passing result. Imple
 exact-candidate gates and independent Astra review remain pending. This failed attempt will
 not be deleted or relabeled after a later pass.
 
+First implementation run:
+
+```text
+python -X utf8 -B experiments/v3/recovery-ledger-20260914/test_ledger.py
+exit 1; 14 errors
+TypeError: _same_binding() missing 1 required positional argument: 'name'
+```
+
+The binding validator was repaired by supplying a stable default diagnostic label. The next
+run passed all 16 test methods, 15 required behavior cases, 21 frozen prefixes and six
+mutation controls.
+
+First committed candidate: `0b8f20d6465eea89d47db4b28886747f052627b6`.
+
+- Handoff source check: exit 0, `HANDOFF_SOURCE_PASS`, 49 unchanged top-level specs.
+- Test command: exit 0, `RECOVERY_LEDGER_TEST_PASS`.
+- Exact-candidate check: exit 1. `git diff --check` found a new blank line at EOF in
+  `SPEC.md` and `check.py`.
+
+That candidate is retained as failed. The trailing blank lines were removed; no oracle,
+case or acceptance requirement was weakened.
+
 ## Limits and negative evidence
 
 - Inert Python event/replay prototype only; no product language or store selected.

@@ -117,4 +117,3 @@ The gate binds the exact candidate, base commit, clean checkout, allowed paths, 
 case/prefix/control inventory, source preservation and a fresh subprocess test result. It
 allows at most 1,024 declared event sequences, 32 events per sequence, 60 seconds per gate,
 32 MiB of experiment artifacts and zero provider calls.
-
