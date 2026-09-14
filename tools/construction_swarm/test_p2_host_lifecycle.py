@@ -83,6 +83,13 @@ class HostLifecycleTests(unittest.TestCase):
             f"recursion-p2-test-{os.getpid()}-{uuid.uuid4().hex}"
         )
         self.cgroup_root.mkdir(mode=0o700)
+        controllers = (self.cgroup_root / "cgroup.controllers").read_text(encoding="ascii").split()
+        self.assertIn("pids", controllers)
+        (self.cgroup_root / "cgroup.subtree_control").write_text("+pids", encoding="ascii")
+        self.assertIn(
+            "pids",
+            (self.cgroup_root / "cgroup.subtree_control").read_text(encoding="ascii").split(),
+        )
         self.processes = []
         self.unrelated = []
         self.config_path = self.root / "config.json"
@@ -264,6 +271,7 @@ class HostLifecycleTests(unittest.TestCase):
         old_grandchild = int(self.grandchild_pid_path.read_text(encoding="ascii"))
         domain = Path(first["service_domain"])
         _wait_until(lambda: len((domain / "cgroup.procs").read_text(encoding="ascii").splitlines()) >= 2)
+        self.assertEqual((domain / "pids.max").read_text(encoding="ascii").strip(), "256")
         os.kill(first["service_identity"]["pid"], signal.SIGKILL)
         restarted = _wait_until(
             lambda: (
@@ -400,6 +408,49 @@ class HostLifecycleTests(unittest.TestCase):
             lifecycle.request_stop(fake_root, 2)
         self.assertEqual(caught.exception.code, "stop_cleanup_unknown")
         fake.wait(timeout=CHILD_DEADLINE)
+
+    def test_undelegated_pids_controller_refuses_before_launch(self):
+        undelegated = Path("/sys/fs/cgroup") / (
+            f"recursion-p2-undelegated-{os.getpid()}-{uuid.uuid4().hex}"
+        )
+        undelegated.mkdir(mode=0o700)
+        try:
+            state_root = self.root / "undelegated-state"
+            self.write_config(state_root=str(state_root), cgroup_root=str(undelegated))
+            controller = self.start()
+            output, error = controller.communicate(timeout=CHILD_DEADLINE)
+            self.assertEqual(controller.returncode, 3, output + error)
+            self.assertIn("delegated cgroup does not enable the pids controller", output)
+            self.assertFalse(self.launch_count_path.exists())
+        finally:
+            for child in undelegated.iterdir():
+                if child.is_dir():
+                    child.rmdir()
+            undelegated.rmdir()
+
+    def test_rejected_prior_state_does_not_kill_unowned_domain_canary(self):
+        config = lifecycle.load_config(self.config_path)
+        domain = lifecycle.CgroupDomain(config["cgroup_root"], self.state_root)
+        domain.ensure()
+        canary = subprocess.Popen(
+            [sys.executable, "-X", "utf8", "-B", "-c", "import time; time.sleep(12)"],
+            preexec_fn=domain.join_current,
+        )
+        self.unrelated.append(canary)
+        lifecycle.StateStore(self.state_root).write(
+            {
+                "state_version": lifecycle.STATE_VERSION,
+                "source_commit": "0" * 40,
+                "service_incarnation": 1,
+                "service_identity": lifecycle.process_identity(canary.pid),
+                "service_domain": str(domain.path),
+            }
+        )
+        controller = self.start()
+        output, error = controller.communicate(timeout=CHILD_DEADLINE)
+        self.assertEqual(controller.returncode, 3, output + error)
+        self.assertIn("prior state source differs", output)
+        self.assertIsNone(canary.poll())
 
     def test_stop_cleans_only_owned_process_tree(self):
         self.write_fixture("stable", grandchild=True)

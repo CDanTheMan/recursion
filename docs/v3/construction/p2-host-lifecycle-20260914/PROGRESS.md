@@ -58,6 +58,16 @@ numeric descendant discovery entirely. The service enters a dedicated cgroup-v2 
 `exec`; all forks inherit it, `pids.max=256` bounds it, and atomic `cgroup.kill` defines quiescence.
 Pidfds remain only for the verified controller Stop signal.
 
+Astra review of exact cgroup candidate `67b65434419331fcc901628b25b1f69724e675fc`
+confirmed pre-exec membership, inherited fork containment, atomic domain cleanup, unrelated-process
+isolation and replacement-controller recovery. It still failed the candidate because the fixture
+delegation did not enable `pids`, making the advertised process bound absent, and because cleanup
+was armed from the derived cgroup pathname before prior source/state ownership validation. The
+third remediation requires and reads back `pids.max=256`, adds an undelegated-controller refusal
+case, and arms domain cleanup only after matching prior source/domain state (or a proven-empty new
+domain). Its negative canary test verifies rejected prior state causes no signal. Cleanup also does
+not let membership-count or process-limit observations block an already-authorized `cgroup.kill`.
+
 ## Coverage so far
 
 Native Linux under WSL Ubuntu-24.04:
@@ -78,6 +88,10 @@ Native Linux under WSL Ubuntu-24.04:
   failed the candidate.
 - First cgroup-domain suite: 15 tests, pass, 3.561 seconds. An added unobserved-fork regression then
   expanded the suite to 16 tests, pass, 4.035 seconds.
+- Clean cgroup candidate: lifecycle 16 pass in 4.332 seconds, P1 18 pass in 2.072 seconds and P2
+  access 19 pass in 5.581 seconds, with preservation/scope/diff passing. Astra reran 16 in 4.392
+  seconds, 18 in 3.346 seconds and 19 in 5.586 seconds before its admission probes failed it.
+- First delegation/authorization remediation suite: 18 tests, pass, 4.076 seconds.
 - Real fixture processes covered competing watchdogs, client disconnect, crash/restart, restart
   exhaustion, stale and active socket handling, stale unrelated PID preservation, old-incarnation
   health rejection, owned-tree cleanup and PAUSE/disabled refusal.
@@ -116,6 +130,9 @@ Not run:
 - Astra review of `22f90f705c0274160b6b59fb5a428de5399be9a9` returned three actionable tree-domain
   findings despite all 52 supplied tests passing. Its two surviving-child probes and modeled stale
   discovery probe were cleaned by the reviewer; the candidate was not treated as final.
+- Astra review of `67b65434419331fcc901628b25b1f69724e675fc` returned two actionable admission
+  findings despite all 53 supplied tests passing. The reviewer's disposable canaries and cgroups
+  were cleaned; the candidate was not treated as final.
 - The first expanded remediation suite completed 15 tests in 3.403 seconds with one error: the
   restart receipt assertion expected `cleanup` in the new running state. The implementation now
   intentionally carries the most recent verified receipt as `last_cleanup`; the corrected suite

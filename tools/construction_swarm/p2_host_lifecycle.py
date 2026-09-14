@@ -236,7 +236,7 @@ class CgroupDomain:
         self.root = root
         self.path = root / name
 
-    def ensure(self):
+    def ensure(self, *, require_process_bound=True):
         try:
             self.path.mkdir(mode=0o700)
         except FileExistsError:
@@ -248,12 +248,17 @@ class CgroupDomain:
         for name in ("cgroup.procs", "cgroup.events", "cgroup.kill"):
             _require((self.path / name).is_file(), "platform_unavailable",
                      "service cgroup lacks required control files")
-        limit = self.path / "pids.max"
-        if limit.is_file():
+        if require_process_bound:
+            limit = self.path / "pids.max"
+            _require(limit.is_file(), "platform_unavailable",
+                     "delegated cgroup does not enable the pids controller")
             try:
                 limit.write_text(str(self.MAX_PROCESSES), encoding="ascii")
+                installed = limit.read_text(encoding="ascii").strip()
             except OSError as exc:
                 raise LifecycleRefused("platform_unavailable", "service cgroup process bound cannot be set") from exc
+            _require(installed == str(self.MAX_PROCESSES), "platform_unavailable",
+                     "service cgroup process bound differs")
 
     def join_current(self):
         # Executed in the Popen child before exec; all later forks inherit the domain.
@@ -277,12 +282,16 @@ class CgroupDomain:
             values = (self.path / "cgroup.procs").read_text(encoding="ascii").splitlines()
         except OSError as exc:
             raise LifecycleRefused("cleanup_unknown", "service cgroup membership is unavailable") from exc
-        _require(len(values) <= self.MAX_PROCESSES, "cleanup_unknown", "service cgroup exceeds process bound")
         return len(values)
 
     def cleanup(self, timeout, process=None):
-        self.ensure()
-        before = self.process_count()
+        # Never let a missing/over-limit pids controller prevent termination of
+        # a domain whose ownership was already authorized.
+        self.ensure(require_process_bound=False)
+        try:
+            before = self.process_count()
+        except LifecycleRefused:
+            before = None
         kill_sent = False
         if self.populated():
             try:
@@ -632,6 +641,7 @@ class Controller:
         self.process = None
         self.service_identity = None
         self.domain = None
+        self.domain_authorized = False
         self.last_cleanup = None
         self.state = None
 
@@ -768,9 +778,15 @@ class Controller:
             )
             identity = previous.get("service_identity")
             recorded_domain = previous.get("service_domain")
-            _require(recorded_domain in {None, str(self.domain.path)},
-                     "state_refused", "prior service ownership domain differs")
-            if self.domain.populated():
+            populated = self.domain.populated()
+            if populated:
+                _require(recorded_domain == str(self.domain.path),
+                         "state_refused", "populated service domain is not authorized by prior state")
+            else:
+                _require(recorded_domain in {None, str(self.domain.path)},
+                         "state_refused", "prior service ownership domain differs")
+            self.domain_authorized = True
+            if populated:
                 cleanup = self.domain.cleanup(self.config["shutdown_timeout_seconds"])
                 _require(cleanup["quiescent"], "cleanup_unknown", "prior owned service did not quiesce")
                 notes.append("prior_owned_service_quiesced")
@@ -780,6 +796,10 @@ class Controller:
                     notes.append("stale_pid_unrelated_preserved")
                 except LifecycleRefused:
                     notes.append("prior_service_absent")
+        else:
+            _require(not self.domain.populated(), "state_refused",
+                     "populated service domain has no prior ownership state")
+            self.domain_authorized = True
         notes.append(reconcile_socket(self.config["socket_path"]))
         return prior_incarnation, notes
 
@@ -924,7 +944,11 @@ class Controller:
                     return 0
         finally:
             try:
-                populated = self.domain is not None and self.domain.populated()
+                populated = (
+                    self.domain_authorized
+                    and self.domain is not None
+                    and self.domain.populated()
+                )
             except LifecycleRefused:
                 populated = False
             if populated:

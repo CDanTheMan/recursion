@@ -76,8 +76,10 @@ these fields:
 `source_commit` must be lowercase 40-character hex and must equal `repository_root` HEAD. Linux
 pidfd support is required. A discovered service tree is capped at 256 members. The
 repository must contain `p2_access.py`; all paths must be absolute. `cgroup_root` must be an
-operator-provisioned writable cgroup-v2 delegation beneath `/sys/fs/cgroup`; the controller creates
-one deterministic child domain there but does not configure delegation or install a service. Timeouts are individually
+operator-provisioned writable cgroup-v2 delegation beneath `/sys/fs/cgroup` whose
+`cgroup.subtree_control` already enables `pids`. The controller requires and verifies
+`pids.max=256` on its deterministic child domain; it does not configure the delegation or install a
+service. Timeouts are individually
 bounded to 15 seconds and the restart cap to ten. The config and grants paths must be regular,
 non-symlink files. This packet does not create those files or choose their production locations.
 
