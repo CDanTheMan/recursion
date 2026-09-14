@@ -1,0 +1,122 @@
+# Recursion v3 development entry point
+
+Reviewed 2026-09-13 against GitHub master `797be4f18edf3f9e0f2dbac9432f190dbe1ed969`.
+This is a source orientation snapshot, not live machine status or a new operating policy.
+Lucas's current request is to repair repository orientation and verify the v3 specifications.
+
+Read [CONTROL_PLANE](../../CONTROL_PLANE.md) first, then [ANCHOR](../../ANCHOR.md),
+[AGENTS](../../AGENTS.md), and this page. The current development target is **Recursion v3**.
+V1/v2 remain historical implementation and regression references. Do not infer a v2
+development task from a legacy filename, goal identifier, or acceptance command.
+
+## Specification and authority
+
+The product requirements and accepted Owner decisions remain intact. They describe a
+provider-neutral agent platform, with native execution, supported upstream harnesses,
+combined workflows, persistent assistants, configurable communication and delegation,
+terminal controls, plugins, context/compaction, and Windows/Linux operation and recovery.
+The dedicated graphical application follows the initial terminal platform.
+
+Read only the specification slices needed for the assigned task:
+
+| Question | Authoritative product record |
+|---|---|
+| Product and first usable release | [PRODUCT](PRODUCT.md) |
+| Accepted direction and resolved Owner questions | [DECISION-REGISTER](DECISION-REGISTER.md), especially OR-021 through OR-039 |
+| Kernel, Head, ARMs and recovery | [ARCHITECTURE](ARCHITECTURE.md), [STATE](STATE.md) |
+| Task planning, amendments and delegation | [AUTONOMOUS-PLANNING](AUTONOMOUS-PLANNING.md), [EXECUTIVES](EXECUTIVES.md) |
+| Native/upstream execution and route evidence | [EXECUTION-FABRIC](EXECUTION-FABRIC.md), [ROUTE-CAPABILITIES](ROUTE-CAPABILITIES.md) |
+| Configuration, terminal and communication | [CLI](CLI.md), [TERMINAL-RUNTIME](TERMINAL-RUNTIME.md), [INTERACTION-SURFACES](INTERACTION-SURFACES.md) |
+| Context, plugins and security | [CONTEXT](CONTEXT.md), [PLUGINS-AND-EDITIONS](PLUGINS-AND-EDITIONS.md), [SECURITY](SECURITY.md) |
+| Release obligations and migration | [ACCEPTANCE](ACCEPTANCE.md), [CURRENT-AND-MIGRATION](CURRENT-AND-MIGRATION.md) |
+
+These product specifications do not silently replace the operative Hermes constitution.
+The [constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) is still a
+proposal. Do not reopen answered Owner questions or select a product language, store,
+framework, spending policy, or autonomous operating mode from a research recommendation.
+
+## What exists and what remains
+
+| Layer | Source-backed state | Limits / next prerequisite |
+|---|---|---|
+| V2 implementation | Source-only MVP and regression baseline | Its tests do not certify v3 or establish deployed state. |
+| V3 M1A | Planning schema, validation, literal fixtures and in-memory replay | Pure/inert scope; preserve frozen contracts. See [campaign](M1A-CONSTRUCTION-CAMPAIGN.md). |
+| V3 M1B / M1C | Execution and integrity schemas, fixtures and test oracles | These specify behavior; they do not prove live adapters or physical persistence. See [M1B](M1B-CONSTRUCTION-CAMPAIGN.md), [M1C](M1C-CONSTRUCTION-CAMPAIGN.md). |
+| Later v3 experiments | Composition, reservation, wire, consultation, source/publication and bounded comparison work | Full formal comparison, physical recovery and common-writer integration remain open. |
+| Construction facility | Native WSL Devin/SWE-2 tools, bounded dispatch, proposals, dependency checks, collection and advisory coordination | A tool for building Recursion; it is not the finished v3 runtime or an unattended product-development service. |
+
+The [2026-09-10 second slice](construction/eight-hour-research-20260910-01a08a22-slice2/README.md)
+records additional bounded histories and explicit unproved cases. The
+[2026-09-11 closeout](construction/swarm-research-20260911-155142/closeout/BRIEF.md)
+records framework repairs but leaves scientific execution blocked. Its
+[continuation](construction/swarm-research-20260911-155142/closeout/CONTINUATION.md)
+identifies controller durability, dependency receipts, additive accounting, budget and
+prospective review prerequisites. Those campaign deadlines have expired.
+
+PRs 124, 125 and 127 are ancestors of the inspected master. Statements that those PRs
+are open, or that a campaign is running, are dated historical observations.
+The [2026-09-12 census](construction-swarm/NIGHT-RDT-20260912.md) records later reservation
+settlement, rate limits and malformed filings. It does not establish today's quota,
+process state, available slots, or accepted scientific results.
+
+The chronological [ROADMAP](ROADMAP.md) preserves earlier next-step proposals. Its
+M1A-era instructions and the old [documentation gate](VALIDATION.md) are not instructions
+to restart completed work. No historical clock, quota observation or authorization
+renews merely because an agent opens a handoff.
+
+## Starting a bounded development task
+
+Use a fresh fetched, clean review worktree and record its full commit. On Windows,
+this repository has paths exceeding 260 characters; use `git -c core.longpaths=true`
+for checkout and status/diff operations when needed. This is a per-command option.
+
+Before inference or writes, bind the task to:
+
+- the parent goal, v3 objective, source commit and relevant accepted requirements;
+- exact allowed paths, non-goals and prerequisite evidence;
+- the acceptance commands and required independent review;
+- provider/tool permissions, finite budget, deadline, retry and stopping conditions;
+- durable checkpoint and result locations, including failures and uncertainty.
+
+The existing parent [goal-recursion-v2-execution-fabric](../../state/goals/goal-recursion-v2-execution-fabric.md)
+is also the recorded parent of the v3 construction campaigns. Its legacy identifier
+is preserved for lineage; it neither changes a task's v3 target nor authorizes a new campaign.
+The current [orientation repair task](../../state/tasks/v3-orientation-20260913.md) has a
+separate, source-only gate. A product implementation packet must identify its own gate.
+
+For Devin, read [TOOL-PIPELINE](construction-swarm/TOOL-PIPELINE.md), then its amendments
+in [CAMPAIGN-SUPERVISION](construction-swarm/CAMPAIGN-SUPERVISION.md),
+[TOOL-VALIDATION](construction-swarm/TOOL-VALIDATION.md), and the dated census above.
+The original packet-only Windows adapter is historical; the native WSL tool route is
+distinct. A `construction-swarm/v3` plan version is not completion of the v3 product.
+Qualify one pinned worker and its cleanup before a new larger campaign; inspect live
+admission instead of copying old worker counts. The command sandbox has four shared
+slots and a 60-second command limit, so long builds need separately qualified execution.
+
+Deterministic process, deadline, quota and receipt checks should provide continuous
+awareness. Model supervision is advisory and should respond to actionable events.
+A worker's self-report cannot replace independent verification. The existing supervisor
+adds no background scheduler. Terra, Hermes, DeepSeek or another route is a future
+qualification choice, not selected or enabled by this repair. Compaction must retain the
+task's source, authority, budget, gate, checkpoint and unresolved evidence references.
+
+## Reproducible orientation and specification checks
+
+Run from the repository root with Python 3.11+ and Git:
+
+```text
+python -X utf8 -B tools/check_v3_orientation.py
+python -X utf8 -B tools/check_v3_orientation.py --contracts
+```
+
+The first command checks the repair scope against the pinned baseline, tracked entry
+points, all top-level v3 Markdown file links (excluding code), registered claim rows,
+Owner decision rows, and fixture inventory. The second also runs the existing three
+schema checks, three fixture-materialization checks and seventeen M1 test programs.
+These are provider-free source checks, not the historical scientific campaign gates,
+independent review, live provider qualification or v3 release acceptance.
+
+After committing a clean candidate, add `--candidate FULL_COMMIT` to bind the checks
+to that exact tree. Preserve the output externally. This repair gate freezes all
+pre-existing paths except its declared entry-point edits; future product changes need
+their own reviewed scope and gate rather than weakening this one.

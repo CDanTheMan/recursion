@@ -1,10 +1,15 @@
 ---
 title: Recursion v3 documentation-campaign deterministic validation procedure
-status: active-campaign-gate-procedure
+status: historical-campaign-gate-procedure
 last-updated: 2026-09-03
 ---
 
 # Recursion v3 documentation-campaign deterministic validation procedure
+
+> Current development entry point (2026-09-13): [START-HERE](START-HERE.md).
+> The dated material below preserves its original campaign scope and evidence.
+> Earlier next-step instructions, branch-specific gates and expired campaign windows
+> do not define a new task or establish current runtime status.
 
 This file owns the exact reproducible local procedure for the documentation campaign's
 machine-checkable gates. It changes no repository or external state. Run it from the target

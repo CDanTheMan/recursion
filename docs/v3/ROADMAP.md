@@ -6,6 +6,11 @@ last-updated: 2026-09-07
 
 # Recursion v3 research and construction roadmap hypothesis
 
+> Current development entry point (2026-09-13): [START-HERE](START-HERE.md).
+> The dated material below preserves its original campaign scope and evidence.
+> Earlier next-step instructions, branch-specific gates and expired campaign windows
+> do not define a new task or establish current runtime status.
+
 ## RESET mapping continuation — 2026-09-07
 
 The [mapping packet](construction/reset-mapping-20260907/handoff.md) establishes a narrow
