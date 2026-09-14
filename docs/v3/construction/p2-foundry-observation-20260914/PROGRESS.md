@@ -173,8 +173,16 @@ projection. Contradictory pairs now refuse the complete snapshot, so they can ne
 assert acceptance nor release a hold. Added positive controls preserve a failed-attempt
 retry, recovery of its second running attempt to retained `unknown`, and explicit
 reconciliation to `cancelled`. The 17 behavioral tests passed locally after the repair
-(one POSIX-only FIFO control skipped on Windows). Exact native gates and a successor
-exact-commit Astra verdict remain pending.
+(one POSIX-only FIFO control skipped on Windows). Candidate
+`200e8cccc1e7701f6f199ec1c8e9176181176857` then passed from the clean native clone:
+
+- focused observation gate: exit 0, 18 tests in 2.780 seconds;
+- P1 regression: exit 0, 18 tests in 2.939 seconds;
+- P2 regression: exit 0, 19 tests in 5.584 seconds; and
+- handoff preservation: exit 0, `HANDOFF_SOURCE_PASS`, 49 unchanged specifications.
+
+The documentation-only successor requires one final exact-commit gate run and Astra
+verdict.
 
 ## Limits and negative evidence
 
