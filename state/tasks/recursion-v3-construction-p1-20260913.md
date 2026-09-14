@@ -123,3 +123,10 @@ Recovery now considers pending delivery ownership as well as original attempt
 ownership. Origin fences and unknown charges remain unchanged; stale callers cannot
 replay or relaunch. Both regressions failed before the fix; the 17-test suite passes
 afterward. Fresh independent review of the repaired candidate remains required.
+
+2026-09-14 repair slice 2: an identical result retry now checks the current canonical
+binding before returning success. Revision changes persist conflict state and terminalize
+only pending outbox delivery; original receipt IDs and already-delivered history remain
+intact. New pending/delivered regression cases failed before the fix. The complete suite
+passes 18 tests after both slices. This remains P1 fake-boundary evidence; it does not
+establish the proposed P2–P7 service, admission or live-worker qualification.

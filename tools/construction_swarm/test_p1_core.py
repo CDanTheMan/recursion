@@ -309,6 +309,32 @@ class P1CoreTests(unittest.TestCase):
     def test_s01_recovery_crash_after_canonical_commit_delivers_once(self):
         self.assert_recovery_survives_another_crash("after_canonical_commit")
 
+    def test_s01_result_retry_revalidates_revision_and_preserves_receipt(self):
+        for delivered in (False, True):
+            with self.subTest(delivered=delivered):
+                task = "retry-" + str(delivered)
+                self.hermes.create_task(task, "alpha")
+                accepted = self.store.accept(self.hermes, FakeTransport("worker"),
+                                             self.request(task=task, key=task), "leader-a", self.fence)
+                attempt = accepted["attempt_id"]
+                self.store.launch(FakeWorker(), FakeTransport("worker"), attempt, "leader-a", self.fence)
+                args = (self.hermes, FakeTransport("worker"), attempt, 1, "result", "leader-a", self.fence)
+                receipt = self.store.submit_result(*args)
+                self.assertEqual(self.store.submit_result(*args), receipt)
+                if delivered:
+                    self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence)
+                self.hermes.amend(task)
+                for _ in range(2):
+                    with self.assertRaises(RevisionConflict):
+                        self.store.submit_result(*args)
+                self.assertEqual(self.store.result(attempt)["receipt"], receipt)
+                self.assertEqual(self.store.result(attempt)["state"], "revision_conflict")
+                self.assertEqual(self.store.outbox_delivery(receipt),
+                                 "delivered" if delivered else "revision_conflict")
+                self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence)
+                self.assertEqual(self.hermes.task(task)["state"], "open")
+                self.assertEqual(self.hermes.receipt_count(task, "attempt_result"), int(delivered))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

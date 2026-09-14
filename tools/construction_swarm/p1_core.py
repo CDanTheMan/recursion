@@ -471,9 +471,23 @@ class P1Store:
             if prior:
                 if prior["body_digest"] != digest or prior["idempotency_key"] != idempotency_key:
                     raise IdempotencyConflict("result idempotency body changed")
-                self.db.commit()
                 if prior["state"] == "revision_conflict":
                     raise RevisionConflict(prior["detail"])
+                binding = {key: attempt[key] for key in
+                           ("task_id", "project", "goal_id", "source_commit", "requirements_digest")}
+                binding["expected_revision"] = attempt["task_revision"]
+                try:
+                    hermes.assert_binding(binding)
+                except RevisionConflict:
+                    # Preserve the original receipt, including any delivered history,
+                    # while preventing an old success from authorizing new progress.
+                    self.db.execute("UPDATE results SET state='revision_conflict',detail='canonical task revision changed' WHERE attempt_id=?",
+                                    (attempt_id,))
+                    self.db.execute("UPDATE outbox SET delivery='revision_conflict' WHERE attempt_id=? AND delivery='pending'",
+                                    (attempt_id,))
+                    self.db.commit()
+                    raise
+                self.db.commit()
                 return prior["receipt"]
             if expected_revision != attempt["task_revision"]:
                 self.db.execute("INSERT INTO results VALUES(?,?,?,?,?,?,?)", (
