@@ -761,6 +761,20 @@ class Controller:
         _require(self.domain is not None, "cleanup_unknown", "service ownership domain is unavailable")
         return self.domain.cleanup(self.config["shutdown_timeout_seconds"], self.process)
 
+    def _cleanup_current_safely(self):
+        try:
+            return self._cleanup_current()
+        except LifecycleRefused as exc:
+            return {
+                "term_sent": False,
+                "kill_sent": False,
+                "quiescent": False,
+                "member_count": None,
+                "ownership_domain": "cgroup_v2",
+                "domain": str(self.domain.path) if self.domain is not None else None,
+                "error": exc.code,
+            }
+
     def _reconcile_previous(self, previous):
         notes = []
         prior_incarnation = 0
@@ -867,7 +881,7 @@ class Controller:
                     time.sleep(0.03)
                 if self.stop.is_set():
                     self._write(incarnation, restart_count, "stopping", reconciliation=reconciliation)
-                    cleanup = self._cleanup_current()
+                    cleanup = self._cleanup_current_safely()
                     self.last_cleanup = cleanup
                     health = "stopped" if cleanup["quiescent"] else "outage"
                     self._write(
@@ -880,7 +894,7 @@ class Controller:
                     )
                     return 0 if cleanup["quiescent"] else 6
                 exit_code = self.process.poll()
-                cleanup = self._cleanup_current()
+                cleanup = self._cleanup_current_safely()
                 self.last_cleanup = cleanup
                 exit_code = self.process.poll() if self.process is not None else exit_code
                 if not cleanup["quiescent"]:

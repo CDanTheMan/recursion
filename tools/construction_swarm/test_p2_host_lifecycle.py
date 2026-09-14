@@ -12,6 +12,7 @@ import time
 import unittest
 import uuid
 from pathlib import Path
+from unittest import mock
 
 from tools.construction_swarm import p2_host_lifecycle as lifecycle
 
@@ -408,6 +409,17 @@ class HostLifecycleTests(unittest.TestCase):
             lifecycle.request_stop(fake_root, 2)
         self.assertEqual(caught.exception.code, "stop_cleanup_unknown")
         fake.wait(timeout=CHILD_DEADLINE)
+
+    def test_cleanup_control_failure_is_explicit_uncertainty(self):
+        controller = lifecycle.Controller(lifecycle.load_config(self.config_path))
+        controller.domain = mock.Mock(path=Path("/sys/fs/cgroup/example"))
+        controller.domain.cleanup.side_effect = lifecycle.LifecycleRefused(
+            "cleanup_unknown", "injected control failure"
+        )
+        receipt = controller._cleanup_current_safely()
+        self.assertFalse(receipt["quiescent"])
+        self.assertEqual(receipt["error"], "cleanup_unknown")
+        self.assertEqual(receipt["ownership_domain"], "cgroup_v2")
 
     def test_undelegated_pids_controller_refuses_before_launch(self):
         undelegated = Path("/sys/fs/cgroup") / (

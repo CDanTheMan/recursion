@@ -92,6 +92,11 @@ Native Linux under WSL Ubuntu-24.04:
   access 19 pass in 5.581 seconds, with preservation/scope/diff passing. Astra reran 16 in 4.392
   seconds, 18 in 3.346 seconds and 19 in 5.586 seconds before its admission probes failed it.
 - First delegation/authorization remediation suite: 18 tests, pass, 4.076 seconds.
+- Exact clean admission candidate then passed 18 lifecycle tests in 4.305 seconds, 18 P1 tests in
+  2.113 seconds and 19 P2 access tests in 5.600 seconds; preservation/scope/diff also passed.
+- A final local audit made cleanup-control errors persist explicit non-quiescent uncertainty rather
+  than leave the last transition apparently healthy. Its focused regression expanded the suite to
+  19 tests, pass, 4.028 seconds.
 - Real fixture processes covered competing watchdogs, client disconnect, crash/restart, restart
   exhaustion, stale and active socket handling, stale unrelated PID preservation, old-incarnation
   health rejection, owned-tree cleanup and PAUSE/disabled refusal.
