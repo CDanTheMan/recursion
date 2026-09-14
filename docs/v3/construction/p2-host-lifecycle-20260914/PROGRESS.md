@@ -49,6 +49,15 @@ success to a quiescent receipt, updates availability with health, and binds sour
 clean HEAD plus five additions. Focused regressions reproduce the review failures. Exact final
 review evidence is recorded in the final documentation commit on this branch.
 
+Astra review of exact remediation candidate `22f90f705c0274160b6b59fb5a428de5399be9a9`
+closed the six prior findings but found three related ownership-domain failures: a child forked
+after discovery could survive a quiescent receipt, numeric ancestry discovery could adopt an
+unrelated reused PID, and the discovery-limit error could leak a pidfd while leaving processes
+frozen. That candidate is also retained as failed review evidence. The second remediation removes
+numeric descendant discovery entirely. The service enters a dedicated cgroup-v2 domain before
+`exec`; all forks inherit it, `pids.max=256` bounds it, and atomic `cgroup.kill` defines quiescence.
+Pidfds remain only for the verified controller Stop signal.
+
 ## Coverage so far
 
 Native Linux under WSL Ubuntu-24.04:
@@ -63,6 +72,12 @@ Native Linux under WSL Ubuntu-24.04:
 - Remediation suite: 15 tests, pass, 3.351 seconds; affected-gate rerun: 15 pass in 3.423 seconds.
 - Affected frozen regressions after remediation: P1 18 pass in 2.113 seconds; P2 access 19 pass in
   5.577 seconds.
+- Clean first-remediation candidate: lifecycle 15 pass in 3.495 seconds, P1 18 pass in 2.115
+  seconds, P2 access 19 pass in 5.581 seconds, with preservation/scope/diff passing. Astra reran 15
+  in 3.625 seconds, 18 in 2.168 seconds and 19 in 5.598 seconds before its adversarial tree probes
+  failed the candidate.
+- First cgroup-domain suite: 15 tests, pass, 3.561 seconds. An added unobserved-fork regression then
+  expanded the suite to 16 tests, pass, 4.035 seconds.
 - Real fixture processes covered competing watchdogs, client disconnect, crash/restart, restart
   exhaustion, stale and active socket handling, stale unrelated PID preservation, old-incarnation
   health rejection, owned-tree cleanup and PAUSE/disabled refusal.
@@ -98,6 +113,9 @@ Not run:
 - Astra review of `2b28a596978845dce2b732d74bbd93cfea578a4b` returned six actionable findings despite
   all 48 supplied tests passing. That failed review receipt is retained above; the exact candidate
   was not treated as final.
+- Astra review of `22f90f705c0274160b6b59fb5a428de5399be9a9` returned three actionable tree-domain
+  findings despite all 52 supplied tests passing. Its two surviving-child probes and modeled stale
+  discovery probe were cleaned by the reviewer; the candidate was not treated as final.
 - The first expanded remediation suite completed 15 tests in 3.403 seconds with one error: the
   restart receipt assertion expected `cleanup` in the new running state. The implementation now
   intentionally carries the most recent verified receipt as `last_cleanup`; the corrected suite

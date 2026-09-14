@@ -220,121 +220,91 @@ def _pidfd_alive(descriptor):
     return not poller.poll(0)
 
 
-def _descendant_pids(root_pid):
-    parents = {}
-    for entry in Path("/proc").iterdir():
-        if not entry.name.isdigit():
-            continue
+class CgroupDomain:
+    """A cgroup-v2 ownership domain inherited by every service descendant."""
+
+    MAX_PROCESSES = 256
+
+    def __init__(self, delegated_root, state_root):
+        root = Path(delegated_root).resolve(strict=True)
+        cgroup_mount = Path("/sys/fs/cgroup")
+        _require(root == cgroup_mount or cgroup_mount in root.parents,
+                 "platform_unavailable", "cgroup root is outside the cgroup-v2 mount")
+        _require((root / "cgroup.procs").is_file() and (root / "cgroup.events").is_file(),
+                 "platform_unavailable", "delegated cgroup-v2 root is unavailable")
+        name = "recursion-p2-" + hashlib.sha256(str(state_root).encode("utf-8")).hexdigest()[:20]
+        self.root = root
+        self.path = root / name
+
+    def ensure(self):
         try:
-            raw = (entry / "stat").read_text(encoding="utf-8")
-            closing = raw.rfind(")")
-            fields = raw[closing + 2 :].split()
-            if closing > 0 and len(fields) >= 2 and fields[0] != "Z":
-                parents[int(entry.name)] = int(fields[1])
-        except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError):
-            continue
-    descendants = set()
-    frontier = {root_pid}
-    while frontier:
-        found = {pid for pid, parent in parents.items() if parent in frontier and pid not in descendants}
-        descendants.update(found)
-        frontier = found
-    return descendants
+            self.path.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            raise LifecycleRefused("platform_unavailable", "service cgroup cannot be created") from exc
+        _require(self.path.is_dir() and not self.path.is_symlink(),
+                 "state_refused", "service cgroup path is unsafe")
+        for name in ("cgroup.procs", "cgroup.events", "cgroup.kill"):
+            _require((self.path / name).is_file(), "platform_unavailable",
+                     "service cgroup lacks required control files")
+        limit = self.path / "pids.max"
+        if limit.is_file():
+            try:
+                limit.write_text(str(self.MAX_PROCESSES), encoding="ascii")
+            except OSError as exc:
+                raise LifecycleRefused("platform_unavailable", "service cgroup process bound cannot be set") from exc
 
+    def join_current(self):
+        # Executed in the Popen child before exec; all later forks inherit the domain.
+        (self.path / "cgroup.procs").write_text(str(os.getpid()), encoding="ascii")
 
-class OwnedTree:
-    """Kernel-pinned handles for one service tree; never signals numeric PIDs."""
-
-    MAX_MEMBERS = 256
-
-    def __init__(self, root_identity, *, known=(), process=None):
-        self.root_identity = root_identity
-        self.process = process
-        self.handles = {}
-        for identity in (root_identity, *known):
-            if isinstance(identity, dict):
-                self._pin(identity, required=identity is root_identity)
-
-    def _pin(self, identity, *, required=False):
-        pid = identity.get("pid") if isinstance(identity, dict) else None
-        if pid in self.handles:
-            return False
+    def populated(self):
         try:
-            descriptor = _open_verified_pidfd(identity)
-        except LifecycleRefused:
-            if required:
-                raise
-            return False
-        _require(len(self.handles) < self.MAX_MEMBERS, "cleanup_unknown", "owned process tree exceeds bound")
-        self.handles[pid] = (dict(identity), descriptor)
-        return True
+            fields = dict(
+                line.split(None, 1)
+                for line in (self.path / "cgroup.events").read_text(encoding="ascii").splitlines()
+                if line.strip()
+            )
+        except (OSError, ValueError) as exc:
+            raise LifecycleRefused("cleanup_unknown", "service cgroup state is unavailable") from exc
+        _require(fields.get("populated") in {"0", "1"},
+                 "cleanup_unknown", "service cgroup populated state is invalid")
+        return fields["populated"] == "1"
 
-    def refresh(self):
-        added = False
-        root_pid = self.root_identity.get("pid")
-        for pid in sorted(_descendant_pids(root_pid)):
-            if pid in self.handles:
-                continue
+    def process_count(self):
+        try:
+            values = (self.path / "cgroup.procs").read_text(encoding="ascii").splitlines()
+        except OSError as exc:
+            raise LifecycleRefused("cleanup_unknown", "service cgroup membership is unavailable") from exc
+        _require(len(values) <= self.MAX_PROCESSES, "cleanup_unknown", "service cgroup exceeds process bound")
+        return len(values)
+
+    def cleanup(self, timeout, process=None):
+        self.ensure()
+        before = self.process_count()
+        kill_sent = False
+        if self.populated():
             try:
-                identity = process_identity(pid)
-            except LifecycleRefused:
-                continue
-            if self._pin(identity):
-                added = True
-        return added
-
-    def identities(self):
-        return [self.handles[pid][0] for pid in sorted(self.handles)]
-
-    def _alive(self):
-        return [(pid, value) for pid, value in self.handles.items() if _pidfd_alive(value[1])]
-
-    @staticmethod
-    def _signal(values, number):
-        sent = False
-        for _pid, (_identity, descriptor) in values:
-            try:
-                signal.pidfd_send_signal(descriptor, number)
-                sent = True
-            except ProcessLookupError:
-                pass
-        return sent
-
-    def cleanup(self, timeout):
-        # Freeze the root first, then discover/freeze descendants to close the
-        # fork-vs-signal window. All later signals use the pinned pidfds.
-        alive = self._alive()
-        if not alive:
-            return {"term_sent": False, "kill_sent": False, "quiescent": True,
-                    "member_count": len(self.handles), "pidfd_bound": True}
-        self._signal(alive, signal.SIGSTOP)
-        while self.refresh():
-            self._signal(self._alive(), signal.SIGSTOP)
-        alive = sorted(self._alive(), key=lambda item: item[0] == self.root_identity["pid"])
-        term_sent = self._signal(alive, signal.SIGTERM)
-        self._signal(alive, signal.SIGCONT)
+                (self.path / "cgroup.kill").write_text("1", encoding="ascii")
+                kill_sent = True
+            except OSError as exc:
+                raise LifecycleRefused("cleanup_unknown", "service cgroup kill failed") from exc
         deadline = time.monotonic() + timeout
-        while self._alive() and time.monotonic() < deadline:
-            if self.process is not None:
-                self.process.poll()
+        while self.populated() and time.monotonic() < deadline:
+            if process is not None:
+                process.poll()
             time.sleep(0.02)
-        remaining = self._alive()
-        kill_sent = self._signal(remaining, signal.SIGKILL) if remaining else False
-        deadline = time.monotonic() + timeout
-        while self._alive() and time.monotonic() < deadline:
-            if self.process is not None:
-                self.process.poll()
-            time.sleep(0.02)
-        if self.process is not None:
-            self.process.poll()
-        return {"term_sent": term_sent, "kill_sent": kill_sent,
-                "quiescent": not self._alive(), "member_count": len(self.handles),
-                "pidfd_bound": True}
-
-    def close(self):
-        for _identity, descriptor in self.handles.values():
-            os.close(descriptor)
-        self.handles.clear()
+        if process is not None:
+            process.poll()
+        return {
+            "term_sent": False,
+            "kill_sent": kill_sent,
+            "quiescent": not self.populated(),
+            "member_count": before,
+            "ownership_domain": "cgroup_v2",
+            "domain": str(self.path),
+        }
 
 
 class WatchdogLock:
@@ -438,6 +408,7 @@ def load_config(filename):
         "socket_path",
         "grants_file",
         "state_root",
+        "cgroup_root",
         "pause_path",
         "restart_cap",
         "backoff_initial_seconds",
@@ -460,6 +431,7 @@ def load_config(filename):
         "socket_path",
         "grants_file",
         "state_root",
+        "cgroup_root",
         "pause_path",
     ):
         value[name] = str(_absolute_path(value[name], name))
@@ -576,10 +548,23 @@ def fixture_child(socket_path, spec_path, incarnation):
     spec = _load_json(spec_path, MAX_FIXTURE_BYTES)
     expected = {"mode", "launch_count_path", "grandchild_pid_path", "exit_delay_seconds"}
     _require(set(spec) == expected, "fixture_refused", "fixture spec fields differ")
-    _require(spec["mode"] in {"stable", "crash_once", "always_crash"}, "fixture_refused", "fixture mode differs")
+    _require(spec["mode"] in {"stable", "crash_once", "always_crash", "fork_then_crash_once"},
+             "fixture_refused", "fixture mode differs")
     launch_count = _fixture_counter(_absolute_path(spec["launch_count_path"], "launch_count_path"))
     delay = spec["exit_delay_seconds"]
     _require(type(delay) in {int, float} and 0 <= delay <= 2, "fixture_refused", "fixture delay is invalid")
+    if spec["mode"] == "fork_then_crash_once" and launch_count == 1:
+        grandchild = subprocess.Popen(
+            [sys.executable, "-X", "utf8", "-B", "-m",
+             "tools.construction_swarm.p2_host_lifecycle", "fixture-grandchild"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+        Path(spec["grandchild_pid_path"]).write_text(str(grandchild.pid), encoding="ascii")
+        time.sleep(delay)
+        return 23
     if spec["mode"] == "always_crash" or (spec["mode"] == "crash_once" and launch_count == 1):
         time.sleep(delay)
         return 23
@@ -646,7 +631,7 @@ class Controller:
         self.stop = threading.Event()
         self.process = None
         self.service_identity = None
-        self.service_tree = None
+        self.domain = None
         self.last_cleanup = None
         self.state = None
 
@@ -660,7 +645,7 @@ class Controller:
             "service_fence": incarnation,
             "canonical_writer_authority": False,
             "service_identity": self.service_identity,
-            "service_tree": self.service_tree.identities() if self.service_tree is not None else [],
+            "service_domain": str(self.domain.path) if self.domain is not None else None,
             "socket_path": self.config["socket_path"],
             "health": health,
             "unavailable": health != "running",
@@ -724,22 +709,25 @@ class Controller:
 
     def _launch(self, incarnation):
         argv = self._child_argv(incarnation)
-        self.process = subprocess.Popen(
-            argv,
-            cwd=self.config["repository_root"],
-            env=self._environment(),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
-        )
+        try:
+            self.process = subprocess.Popen(
+                argv,
+                cwd=self.config["repository_root"],
+                env=self._environment(),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                preexec_fn=self.domain.join_current,
+                close_fds=True,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise LifecycleRefused("launch_refused", "service could not enter its ownership domain") from exc
         try:
             self.service_identity = process_identity(self.process.pid)
         except LifecycleRefused:
             if self.process.poll() is not None:
                 self.service_identity = None
-                self.service_tree = None
                 return
             raise
         _require(
@@ -747,7 +735,6 @@ class Controller:
             "launch_refused",
             "service did not become process-group leader",
         )
-        self.service_tree = OwnedTree(self.service_identity, process=self.process)
 
     def _ready(self):
         deadline = time.monotonic() + self.config["startup_timeout_seconds"]
@@ -761,11 +748,8 @@ class Controller:
         return False
 
     def _cleanup_current(self):
-        if self.service_tree is None:
-            return {"term_sent": False, "kill_sent": False, "quiescent": True,
-                    "member_count": 0, "pidfd_bound": True}
-        self.service_tree.refresh()
-        return self.service_tree.cleanup(self.config["shutdown_timeout_seconds"])
+        _require(self.domain is not None, "cleanup_unknown", "service ownership domain is unavailable")
+        return self.domain.cleanup(self.config["shutdown_timeout_seconds"], self.process)
 
     def _reconcile_previous(self, previous):
         notes = []
@@ -783,15 +767,11 @@ class Controller:
                 "prior incarnation is invalid",
             )
             identity = previous.get("service_identity")
-            recorded_tree = previous.get("service_tree", [])
-            _require(isinstance(recorded_tree, list), "state_refused", "prior service tree is invalid")
-            known = [item for item in recorded_tree if isinstance(item, dict) and item != identity]
-            matching = [item for item in ([identity] + known) if isinstance(item, dict) and identity_matches(item)]
-            if matching:
-                root = identity if isinstance(identity, dict) and identity_matches(identity) else matching[0]
-                tree = OwnedTree(root, known=[item for item in matching if item != root])
-                cleanup = tree.cleanup(self.config["shutdown_timeout_seconds"])
-                tree.close()
+            recorded_domain = previous.get("service_domain")
+            _require(recorded_domain in {None, str(self.domain.path)},
+                     "state_refused", "prior service ownership domain differs")
+            if self.domain.populated():
+                cleanup = self.domain.cleanup(self.config["shutdown_timeout_seconds"])
                 _require(cleanup["quiescent"], "cleanup_unknown", "prior owned service did not quiesce")
                 notes.append("prior_owned_service_quiesced")
             elif isinstance(identity, dict):
@@ -811,6 +791,8 @@ class Controller:
         old_handlers = {}
         try:
             self.store = StateStore(self.root)
+            self.domain = CgroupDomain(self.config["cgroup_root"], self.root)
+            self.domain.ensure()
             previous = self.store.read()
             incarnation, reconciliation = self._reconcile_previous(previous)
             restart_count = 0
@@ -830,14 +812,23 @@ class Controller:
                     return 5
                 incarnation += 1
                 self.service_identity = None
-                self.service_tree = None
                 self._write(
                     incarnation,
                     restart_count,
                     "starting",
                     reconciliation=reconciliation,
                 )
-                self._launch(incarnation)
+                try:
+                    self._launch(incarnation)
+                except LifecycleRefused as exc:
+                    self._write(
+                        incarnation,
+                        restart_count,
+                        "outage",
+                        reconciliation=reconciliation,
+                        outage_reason=exc.code,
+                    )
+                    return 6
                 self._write(
                     incarnation,
                     restart_count,
@@ -846,8 +837,6 @@ class Controller:
                 )
                 ready = self._ready()
                 if ready:
-                    if self.service_tree is not None:
-                        self.service_tree.refresh()
                     self._write(
                         incarnation,
                         restart_count,
@@ -855,13 +844,6 @@ class Controller:
                         reconciliation=reconciliation,
                     )
                 while ready and not self.stop.is_set() and self.process.poll() is None:
-                    if self.service_tree is not None and self.service_tree.refresh():
-                        self._write(
-                            incarnation,
-                            restart_count,
-                            "running",
-                            reconciliation=reconciliation,
-                        )
                     time.sleep(0.03)
                 if self.stop.is_set():
                     self._write(incarnation, restart_count, "stopping", reconciliation=reconciliation)
@@ -876,8 +858,6 @@ class Controller:
                         cleanup=cleanup,
                         outage_reason=None if cleanup["quiescent"] else "cleanup_unknown",
                     )
-                    if self.service_tree is not None:
-                        self.service_tree.close()
                     return 0 if cleanup["quiescent"] else 6
                 exit_code = self.process.poll()
                 cleanup = self._cleanup_current()
@@ -893,8 +873,6 @@ class Controller:
                         last_exit_code=exit_code,
                         cleanup=cleanup,
                     )
-                    if self.service_tree is not None:
-                        self.service_tree.close()
                     return 6
                 try:
                     socket_note = reconcile_socket(self.config["socket_path"])
@@ -909,8 +887,6 @@ class Controller:
                         last_exit_code=exit_code,
                         cleanup=cleanup,
                     )
-                    if self.service_tree is not None:
-                        self.service_tree.close()
                     return 6
                 if restart_count >= self.config["restart_cap"]:
                     self._write(
@@ -922,8 +898,6 @@ class Controller:
                         last_exit_code=exit_code,
                         cleanup=cleanup,
                     )
-                    if self.service_tree is not None:
-                        self.service_tree.close()
                     return 4
                 restart_count += 1
                 backoff = min(
@@ -947,19 +921,17 @@ class Controller:
                         reconciliation=reconciliation,
                         cleanup={"term_sent": False, "kill_sent": False, "quiescent": True},
                     )
-                    if self.service_tree is not None:
-                        self.service_tree.close()
                     return 0
-                if self.service_tree is not None:
-                    self.service_tree.close()
         finally:
-            if self.service_tree is not None and self.service_tree._alive():
+            try:
+                populated = self.domain is not None and self.domain.populated()
+            except LifecycleRefused:
+                populated = False
+            if populated:
                 try:
                     self._cleanup_current()
                 except LifecycleRefused:
                     pass
-            if self.service_tree is not None and self.service_tree.handles:
-                self.service_tree.close()
             for number, handler in old_handlers.items():
                 signal.signal(number, handler)
             self.lock.release()

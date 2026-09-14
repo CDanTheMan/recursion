@@ -16,10 +16,11 @@ exclusive watchdog lock and only then reconciles prior state. A competing contro
 
 Each service launch gets a monotonically increasing persisted incarnation. The same integer is
 passed to `p2_access` as its read-service fence and is recorded with the service PID, Linux boot ID,
-`/proc` start ticks, process group and command-line digest. The controller then binds each verified
-identity to a Linux pidfd before any signal; it never signals a numeric PID or process group. A
-bounded set of discovered descendants is persisted and kernel-pinned. Cleanup freezes the pinned
-tree before a final descendant scan, then signals only those handles. A read-service fence is only an access
+`/proc` start ticks, process group and command-line digest. Before service `exec`, the child joins a
+dedicated cgroup-v2 ownership domain with a 256-process limit; every later fork inherits that domain
+even after reparenting. Tree cleanup uses the kernel's atomic `cgroup.kill`, never discovered or
+numeric PIDs. The operator Stop signal to the controller itself is sent through a verified pidfd. A
+read-service fence is only an access
 service incarnation: state always records `canonical_writer_authority=false`; it is not a Hermes or
 P1 leader fence and grants no mutation authority.
 
@@ -62,6 +63,7 @@ these fields:
   "socket_path": "/run/user/1000/recursion-construction-read.sock",
   "grants_file": "/var/lib/recursion-foundry/access/read-grants.json",
   "state_root": "/var/lib/recursion-foundry/run/p2-read-lifecycle",
+  "cgroup_root": "/sys/fs/cgroup/recursion-p2-delegated",
   "pause_path": "/var/lib/recursion-foundry/run/PAUSE",
   "restart_cap": 3,
   "backoff_initial_seconds": 1.0,
@@ -73,7 +75,9 @@ these fields:
 
 `source_commit` must be lowercase 40-character hex and must equal `repository_root` HEAD. Linux
 pidfd support is required. A discovered service tree is capped at 256 members. The
-repository must contain `p2_access.py`; all paths must be absolute. Timeouts are individually
+repository must contain `p2_access.py`; all paths must be absolute. `cgroup_root` must be an
+operator-provisioned writable cgroup-v2 delegation beneath `/sys/fs/cgroup`; the controller creates
+one deterministic child domain there but does not configure delegation or install a service. Timeouts are individually
 bounded to 15 seconds and the restart cap to ten. The config and grants paths must be regular,
 non-symlink files. This packet does not create those files or choose their production locations.
 
@@ -95,7 +99,8 @@ Manual bounded stop from Linux/WSL:
 python3 -X utf8 -B -m tools.construction_swarm.p2_host_lifecycle stop --state-root /var/lib/recursion-foundry/run/p2-read-lifecycle --timeout 15
 ```
 
-State is in `state.json` beneath the configured state root. Operators must treat missing state,
+State is in `state.json` beneath the configured state root and names the exact service cgroup.
+Operators must treat missing state,
 non-`running` health, a stale `observation_time`, an identity mismatch or a failed read as
 unavailable—not infer health from a PID alone. `PAUSE`/disabled inputs prevent a new controller
 start and are not changed by the controller.
@@ -158,8 +163,9 @@ repair by weakening a gate or deleting evidence.
 - No real canonical Hermes adapter, canonical ledger reader or live artifact manifest exists.
 - The controller records transition health; it does not perform semantic read-protocol liveness
   probes while the child remains running.
-- Tree discovery is bounded to 256 processes and relies on Linux `/proc` plus pidfds; unsupported
-  kernels refuse rather than falling back to numeric PID signaling.
+- The service ownership domain relies on delegated cgroup v2 with `cgroup.kill` and `pids.max`; the
+  controller pid signal relies on pidfds. Unsupported or undelegated hosts refuse rather than
+  falling back to numeric PID signaling.
 - Remote transport, grant provisioning/revocation and credential rotation remain outside scope.
 - All disruptive Windows/WSL lifecycle qualification rows above remain `specified_not_run`.
 - This packet does not qualify S03/S04 as a whole, launch providers/workers, mutate canonical

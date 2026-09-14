@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 from pathlib import Path
 
 from tools.construction_swarm import p2_host_lifecycle as lifecycle
@@ -78,6 +79,10 @@ class HostLifecycleTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="p2-host-lifecycle-")
         self.root = Path(self.temporary.name)
+        self.cgroup_root = Path("/sys/fs/cgroup") / (
+            f"recursion-p2-test-{os.getpid()}-{uuid.uuid4().hex}"
+        )
+        self.cgroup_root.mkdir(mode=0o700)
         self.processes = []
         self.unrelated = []
         self.config_path = self.root / "config.json"
@@ -113,6 +118,14 @@ class HostLifecycleTests(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=3)
+        for domain in self.cgroup_root.iterdir():
+            if domain.is_dir():
+                events = domain / "cgroup.events"
+                if events.is_file() and "populated 1" in events.read_text(encoding="ascii"):
+                    (domain / "cgroup.kill").write_text("1", encoding="ascii")
+                    _wait_until(lambda: "populated 0" in events.read_text(encoding="ascii"), timeout=3)
+                domain.rmdir()
+        self.cgroup_root.rmdir()
         self.temporary.cleanup()
 
     def write_config(self, **overrides):
@@ -125,6 +138,7 @@ class HostLifecycleTests(unittest.TestCase):
             "socket_path": str(self.socket_path),
             "grants_file": str(self.grants_path),
             "state_root": str(self.state_root),
+            "cgroup_root": str(self.cgroup_root),
             "pause_path": str(self.pause_path),
             "restart_cap": 2,
             "backoff_initial_seconds": 0.05,
@@ -246,15 +260,10 @@ class HostLifecycleTests(unittest.TestCase):
     def test_killed_leader_cleans_pinned_descendant_before_restart(self):
         self.write_fixture("stable", grandchild=True)
         controller = self.start()
-        first = _wait_until(
-            lambda: (
-                value
-                if (value := self.state()).get("health") == "running"
-                and len(value.get("service_tree", [])) >= 2
-                else None
-            )
-        )
+        first = self.wait_health("running")
         old_grandchild = int(self.grandchild_pid_path.read_text(encoding="ascii"))
+        domain = Path(first["service_domain"])
+        _wait_until(lambda: len((domain / "cgroup.procs").read_text(encoding="ascii").splitlines()) >= 2)
         os.kill(first["service_identity"]["pid"], signal.SIGKILL)
         restarted = _wait_until(
             lambda: (
@@ -266,7 +275,29 @@ class HostLifecycleTests(unittest.TestCase):
         )
         self.assertFalse(_pid_exists(old_grandchild))
         self.assertTrue(restarted["last_cleanup"]["quiescent"])
-        self.assertTrue(restarted["last_cleanup"]["pidfd_bound"])
+        self.assertEqual(restarted["last_cleanup"]["ownership_domain"], "cgroup_v2")
+        self.stop(controller)
+
+    def test_unobserved_fork_survives_leader_only_until_domain_cleanup(self):
+        self.write_fixture("fork_then_crash_once", grandchild=True)
+        controller = self.start()
+        old_grandchild = int(_wait_until(
+            lambda: self.grandchild_pid_path.read_text(encoding="ascii")
+            if self.grandchild_pid_path.exists()
+            else None
+        ))
+        restarted = _wait_until(
+            lambda: (
+                value
+                if (value := self.state()).get("health") == "running"
+                and value.get("restart_count") == 1
+                else None
+            )
+        )
+        self.assertFalse(_pid_exists(old_grandchild))
+        self.assertTrue(restarted["last_cleanup"]["quiescent"])
+        self.assertGreaterEqual(restarted["last_cleanup"]["member_count"], 1)
+        self.assertEqual(restarted["last_cleanup"]["ownership_domain"], "cgroup_v2")
         self.stop(controller)
 
     def test_restart_exhaustion_is_explicit_outage(self):
@@ -414,6 +445,7 @@ class HostLifecycleTests(unittest.TestCase):
                     "socket_path": str(case_root / "read.sock"),
                     "grants_file": str(grants),
                     "state_root": str(case_root / "state"),
+                    "cgroup_root": str(self.cgroup_root),
                     "pause_path": str(pause),
                     "restart_cap": 1,
                     "backoff_initial_seconds": 0.05,
