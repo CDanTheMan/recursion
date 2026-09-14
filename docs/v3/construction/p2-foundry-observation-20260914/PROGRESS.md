@@ -94,6 +94,27 @@ additive focused source check confirmed exact `TASK_BASE`, the five dependency b
 clean branch and exactly the four allowed new paths. `git diff --check TASK_BASE HEAD`
 also exited 0.
 
+Candidate `9b25a10aeb9281e3961ea7df8ed3b2772fe760cf` was not approved. During
+self-audit, before its Astra review completed, the actual `foundry_tools.py` producer was
+rechecked and showed that every tool-manifest row has `number`, `sha256`, and `name`. The
+candidate verifier required only the first two fields, so real returned work using tools
+would have been reported unavailable despite the synthetic fixture passing. The obsolete
+review was interrupted and produced no verdict.
+
+The repair uses the exact three-field row, binds `name` and `number` back to the verified
+request, requires receipt outcome identity, and makes contradictory head decisions
+unavailable instead of accepted. Its fixture now has the actual tool row/request shape and
+an injected contradictory-decision control. The evidence file ceiling was also aligned to
+the actual foundry's 32 MiB export ceiling while preserving a finite 64 MiB aggregate
+verification ceiling.
+
+Repaired candidate `1218ec7d891fd912dda5e19c108edfdc34032420` passed from the
+clean native clone:
+
+- focused observation gate: exit 0, 13 tests in 1.056 seconds;
+- P1 regression: exit 0, 18 tests in 1.911 seconds;
+- P2 regression: exit 0, 19 tests in 5.623 seconds.
+
 Independent exact-candidate Astra review remains pending.
 
 ## Limits and negative evidence
