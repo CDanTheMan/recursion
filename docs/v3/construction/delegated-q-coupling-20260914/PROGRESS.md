@@ -89,3 +89,19 @@ two-sided poststate regression. This traverses already restored states and adds
 no model/reference state creation. Final controls are now 38 with 29 fake
 certificate inspections. Both reviewers must inspect the resulting new exact SHA;
 the earlier review 2 PASS is retained but does not approve a changed candidate.
+
+Third reviewed bundle: b23446bd910df1f585165d2c369e8541755ffd1e.
+Root preflight passed 3.828 seconds (preflight-04/receipt.json). Review 1 passed
+the candidate, preflight 3.516 seconds and fake gate 0.875 seconds, with receipt
+C:/Users/Lucas/AppData/Local/Temp/dq-coupling-review1-03/receipt.json.
+Review 2 preflight passed 3.875 seconds; receipt
+C:/Users/Lucas/AppData/Local/Temp/dq-coupling-review2-03/receipt.json. It identified
+a static P2 in newly appended catalog rows: no previous counterpart exists for
+the transition type frame, and original catalog postconditions permit numeric
+aliases on both sides. Root additionally identified normal stage body aliases
+that could become invalid signed evidence. Neither scientific probe was executed.
+Resolved by exact catalog row types and original staged-object authentication at
+every audited prefix, before relation classification. Added two rehashed controls
+and a valid growing-material check. The material checks are separately charged in
+plan.json; the suite now has 40 negative controls / 31 certificate inspections.
+Both final reviewers must review the new complete exact bundle again.

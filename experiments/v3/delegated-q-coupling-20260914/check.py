@@ -85,7 +85,8 @@ def expected_plan():
                         reducer_wrapper_calls=4 * events, transition_audit_calls=2 * events,
                         relation_checks=prefixes, timeout_seconds=2 * histories + 4,
                         output_bytes=(histories + 1) * 1048576)
-    audit = dict(restored_state_visits=2 * prefixes, typed_initial_reference_states=2 * histories, transition_audit_calls=2 * events,
+    audit = dict(restored_state_visits=2 * prefixes, typed_initial_reference_states=2 * histories,
+                 material_state_checks=2 * prefixes, transition_audit_calls=2 * events,
                  relation_checks=prefixes, timeout_seconds=histories + 4, output_bytes=1048576)
     return dict(format='delegated-q-plan/1', TASK_BASE=BASE,
                 parent='goal-recursion-v2-execution-fabric',
@@ -98,6 +99,7 @@ def expected_plan():
                                 scientific_bundles=3, independent_scientific_reviewer_reruns=2,
                                 aggregate_new_state_visits=3 * (4 * prefixes + 2 * prefixes + 4 * histories),
                                 aggregate_transition_audit_calls=3 * 4 * events,
+                                aggregate_material_state_checks=3 * 2 * prefixes,
                                 aggregate_reducer_wrapper_calls=3 * 4 * events,
                                 aggregate_seconds=3 * (construction['timeout_seconds'] + audit['timeout_seconds']),
                                 aggregate_output_bytes=3 * (construction['output_bytes'] + audit['output_bytes']),

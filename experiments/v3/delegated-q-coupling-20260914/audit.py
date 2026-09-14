@@ -48,6 +48,23 @@ def type_frame(before, after):
             type_frame(old, new)
 
 
+def material_state(state, kernel):
+    """Typed newly allocated material in the declared DQ-16 domain.
+
+    The original catalogue's five-tuple schema also applies to newly appended
+    rows, for which a before/after leaf comparison has no previous counterpart.
+    Normal staged objects must authenticate before any relation verdict is used.
+    """
+    catalog = state['catalog']
+    demand(type(catalog) is tuple, 'typed catalog container')
+    for row in catalog:
+        demand(type(row) is tuple and len(row) == 5, 'typed catalog row')
+        demand(type(row[0]) is str and type(row[1]) is tuple and type(row[2]) is tuple
+               and type(row[3]) is int and type(row[4]) is int, 'typed catalog fields including new rows')
+    if state['staged']:
+        kernel.audit_original_staged(state['staged'])
+
+
 def decode(node, envelope_type):
     demand(type(node) is list and len(node) == 2, 'typed transport node')
     tag, body = node
@@ -128,6 +145,8 @@ def inspect(cert, binding, entry, profile, kernel):
     demand(len(cert['rows']) == len(actions) + 1, 'every pre/post prefix required')
     pairs, failures, strict_failures = [], [], []
     for prefix, row in enumerate(cert['rows']):
+        material_state(ss[prefix], kernel)
+        material_state(aa[prefix]['core'], kernel)
         demand(set(row) == {'prefix', 'comparison', 'response', 'q_invoked', 'source_state', 'adapter_state', 'source_prefix', 'adapter_prefix'}, 'row schema')
         demand(type(row['prefix']) is int and row['prefix'] == prefix, 'prefix index')
         demand(row['source_state'] == sha(ss[prefix]) and row['adapter_state'] == sha(aa[prefix]), 'row state bindings')

@@ -140,6 +140,11 @@ class ScientificKernel:
     def audit_row(self, row, case, ss, aa, prefix, pairs):
         self.ia.check(row, self.legacy_case(case, ss, aa), ss, aa, prefix, pairs)
 
+    def audit_original_staged(self, value):
+        # DQ-16 includes normal stage only. Invalid original evidence is a failed
+        # certificate, never a model counterexample inferred from that evidence.
+        require(self.ia.valid_objects(value, value), 'authenticated original typed stage material')
+
     def response(self, source, adapter, action, pairs):
         return self.t.response(source, adapter, action, pairs)
 

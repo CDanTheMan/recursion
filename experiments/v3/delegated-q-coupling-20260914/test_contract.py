@@ -60,7 +60,8 @@ class FakeKernel:
     def initial(self, unit):
         core = dict.fromkeys(self.fields, ())
         core.update(done=0, decision='initial', source_name='',
-                    source_generation=('cut-source', 'collectorA', 'effectA', 0), stage_serial=0, publisher_boot=1)
+                    source_generation=('cut-source', 'collectorA', 'effectA', 0), stage_serial=0, publisher_boot=1,
+                    catalog=(('boot', (), (), 0, 0),))
         ledger = dict.fromkeys(self.journal, ())
         ledger.update(source_generation=core['source_generation'], source_revision=0)
         return dict(core, **ledger), dict(core=core, journal=ledger, done=0, decision='initial', invocations=())
@@ -69,7 +70,8 @@ class FakeKernel:
         # Independent initial expectations, checking even fields unused by the toy actions.
         for state in (source, adapter['core']):
             for key in self.fields:
-                expected = {'source_name': '', 'source_generation': ('cut-source', 'collectorA', 'effectA', 0), 'stage_serial': 0, 'publisher_boot': 1}.get(key, ())
+                expected = {'source_name': '', 'source_generation': ('cut-source', 'collectorA', 'effectA', 0), 'stage_serial': 0, 'publisher_boot': 1,
+                            'catalog': (('boot', (), (), 0, 0),)}.get(key, ())
                 audit.demand(audit.same(state[key], expected), 'inert initial common field ' + key)
             audit.demand(state['done'] == 0 and state['decision'] == 'initial', 'initial bookkeeping')
         for key in self.journal:
@@ -142,6 +144,9 @@ class FakeKernel:
 
     def advance(self, pairs, *args):
         audit.demand(pairs == [], 'no fabricated incarnation pairing')
+
+    def audit_original_staged(self, value):
+        self.audit_object(value)
 
     def compare(self, case, ss, aa, prefix, pairs):
         source, adapter = ss[prefix], aa[prefix]
@@ -256,6 +261,8 @@ def run():
             ('rehash-initial-Q-bool', lambda l, r: r[0]['core'].update(done=False)),
             ('rehash-initial-shared-scalar', lambda l, r: (l[0].update(stage_serial=False), r[0]['core'].update(stage_serial=False))),
             ('rehash-both-sides-poststate-type-alias', lambda l, r: [(l[i].update(publisher_boot=True), r[i]['core'].update(publisher_boot=True)) for i in range(1, len(l))]),
+            ('rehash-new-catalog-row-type-alias', lambda l, r: (l[1].update(catalog=l[1]['catalog'] + (('reserve', (), (), True, False),)), r[1]['core'].update(catalog=r[1]['core']['catalog'] + (('reserve', (), (), True, False),)))),
+            ('rehash-new-stage-body-alias-original-signature', lambda l, r: (l[4].update(staged=(l[4]['staged'][0]._replace(source_generation=('cut-source', 'collectorA', 'effectA', True)), PAYLOAD)), r[4]['core'].update(staged=(r[4]['core']['staged'][0]._replace(source_generation=('cut-source', 'collectorA', 'effectA', True)), PAYLOAD)))),
             ('rehash-live-Q-generation', lambda l, r: r[2]['core'].update(source_generation=('cut-source', 'collectorA', 'effectA', 9))),
             ('rehash-refused-outer-response', lambda l, r: r[3].update(decision='source-attest:ok')),
             ('rehash-refused-Q-mask', lambda l, r: r[3]['core'].update(done=3)),
@@ -281,6 +288,7 @@ def run():
         outcome = relation.experiment(fake_plan, BINDING, kernel, lambda name, cert: emitted.append(cert))
         check.require(len(emitted) == 1 and outcome[0]['status'] == 'finite-domain-pass', 'executable candidate fake path')
         inspect(emitted[0])
+        audit.material_state(dict(catalog=(('boot', (), (), 0, 0), ('reserve', ('owner', 6), (), 1, 0)), staged=signed_fixture()), kernel)
         plan = check.expected_plan()
         check.validate_plan(plan)
         for name, mutate in (
@@ -312,7 +320,7 @@ def run():
         failure = json.loads((timeout_output / 'deadline-failure.json').read_text(encoding='utf8'))
         check.require(failure['status'] == 'FAKE_GATE_TIMEOUT', 'durable owned timeout evidence')
         controls.append(dict(control='owned-deadline-termination', detected=True, reason='child terminated and failure receipt retained'))
-        check.require(len(controls) == 38, 'complete mandatory negative control inventory')
+        check.require(len(controls) == 40, 'complete mandatory negative control inventory')
         check.require(time.monotonic() - started < 60, 'fake command time bound')
         return dict(status='FAKE_CONTRACT_PASS', fake_certificates=attempts, valid_fixtures=3,
                     controls=controls, provider_calls=0, inherited_state_visits=0,

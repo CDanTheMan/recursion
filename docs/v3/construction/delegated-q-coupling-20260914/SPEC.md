@@ -127,3 +127,9 @@ subtrees and rejects int/bool changes at retained numeric leaves. DQ-16 never
 changes those numeric types; ordinary value changes and growing containers still
 need the original full postconditions. This closes two-sided post-initialization
 equality-alias forgeries; type-sensitive hashes alone cannot reject such forgeries.
+New catalog rows have no previous counterpart, so each prefix also checks the
+catalog's original five-tuple schema (string, tuple, tuple, int, int). Every nonempty
+normal staged value must validate its original typed body/signature/payload before
+relation classification. Invalid stage evidence cannot manufacture a semantic
+counterexample. The audit reserves 1,120 material-state checks, 3,360 across three
+bundles, on the already charged restored states; no additional state is generated.
