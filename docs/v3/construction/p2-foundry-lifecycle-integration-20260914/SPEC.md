@@ -63,7 +63,8 @@ No acceptance promotion, canonical Hermes authority, replay cursor, or live-clie
    a changed service instance; a persistent MCP client reconnects successfully.
 6. Stop returns a quiescent receipt, the owned cgroup is empty, and unrelated canary survives.
 7. Retrying a controller at the same source/mapping preserves incarnation monotonicity.
-8. Invalid/aliased/injection-shaped mappings refuse before launch; mismatched prior mapping
+8. Invalid/aliased mappings and injection-shaped project identifiers refuse before launch;
+   valid shell-shaped path text remains a literal argv value; mismatched prior mapping
    refuses without signaling its owned canary or changing inherited domain controls/state.
 9. PAUSE/disabled prevents start; a competing controller starts/signals no service.
 10. Every read preserves source run bytes; malformed/missing data produces unavailable instead
