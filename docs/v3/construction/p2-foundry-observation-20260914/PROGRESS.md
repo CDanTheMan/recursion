@@ -56,6 +56,46 @@ ModuleNotFoundError: No module named 'tools.construction_swarm.p2_foundry_observ
 This is retained missing-implementation evidence, not a passing result. Implementation,
 regressions, exact scope gate and independent Astra review remain pending.
 
+The first implementation run retained two independent failures. Ten of 12 tests failed:
+
+- the evidence verifier called nonexistent `hashlib.compare_digest`; and
+- `Ledger.readonly` created empty SQLite WAL/SHM sidecars, violating the input-directory
+  byte-invariance oracle.
+
+The implementation now uses `hmac.compare_digest` and copies a stable, bounded database
+plus any WAL into a temporary observation snapshot before opening SQLite. A second local
+run passed all behavior cases; only the deliberately dirty-tree scope check failed because
+the new adapter was not yet committed. That failure was not reclassified.
+
+Candidate `c4af7b454b7d914296bda411524bcbf48a9dd62d` passed the clean 12-case
+focused gate. A native Ubuntu-24.04 clone was created at
+`/opt/recursion-foundry/p2-foundry-observation-20260914` rather than using Windows
+worktree Git pointers. On that candidate:
+
+- focused observation gate: exit 0, 12 tests;
+- P1 regression: exit 0, 18 tests; and
+- P2 regression: exit 0, 19 tests.
+
+The snapshot copy was then hardened with whole database/WAL-set pre/post signatures and a
+live committed-WAL control. Candidate `072ebf448055e979a4fa54fbb1ca76c770ee3800`
+passed from the clean native clone:
+
+- focused observation gate: exit 0, 13 tests in 1.034 seconds;
+- P1 regression: exit 0, 18 tests in 1.872 seconds;
+- P2 regression: exit 0, 19 tests in 5.588 seconds.
+
+The live-WAL case observed its committed event without changing database, WAL, SHM or any
+attempt bytes. All fixture trees remained below 32 MiB and no provider, scheduler, worker
+or service path ran.
+
+On the same exact candidate, the existing handoff-preservation check exited 0 with
+`HANDOFF_SOURCE_PASS`, 49 unchanged v3 specifications and zero provider calls. The
+additive focused source check confirmed exact `TASK_BASE`, the five dependency blobs, a
+clean branch and exactly the four allowed new paths. `git diff --check TASK_BASE HEAD`
+also exited 0.
+
+Independent exact-candidate Astra review remains pending.
+
 ## Limits and negative evidence
 
 - Temporary fixture bytes are capped below 32 MiB; child commands use 15-second timeouts
