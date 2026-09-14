@@ -81,8 +81,9 @@ missing paths, malformed or partial SQLite/JSON, schema drift, inconsistent plan
 oversized evidence refuse or appear explicitly unavailable. Valid in-flight absence is not
 treated as corruption.
 
-Limits are 32 MiB per database, 32 MiB aggregate evidence verification per request,
-16 MiB per evidence file, 1 MiB returned artifact slices, 256 jobs, 2,048 attempts,
+Limits are 32 MiB per database, 64 MiB aggregate evidence verification per request,
+32 MiB per evidence file (matching the foundry export ceiling), 1 MiB returned artifact
+slices, 256 jobs, 2,048 attempts,
 4,096 events, 100 projects, and the inherited P2 request/response, reader and timeout
 bounds. Tests use temporary fixtures under 32 MiB, no child over 15 seconds, a focused
 gate ceiling of 120 seconds and zero inference/provider calls.
