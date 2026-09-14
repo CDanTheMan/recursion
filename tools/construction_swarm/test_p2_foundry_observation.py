@@ -259,6 +259,39 @@ class FoundryObservationTests(unittest.TestCase):
         with self.assertRaisesRegex(AccessRefused, "attempts are not a complete admitted prefix"):
             self.read_only(missing, "status", "missing-current", roots=[missing_root])
 
+    def test_legitimate_retry_and_reconciliation_states_remain_observable(self):
+        root = _make_run(self.base, "retry-reconcile", SOURCE_A, full=False)
+        ledger = Ledger(root)
+        try:
+            first = ledger.reserve("queued")
+            ledger.finish("queued", first, "failed", {
+                "job": "queued", "attempt": first, "state": "failed",
+            })
+            ledger.retry("queued", "independent retry evidence")
+            adapter = FoundryObservationAdapter({"retry": root})
+            queued = self.read_only(adapter, "task", "retry", {"task_id": "queued"},
+                                    roots=[root])["data"]["item"]
+            self.assertEqual((queued["foundry_state"], queued["attempt"]["state"]),
+                             ("queued", "failed"))
+
+            second = ledger.reserve("queued")
+            self.assertEqual(second, 2)
+            ledger.recover()
+            unknown = self.read_only(adapter, "task", "retry", {"task_id": "queued"},
+                                     roots=[root])["data"]["item"]
+            self.assertEqual((unknown["foundry_state"], unknown["attempt"]["state"]),
+                             ("unknown", "unknown"))
+            self.assertTrue(unknown["attempt"]["held"])
+
+            ledger.reconcile_failed("queued", second, "f" * 64, terminal="cancelled")
+            cancelled = self.read_only(adapter, "task", "retry", {"task_id": "queued"},
+                                       roots=[root])["data"]["item"]
+            self.assertEqual((cancelled["foundry_state"], cancelled["attempt"]["state"]),
+                             ("cancelled", "cancelled"))
+            self.assertFalse(cancelled["attempt"]["held"])
+        finally:
+            ledger.close()
+
     def test_missing_malformed_and_partial_records_are_bounded(self):
         missing = FoundryObservationAdapter({"missing": self.base / "absent"})
         with self.assertRaisesRegex(AccessRefused, "run directory is unavailable"):

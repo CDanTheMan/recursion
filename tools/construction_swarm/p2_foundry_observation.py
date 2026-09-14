@@ -58,6 +58,17 @@ JOB_STATES = frozenset({
     "failed", "cancelled", "blocked",
 })
 ATTEMPT_STATES = frozenset({"running", "unknown", "returned", "failed", "cancelled"})
+CURRENT_ATTEMPT_STATES = {
+    "queued": frozenset({None, "failed"}),
+    "running": frozenset({"running"}),
+    "unknown": frozenset({"unknown"}),
+    "returned": frozenset({"returned"}),
+    "accepted": frozenset({"returned"}),
+    "rejected": frozenset({"returned"}),
+    "failed": frozenset({"failed"}),
+    "cancelled": frozenset({"cancelled"}),
+    "blocked": frozenset({None, "failed"}),
+}
 COMMON_UNAVAILABLE = frozenset({
     "canonical.adapter",
     "canonical.ledger",
@@ -376,6 +387,10 @@ class FoundryObservationAdapter:
                 if (len(numbers) != row["attempts"] or
                         any(number != expected for expected, number in enumerate(numbers, 1))):
                     _refuse("foundry_unavailable", "foundry attempts are not a complete admitted prefix")
+                current = attempts[row["id"]].get(row["attempts"]) if row["attempts"] else None
+                current_state = current["state"] if current is not None else None
+                if current_state not in CURRENT_ATTEMPT_STATES[row["state"]]:
+                    _refuse("foundry_unavailable", "foundry job and current attempt states conflict")
 
             events = [dict(row) for row in connection.execute(
                 "SELECT seq,at,event,detail FROM events ORDER BY seq LIMIT ?", (MAX_EVENTS + 1,)
