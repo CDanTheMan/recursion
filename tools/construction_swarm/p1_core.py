@@ -115,18 +115,24 @@ class FakeHermes:
 
     def deliver(self, receipt, body):
         """Idempotent canonical transition receipt, called only from an effect boundary."""
-        with self.db:
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
             prior = self.db.execute("SELECT body FROM receipts WHERE receipt=?", (receipt,)).fetchone()
             if prior:
                 if prior["body"] != _json(body):
                     raise IdempotencyConflict("canonical receipt body changed")
+                self.db.commit()
                 return {"receipt": receipt, "duplicate": True}
             self.assert_binding(body)
             self.db.execute("INSERT INTO receipts VALUES(?,?)", (receipt, _json(body)))
             self.db.execute("INSERT INTO transitions VALUES(?,?,?)", (receipt, body["task_id"], body["event"]))
             state = "attempt_accepted" if body["event"] == "attempt_accepted" else "result_received"
             self.db.execute("UPDATE tasks SET state=? WHERE task_id=?", (state, body["task_id"]))
+            self.db.commit()
             return {"receipt": receipt, "duplicate": False}
+        except BaseException:
+            self.db.rollback()
+            raise
 
     def receipt_count(self, task_id, event=None):
         rows = [json.loads(row[0]) for row in self.db.execute("SELECT body FROM receipts")]
@@ -145,13 +151,17 @@ class FakeWorker:
     def launch(self, attempt_id, fence, authorize):
         if self.before_effect:
             self.before_effect()
-        authorize()
-        if self.after_authorize:
-            self.after_authorize()
-        authorize()
-        self.launches.append({"attempt_id": attempt_id, "fence": fence})
-        if self.after_effect:
-            self.after_effect()
+        finish = authorize()
+        failed = True
+        try:
+            if self.after_authorize:
+                self.after_authorize()
+            self.launches.append({"attempt_id": attempt_id, "fence": fence})
+            if self.after_effect:
+                self.after_effect()
+            failed = False
+        finally:
+            finish(not failed)
         return "fake-launch:" + attempt_id + ":" + str(fence)
 
 
@@ -319,9 +329,16 @@ class P1Store:
                             "goal_id": attempt["goal_id"], "source_commit": attempt["source_commit"],
                             "requirements_digest": attempt["requirements_digest"], "content_digest": attempt["content_digest"],
                             "identity": attempt["identity"], "grant_id": attempt["grant_id"], "fence": attempt["fence"]}
-                _require(body.get("event") in {"attempt_accepted", "attempt_result"} and
-                         all(body.get(key) == value for key, value in expected.items()), "outbox envelope mismatch")
-                hermes.deliver(receipt, body)
+                expected["event"] = ("attempt_accepted" if receipt == "attempt-accepted:" + attempt["attempt_id"]
+                                     else "attempt_result" if receipt == "attempt-result:" + attempt["attempt_id"] else None)
+                _require(expected["event"] is not None and body == expected, "outbox envelope mismatch")
+                try:
+                    hermes.deliver(receipt, body)
+                except RevisionConflict:
+                    self.db.execute("UPDATE outbox SET delivery='revision_conflict' WHERE receipt=?", (receipt,))
+                    self.db.execute("UPDATE attempts SET state='revision_conflict' WHERE attempt_id=?", (attempt["attempt_id"],))
+                    self.db.commit()
+                    continue
                 self.db.execute("UPDATE outbox SET delivery='delivered' WHERE receipt=?", (receipt,))
                 self.db.commit()
                 delivered.append(receipt)
@@ -351,11 +368,25 @@ class P1Store:
         launch_identity = self.begin_launch(transport, attempt_id, owner, fence)
 
         def authorize():
-            attempt = self.db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
-            self._attempt_authorized(attempt, transport, owner, fence)
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                attempt = self.db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
+                self._attempt_authorized(attempt, transport, owner, fence)
+            except BaseException:
+                self.db.rollback()
+                raise
+
+            def finish(success):
+                if success:
+                    self.db.commit()
+                else:
+                    self.db.rollback()
+            return finish
 
         receipt = worker.launch(attempt_id, fence, authorize)
         with self.db:
+            attempt = self.db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
+            self._attempt_authorized(attempt, transport, owner, fence)
             row = self.db.execute("SELECT state,launch_identity FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
             if not row or row["state"] != "launch_intent" or row["launch_identity"] != launch_identity:
                 raise P1Refused("launch intent changed before receipt")
@@ -371,12 +402,13 @@ class P1Store:
             _require(fence > crashed_fence, "recovery fence must advance")
             prior = self.db.execute("SELECT 1 FROM recoveries WHERE crashed_fence=?", (crashed_fence,)).fetchone()
             _require(prior is None, "fence already recovered")
-            owned = self.db.execute("SELECT COUNT(*) FROM attempts WHERE fence=? AND state IN ('reserved','launch_intent')",
+            owned = self.db.execute("SELECT COUNT(*) FROM attempts WHERE fence=? AND state IN ('reserved','launch_intent','launched')",
                                     (crashed_fence,)).fetchone()[0]
             _require(owned > 0, "no recoverable crashed-fence attempt")
             self.db.execute("UPDATE attempts SET state='unknown' WHERE fence=? AND state IN ('reserved','launch_intent')",
                             (crashed_fence,))
             self.db.execute("UPDATE outbox SET fence=? WHERE fence=? AND delivery='pending'", (fence, crashed_fence))
+            self.db.execute("UPDATE idempotency SET fence=? WHERE fence=?", (fence, crashed_fence))
             self.db.execute("INSERT INTO recoveries VALUES(?,?,?)", (crashed_fence, fence, owner))
             self.db.commit()
         except BaseException:
@@ -412,7 +444,14 @@ class P1Store:
                      "goal_id": attempt["goal_id"], "source_commit": attempt["source_commit"],
                      "requirements_digest": attempt["requirements_digest"], "content_digest": attempt["content_digest"],
                      "fence": fence, "identity": attempt["identity"], "grant_id": attempt["grant_id"]}
-            hermes.assert_binding(event)
+            try:
+                hermes.assert_binding(event)
+            except RevisionConflict:
+                self.db.execute("INSERT INTO results VALUES(?,?,?,?,?,?,?)", (
+                    attempt_id, expected_revision, idempotency_key, digest, None, "revision_conflict",
+                    "canonical task revision changed"))
+                self.db.commit()
+                raise
             receipt = "attempt-result:" + attempt_id
             self.db.execute("INSERT INTO outbox(receipt,attempt_id,fence,identity,grant_id,body) VALUES(?,?,?,?,?,?)",
                             (receipt, attempt_id, fence, attempt["identity"], attempt["grant_id"], _json(event)))

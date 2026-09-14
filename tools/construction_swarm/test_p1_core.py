@@ -65,6 +65,8 @@ class P1CoreTests(unittest.TestCase):
         attempt = self.store.attempt("attempt-00000001")
         self.assertEqual((attempt["state"], attempt["charge_state"]), ("unknown", "held"))
         self.assertEqual(self.store.attempts_count(), 1)
+        self.assertEqual(self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="crash-reservation"),
+                                           "recovery-incarnation", recovery_fence)["attempt_id"], "attempt-00000001")
         self.assertEqual(self.store.outbox_delivery("attempt-accepted:attempt-00000001"), "pending")
         self.assertEqual(self.store.replay_outbox(self.hermes, "recovery-incarnation", recovery_fence),
                          ["attempt-accepted:attempt-00000001"])
@@ -78,7 +80,7 @@ class P1CoreTests(unittest.TestCase):
         self.store.launch(FakeWorker(), FakeTransport("worker"), accepted["attempt_id"], "leader-a", self.fence)
         self.hermes.amend("task-a")
         with self.assertRaises(RevisionConflict):
-            self.store.submit_result(self.hermes, FakeTransport("worker"), accepted["attempt_id"], 2,
+            self.store.submit_result(self.hermes, FakeTransport("worker"), accepted["attempt_id"], 1,
                                      "result-retry", "leader-a", self.fence)
         self.assertEqual(self.store.result(accepted["attempt_id"])["state"], "revision_conflict")
         self.assertEqual(self.hermes.receipt_count("task-a", "attempt_result"), 0)
@@ -158,13 +160,43 @@ class P1CoreTests(unittest.TestCase):
         self.assertIsNotNone(attempt["launch_identity"])
         self.assertIsNone(attempt["launch_receipt"])
 
-    def test_s02_effect_boundary_rechecks_fence_after_takeover(self):
+    def test_s02_effect_boundary_holds_authorization_transaction_through_fake_effect(self):
         accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)
-        worker = FakeWorker(after_authorize=lambda: self.store.acquire_leader("racing-replacement", takeover=True))
-        with self.assertRaises(FenceRejected):
+        observed = []
+        worker = FakeWorker(after_authorize=lambda: observed.append(self.store.db.in_transaction))
+        self.store.launch(worker, FakeTransport("worker"), accepted["attempt_id"], "leader-a", self.fence)
+        self.assertEqual(observed, [True])
+        self.assertEqual(worker.launches[0]["attempt_id"], accepted["attempt_id"])
+
+    def test_s02_effect_boundary_rechecks_grant_after_before_effect_hook(self):
+        accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)
+        worker = FakeWorker(before_effect=lambda: self.store.revoke("grant-worker-alpha"))
+        with self.assertRaises(PermissionDenied):
             self.store.launch(worker, FakeTransport("worker"), accepted["attempt_id"], "leader-a", self.fence)
         self.assertEqual(worker.launches, [])
-        self.assertEqual(self.store.attempt(accepted["attempt_id"])["state"], "launch_intent")
+
+    def test_s02_recovery_adopts_only_crashed_fence_pending_result_outbox(self):
+        accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)
+        self.store.launch(FakeWorker(), FakeTransport("worker"), accepted["attempt_id"], "leader-a", self.fence)
+        result = self.store.submit_result(self.hermes, FakeTransport("worker"), accepted["attempt_id"], 1,
+                                          "pending-result", "leader-a", self.fence)
+        replacement = self.store.acquire_leader("recovery", takeover=True)
+        with self.assertRaises(FenceRejected):
+            self.store.replay_outbox(self.hermes, "recovery", replacement)
+        self.store.recover_after_crash(self.fence, "recovery", replacement)
+        self.assertEqual(self.store.replay_outbox(self.hermes, "recovery", replacement),
+                         ["attempt-accepted:attempt-00000001", result])
+        self.assertEqual(self.hermes.receipt_count("task-a", "attempt_result"), 1)
+
+    def test_s01_revision_conflict_outbox_does_not_block_later_receipts(self):
+        self.hermes.create_task("task-c", "alpha")
+        first = self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="first"), "leader-a", self.fence)
+        second = self.store.accept(self.hermes, FakeTransport("worker"), self.request("task-c", "alpha", key="second"),
+                                   "leader-a", self.fence)
+        self.hermes.amend("task-a")
+        self.assertEqual(self.store.replay_outbox(self.hermes, "leader-a", self.fence), [second["receipt"]])
+        self.assertEqual(self.store.outbox_delivery(first["receipt"]), "revision_conflict")
+        self.assertEqual(self.hermes.receipt_count("task-c", "attempt_accepted"), 1)
 
     def test_s05_tampered_outbox_envelope_cannot_cross_the_fake_boundary(self):
         accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)

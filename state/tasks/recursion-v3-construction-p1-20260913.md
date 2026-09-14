@@ -64,3 +64,11 @@ for only known crashed-fence outbox intents, stale-outbox refusal after ordinary
 launch receipt uncertainty after an observed fake effect, and outbox-envelope tamper refusal.
 The real child-process/competing-process suite passed 9 tests. This is still fake-boundary
 evidence only; it is neither a live transport nor fleet qualification.
+
+Checkpoint 3 (2026-09-13): the first independent OpenCode Go Muse Spark 1.3 Contributor
+review rejected the initial candidate and supplied ten bounded P1 defects. Remediation made
+canonical receipt mutation transactional; held final fake-effect authorization through the
+effect; retained revised-task evidence; terminalized revision-conflicted outbox rows without
+blocking unrelated rows; strengthened exact envelope checks; and added recovery/idempotency
+and real crash fixtures. The scoped suite passed 12 tests after remediation. A fresh Muse
+review of the next exact commit is still required.
