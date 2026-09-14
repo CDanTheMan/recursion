@@ -48,4 +48,13 @@ actual absence of the known escaped PID, including when test teardown already re
 cgroup. No inherited guard file changed. Outer integration validation also explicitly
 rejects a boolean inner configuration version; inherited source remains untouched.
 Manual invocation and the unrun application/production boundaries are documented in SPEC.
-Corrected exact-candidate gates and review are pending.
+Corrected candidate 8441cdcaf0b2ef86688db277542974688216b318 passed the union gate:
+14 composition tests, 75 regressions, 49 preserved specifications, three source controls,
+and both escaped-child controls. The receipts now contain actual waitpid results and no
+remaining adopted child, including ordinary test teardown's adopted zombies.
+Evidence: /var/lib/recursion-foundry/reviews/p2-foundry-lifecycle-integration-20260914/root-corrected-1/receipt.json.
+
+Final exact-candidate review receipts are recorded externally under the same evidence root;
+the parent handoff identifies the approved full SHA. This documentation does not substitute
+an implementer-authored approval for independent review. All runtime and production limits
+remain as specified; actual app/host qualification and fleet activation have not occurred.
