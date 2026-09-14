@@ -86,7 +86,8 @@ def _returned(ledger, root, job_id, *, accepted=False, content=None):
     packet = encoded({"job": job_id, "attempt": number})
     transport = encoded({"exit_code": 0, "reason": None, "local_quiescent": True})
     export = encoded({"agent": {"model_name": "SWE-2 Max"}, "steps": []})
-    request = encoded({"name": "list_files", "arguments": {}})
+    request = encoded({"name": "list_files", "arguments": {}, "number": 1,
+                       "snapshot_sha256": digest(b"fixture-snapshot")})
     tool_receipt = encoded({"request_sha256": digest(request), "accepted": True})
     _write(attempt / "filing.json", filing)
     _write(attempt / "packet.json", packet)
@@ -104,7 +105,7 @@ def _returned(ledger, root, job_id, *, accepted=False, content=None):
         "transport_sha256": digest(transport),
         "export_sha256": digest(export),
         "filing_sha256": digest(filing),
-        "tool_receipts": [{"number": 1, "sha256": digest(tool_receipt)}],
+        "tool_receipts": [{"number": 1, "sha256": digest(tool_receipt), "name": "list_files"}],
     }
     _write(attempt / "receipt.json", encoded(receipt))
     ledger.finish(job_id, number, "returned", receipt, digest(filing))
@@ -195,6 +196,21 @@ class FoundryObservationTests(unittest.TestCase):
         self.assertFalse(returned["data"]["item"]["acceptance"]["independently_accepted"])
         self.assertTrue(accepted["data"]["item"]["acceptance"]["independently_accepted"])
         self.assertIn("independent fixture review", accepted["data"]["item"]["acceptance"]["reference"])
+
+        db = sqlite3.connect(self.root / "ledger.sqlite")
+        db.execute("INSERT INTO events(at,event,detail) VALUES(?,?,?)", (
+            "2026-09-14T00:00:00Z", "head-decision",
+            encoded({"job": "accepted", "accepted": False,
+                     "reference": "contradictory injected decision",
+                     "automatic_empirical_pass": False}).decode(),
+        ))
+        db.commit()
+        db.close()
+        contradicted = self.read_only(
+            self.adapter, "task", "alpha", {"task_id": "accepted"}
+        )["data"]["item"]["acceptance"]
+        self.assertEqual(contradicted["state"], "unavailable")
+        self.assertFalse(contradicted["independently_accepted"])
 
     def test_running_and_unknown_attempts_remain_held(self):
         for job_id, effect in (("running", "in_flight"), ("unknown", "unknown")):

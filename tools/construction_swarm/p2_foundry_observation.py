@@ -459,7 +459,7 @@ class FoundryObservationAdapter:
         if job["state"] == "accepted":
             valid = [value for value in matches if value.get("accepted") is True and
                      isinstance(value.get("reference"), str) and value["reference"]]
-            if len(valid) == 1 and not malformed:
+            if len(matches) == 1 and len(valid) == 1 and not malformed:
                 return {"state": "accepted", "independently_accepted": True,
                         "scope": "foundry_head_decision", "reference": valid[0]["reference"]}
             return {"state": "unavailable", "independently_accepted": False,
@@ -467,9 +467,10 @@ class FoundryObservationAdapter:
         if job["state"] == "rejected":
             valid = [value for value in matches if value.get("accepted") is False and
                      isinstance(value.get("reference"), str) and value["reference"]]
-            return {"state": "rejected" if len(valid) == 1 and not malformed else "unavailable",
+            coherent = len(matches) == 1 and len(valid) == 1 and not malformed
+            return {"state": "rejected" if coherent else "unavailable",
                     "independently_accepted": False, "scope": "foundry_head_decision",
-                    "reference": valid[0]["reference"] if len(valid) == 1 and not malformed else None}
+                    "reference": valid[0]["reference"] if coherent else None}
         if job["state"] == "returned":
             state = "pending"
         else:
@@ -570,6 +571,9 @@ class FoundryObservationAdapter:
             if receipt.get("job") != job["id"] or receipt.get("attempt") != number:
                 _refuse("artifact_refused", "attempt receipt identity differs from ledger",
                         reason="digest_mismatch")
+            if receipt.get("state") != "returned" or receipt.get("accepted") is not False:
+                _refuse("artifact_refused", "attempt receipt outcome differs from ledger",
+                        reason="digest_mismatch")
             if receipt.get("filing_sha256") != result_hash:
                 _refuse("artifact_refused", "filing digest differs between receipt and ledger",
                         reason="digest_mismatch")
@@ -591,9 +595,10 @@ class FoundryObservationAdapter:
                 return None, "manifest_digest_missing"
             seen = set()
             for tool in tools:
-                if (not isinstance(tool, dict) or set(tool) != {"number", "sha256"} or
+                if (not isinstance(tool, dict) or set(tool) != {"number", "sha256", "name"} or
                         type(tool["number"]) is not int or tool["number"] <= 0 or
-                        tool["number"] in seen or not _valid_sha(tool["sha256"])):
+                        tool["number"] in seen or not _valid_sha(tool["sha256"]) or
+                        not isinstance(tool["name"], str) or not tool["name"]):
                     return None, "manifest_digest_missing"
                 seen.add(tool["number"])
                 tool_root = ("tools", str(tool["number"]))
@@ -604,10 +609,14 @@ class FoundryObservationAdapter:
                 request_hash = tool_receipt.get("request_sha256") if isinstance(tool_receipt, dict) else None
                 if not _valid_sha(request_hash):
                     return None, "manifest_digest_missing"
-                self._read_file(
+                request, _ = self._json_file(
                     self._evidence_path(snapshot.root, job["id"], number, *tool_root, "request.json"),
                     budget, expected=request_hash,
                 )
+                if (not isinstance(request, dict) or request.get("number") != tool["number"] or
+                        request.get("name") != tool["name"]):
+                    _refuse("artifact_refused", "tool manifest identity differs from request",
+                            reason="digest_mismatch")
             return filing_path, None
         except AccessRefused as exc:
             return None, exc.detail.get("reason", "evidence_unavailable")
