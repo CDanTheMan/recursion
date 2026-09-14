@@ -94,3 +94,37 @@ records, not actual Cursor/Codex app installation, remote transport, canonical a
 standing worker scheduling, quota/reset handling, installed startup, or 24/7 operation.
 Real completed-run smoke, production grants/delegation and disruptive host trials remain unrun.
 No pushes, publication, protected-branch merges or operational configuration changes in this slice.
+
+## Manual invocation after separately qualified provisioning
+
+The existing host-lifecycle README defines the inner lifecycle JSON. The new outer JSON is:
+
+~~~json
+{
+  "version": 1,
+  "lifecycle_config": "/ABSOLUTE/UNTRACKED/lifecycle.json",
+  "project_runs": {"recursion": "/ABSOLUTE/EXISTING/FOUNDRY_RUN"}
+}
+~~~
+
+Native Linux/WSL command:
+~~~text
+python3 -X utf8 -B -m tools.construction_swarm.p2_foundry_lifecycle run --config /ABSOLUTE/UNTRACKED/observation.json
+~~~
+
+A Windows caller may explicitly invoke the same command using wsl.exe with an argument array
+and the native repository as --cd. The inherited p2_windows_watchdog.ps1 still targets the
+generic host controller; it is preserved, not silently repurposed for this new outer schema.
+
+Stop uses p2_foundry_lifecycle stop --state-root /ABSOLUTE/STATE_ROOT --timeout 15.
+Existing p2_cli and p2_mcp connect with --socket and --token-file; no client starts the service.
+The tokens are supplied in private files, never controller command arguments.
+
+Changing the project mapping, service socket, source, interpreter, checkout or grant-file path
+requires an explicitly qualified operator transition. The current controller refuses an old
+state with another observation binding before changing its domain. It does not erase old
+ownership/uncertainty evidence or implement a migration/reset command.
+
+Validation in this slice covers native WSL CLI/MCP protocol processes with disposable records.
+Actual Codex/Cursor app configuration, remote/mobile transport, standing worker dispatch, quotas,
+boot automation, and physical host lifecycle qualification remain separate work.

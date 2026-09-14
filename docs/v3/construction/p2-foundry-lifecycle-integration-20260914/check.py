@@ -148,8 +148,45 @@ def load_guard():
                         path.rmdir()
                     except Exception as exc:
                         errors.append(str(exc))
-                result.update(fixture_cgroups_cleaned=leftovers, fixture_cleanup_errors=errors)
-                result["quiescent"] = result["quiescent"] and not errors
+                # This gate is a subreaper and runs one fixed command at a time.
+                # Escaped service sessions become our direct children when their
+                # controllers die. The unreaped command leader is explicitly excluded.
+                def adopted():
+                    members = []
+                    for entry in Path("/proc").iterdir():
+                        if not entry.name.isdecimal() or int(entry.name) == self.process.pid:
+                            continue
+                        try:
+                            fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
+                        except (FileNotFoundError, ProcessLookupError):
+                            continue
+                        if int(fields[1]) == os.getpid():
+                            members.append({"pid": int(entry.name), "start": int(fields[19]),
+                                            "session": int(fields[3]), "state": fields[0]})
+                    return members
+                reaped = []
+                end = time.monotonic() + 1
+                while True:
+                    pending = adopted()
+                    if not pending:
+                        break
+                    for member in pending:
+                        current = guard.process_identity(member["pid"])
+                        if current is None or current["start"] != member["start"]:
+                            continue
+                        try:
+                            pid, status = os.waitpid(member["pid"], os.WNOHANG)
+                        except ChildProcessError:
+                            continue
+                        if pid:
+                            reaped.append(dict(member, wait_status=status))
+                    if time.monotonic() >= end:
+                        break
+                    time.sleep(.01)
+                remaining = adopted()
+                result.update(fixture_cgroups_cleaned=leftovers, fixture_cleanup_errors=errors,
+                              adopted_reaped=reaped, adopted_remaining=remaining)
+                result["quiescent"] = result["quiescent"] and not errors and not remaining
                 self.fixture_report = result
                 return result
 
@@ -169,21 +206,29 @@ def run_command(guard, output, name, args, marker, seconds=60):
     return result
 
 
-def cgroup_timeout_control(guard, output):
+def cgroup_timeout_control(guard, output, removed=False):
     # Fixed inert descendant escapes the session, but remains in its owned fixture domain.
     program = (
         "from pathlib import Path; import os,subprocess,sys,time; "
         "r=Path('/sys/fs/cgroup')/('p2fi-test-'+str(os.getpid())+'-guard'); r.mkdir(); "
         "(r/'cgroup.subtree_control').write_text('+pids'); d=r/'service'; d.mkdir(); "
         "(d/'pids.max').write_text('8'); "
-        "subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(10)'],"
+        "child=subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(10)'],"
         "start_new_session=True,preexec_fn=lambda:(d/'cgroup.procs').write_text(str(os.getpid()))); "
-        "print('OWNED_CGROUP',flush=True); time.sleep(10)"
+        + ("(d/'cgroup.kill').write_text('1'); time.sleep(.05); d.rmdir(); r.rmdir(); "
+           if removed else "")
+        + "print('OWNED_CGROUP',child.pid,flush=True); time.sleep(10)"
     )
-    result, captured = guard.guarded_command("guard-cgroup-timeout", ["-c", program], 1, output, 4096)
+    name = "guard-removed-domain-zombie" if removed else "guard-cgroup-timeout"
+    result, captured = guard.guarded_command(name, ["-c", program], 1, output, 4096)
     require(result["reason"] == "timeout" and b"OWNED_CGROUP" in captured, "cgroup timeout control")
-    require(result["cleanup"]["quiescent"] and len(result["cleanup"]["fixture_cgroups_cleaned"]) == 1,
+    require(result["cleanup"]["quiescent"] and len(result["cleanup"]["fixture_cgroups_cleaned"]) == (0 if removed else 1),
             "escaped fixture session was not cleaned")
+    escaped = int(captured.decode().strip().split()[-1])
+    require(any(item["pid"] == escaped for item in result["cleanup"]["adopted_reaped"]),
+            "known escaped child lacks an actual waitpid receipt")
+    require(guard.process_identity(escaped) is None and not result["cleanup"]["adopted_remaining"],
+            "known escaped child still exists after reported cleanup")
     require(result["elapsed_seconds"] < 5, "bounded escaped-session cleanup")
     return result
 
@@ -204,7 +249,8 @@ def main():
         binding = source_check(args.candidate)
         record["binding"] = binding
         guard = load_guard()
-        record["cgroup_guard_control"] = cgroup_timeout_control(guard, output)
+        record["cgroup_guard_controls"] = [cgroup_timeout_control(guard, output),
+                                           cgroup_timeout_control(guard, output, removed=True)]
         commands = [
             ("handoff", ["docs/v3/construction/next-work-20260914/check_handoff.py"],
              "HANDOFF_SOURCE_PASS", 60),

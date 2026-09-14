@@ -359,6 +359,14 @@ class FoundryLifecycleTests(unittest.TestCase):
                 self.assertIn("configuration_refused", result.stdout)
                 self.assertFalse(self.state_root.exists())
 
+        self.config["version"] = True
+        self.save()
+        result = self.command("tools.construction_swarm.p2_foundry_lifecycle", "run",
+                              "--config", str(self.outer))
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("configuration_refused", result.stdout)
+        self.assertFalse(self.state_root.exists())
+
     def test_changed_prior_binding_refuses_before_domain_effect(self):
         controller = self.start()
         state = self.running()

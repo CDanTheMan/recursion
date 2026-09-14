@@ -26,3 +26,26 @@ changes or dropped behavioral outcomes. Added actual-service restart-exhaustion 
 
 Second focused run: 14 tests passed in 7.414 seconds. Gate construction and exact-candidate
 independent review pending. The source and protocol distinctions remain explicit.
+
+## Independent review and correction
+
+Candidate b2e08737b181f5a331e0306bf358a7ba453aad91 passed its first union gate:
+14 composition tests, 75 preserved behavioral tests, handoff and complete source binding.
+Root receipt: /var/lib/recursion-foundry/reviews/p2-foundry-lifecycle-integration-20260914/root-b2e0873/receipt.json.
+
+Independent Astra review REQUEST_CHANGES despite those passing gates:
+the command-session guard could report quiescence while an escaped adopted child remained
+a zombie after cgroup.kill. Its actual probe found escaped PID 1409 in state Z after
+quiescent=true, and the probe itself reaped it. No service-composition findings were reported.
+Review: /var/lib/recursion-foundry/reviews/p2-foundry-lifecycle-integration-20260914/astra-b2e0873-review/independent-review.md.
+Counterexample: /var/lib/recursion-foundry/reviews/p2-foundry-lifecycle-integration-20260914/astra-b2e0873-guard-probe/independent-probe.json.
+Those receipts remain failed-review evidence, not final acceptance.
+
+The new guard now observes start-bound direct adopted children of its single-command
+subreaper, excludes the still-unreaped command leader, performs bounded waitpid reaping,
+and refuses quiescence if an adopted child remains. Controls require a waitpid receipt and
+actual absence of the known escaped PID, including when test teardown already removed its
+cgroup. No inherited guard file changed. Outer integration validation also explicitly
+rejects a boolean inner configuration version; inherited source remains untouched.
+Manual invocation and the unrun application/production boundaries are documented in SPEC.
+Corrected exact-candidate gates and review are pending.

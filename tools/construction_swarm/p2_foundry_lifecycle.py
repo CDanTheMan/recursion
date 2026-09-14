@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
 
 from . import p2_host_lifecycle as host
 from .p2_access import AccessRefused
@@ -39,6 +38,8 @@ def load_config(filename):
         raise host.LifecycleRefused("configuration_refused", "project mapping refused") from exc
     normalized = tuple(sorted((key, str(path)) for key, path in adapter.project_runs.items()))
     config = host.load_config(host._absolute_path(outer["lifecycle_config"], "lifecycle_config"))
+    host._require(type(config["version"]) is int, "configuration_refused",
+                  "inner lifecycle version must be an integer")
     return config, normalized
 
 
