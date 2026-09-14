@@ -185,7 +185,7 @@ class P1Store:
                 grant_id TEXT NOT NULL, fence INTEGER NOT NULL, state TEXT NOT NULL, charge_state TEXT NOT NULL,
                 launch_identity TEXT, launch_receipt TEXT);
             CREATE TABLE IF NOT EXISTS outbox (
-                receipt TEXT PRIMARY KEY, attempt_id TEXT NOT NULL, fence INTEGER NOT NULL,
+                receipt TEXT PRIMARY KEY, attempt_id TEXT NOT NULL, delivery_fence INTEGER NOT NULL,
                 identity TEXT NOT NULL, grant_id TEXT NOT NULL, body TEXT NOT NULL,
                 delivery TEXT NOT NULL DEFAULT 'pending');
             CREATE TABLE IF NOT EXISTS idempotency (
@@ -282,6 +282,10 @@ class P1Store:
                     raise IdempotencyConflict("idempotency key reused with different body")
                 if prior["fence"] != fence:
                     raise FenceRejected("idempotent request belongs to a retired fence")
+                prior_attempt = self.db.execute("SELECT state FROM attempts WHERE attempt_id=?",
+                                                (json.loads(prior["response"])["attempt_id"],)).fetchone()
+                if prior_attempt and prior_attempt["state"] == "revision_conflict":
+                    raise RevisionConflict("prior attempt has a canonical revision conflict")
                 self.db.commit()
                 return json.loads(prior["response"])
             attempt_id = "attempt-%08d" % (self.db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0] + 1)
@@ -295,7 +299,7 @@ class P1Store:
                      "goal_id": request["goal_id"], "source_commit": request["source_commit"],
                      "requirements_digest": request["requirements_digest"], "content_digest": request["content_digest"],
                      "fence": fence, "identity": identity, "grant_id": request["grant_id"]}
-            self.db.execute("INSERT INTO outbox(receipt,attempt_id,fence,identity,grant_id,body) VALUES(?,?,?,?,?,?)",
+            self.db.execute("INSERT INTO outbox(receipt,attempt_id,delivery_fence,identity,grant_id,body) VALUES(?,?,?,?,?,?)",
                             (receipt, attempt_id, fence, identity, request["grant_id"], _json(event)))
             response = {"attempt_id": attempt_id, "receipt": receipt, "fence": fence, "state": "reserved"}
             self.db.execute("INSERT INTO idempotency VALUES(?,?,?,?,?,?)",
@@ -306,7 +310,7 @@ class P1Store:
             self.db.rollback()
             raise
 
-    def replay_outbox(self, hermes, owner, fence):
+    def replay_outbox(self, hermes, transport, owner, fence):
         """Deliver pending effects only under their exact current fence and current grant."""
         delivered = []
         receipts = [row[0] for row in self.db.execute("SELECT receipt FROM outbox WHERE delivery='pending' ORDER BY receipt")]
@@ -318,9 +322,11 @@ class P1Store:
                     self.db.commit()
                     continue
                 self._fence(owner, fence)
-                if row["fence"] != fence:
+                if row["delivery_fence"] != fence:
                     raise FenceRejected("pending outbox belongs to a retired fence")
                 body = json.loads(row["body"])
+                if transport.identity != row["identity"]:
+                    raise PermissionDenied("transport identity differs from outbox contributor")
                 self._grant(row["grant_id"], row["identity"], body["project"])
                 attempt = self.db.execute("SELECT * FROM attempts WHERE attempt_id=?", (row["attempt_id"],)).fetchone()
                 _require(attempt is not None, "outbox attempt missing")
@@ -337,6 +343,8 @@ class P1Store:
                 except RevisionConflict:
                     self.db.execute("UPDATE outbox SET delivery='revision_conflict' WHERE receipt=?", (receipt,))
                     self.db.execute("UPDATE attempts SET state='revision_conflict' WHERE attempt_id=?", (attempt["attempt_id"],))
+                    self.db.execute("UPDATE results SET state='revision_conflict',detail='canonical task revision changed' WHERE attempt_id=?",
+                                    (attempt["attempt_id"],))
                     self.db.commit()
                     continue
                 self.db.execute("UPDATE outbox SET delivery='delivered' WHERE receipt=?", (receipt,))
@@ -384,13 +392,18 @@ class P1Store:
             return finish
 
         receipt = worker.launch(attempt_id, fence, authorize)
-        with self.db:
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
             attempt = self.db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
             self._attempt_authorized(attempt, transport, owner, fence)
             row = self.db.execute("SELECT state,launch_identity FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
             if not row or row["state"] != "launch_intent" or row["launch_identity"] != launch_identity:
                 raise P1Refused("launch intent changed before receipt")
             self.db.execute("UPDATE attempts SET state='launched',launch_receipt=? WHERE attempt_id=?", (receipt, attempt_id))
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
         return receipt
 
     def recover_after_crash(self, crashed_fence, owner, fence):
@@ -405,9 +418,9 @@ class P1Store:
             owned = self.db.execute("SELECT COUNT(*) FROM attempts WHERE fence=? AND state IN ('reserved','launch_intent','launched')",
                                     (crashed_fence,)).fetchone()[0]
             _require(owned > 0, "no recoverable crashed-fence attempt")
-            self.db.execute("UPDATE attempts SET state='unknown' WHERE fence=? AND state IN ('reserved','launch_intent')",
+            self.db.execute("UPDATE attempts SET state='unknown' WHERE fence=? AND state IN ('reserved','launch_intent','launched')",
                             (crashed_fence,))
-            self.db.execute("UPDATE outbox SET fence=? WHERE fence=? AND delivery='pending'", (fence, crashed_fence))
+            self.db.execute("UPDATE outbox SET delivery_fence=? WHERE delivery_fence=? AND delivery='pending'", (fence, crashed_fence))
             self.db.execute("UPDATE idempotency SET fence=? WHERE fence=?", (fence, crashed_fence))
             self.db.execute("INSERT INTO recoveries VALUES(?,?,?)", (crashed_fence, fence, owner))
             self.db.commit()
@@ -453,7 +466,7 @@ class P1Store:
                 self.db.commit()
                 raise
             receipt = "attempt-result:" + attempt_id
-            self.db.execute("INSERT INTO outbox(receipt,attempt_id,fence,identity,grant_id,body) VALUES(?,?,?,?,?,?)",
+            self.db.execute("INSERT INTO outbox(receipt,attempt_id,delivery_fence,identity,grant_id,body) VALUES(?,?,?,?,?,?)",
                             (receipt, attempt_id, fence, attempt["identity"], attempt["grant_id"], _json(event)))
             self.db.execute("INSERT INTO results VALUES(?,?,?,?,?,?,?)",
                             (attempt_id, expected_revision, idempotency_key, digest, receipt, "pending", "outbox queued"))

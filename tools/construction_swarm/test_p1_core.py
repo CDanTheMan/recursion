@@ -68,15 +68,15 @@ class P1CoreTests(unittest.TestCase):
         self.assertEqual(self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="crash-reservation"),
                                            "recovery-incarnation", recovery_fence)["attempt_id"], "attempt-00000001")
         self.assertEqual(self.store.outbox_delivery("attempt-accepted:attempt-00000001"), "pending")
-        self.assertEqual(self.store.replay_outbox(self.hermes, "recovery-incarnation", recovery_fence),
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery-incarnation", recovery_fence),
                          ["attempt-accepted:attempt-00000001"])
-        self.assertEqual(self.store.replay_outbox(self.hermes, "recovery-incarnation", recovery_fence), [])
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery-incarnation", recovery_fence), [])
         self.assertEqual(self.store.outbox_delivery("attempt-accepted:attempt-00000001"), "delivered")
         self.assertEqual(self.hermes.receipt_count("task-a", "attempt_accepted"), 1)
 
     def test_s01_attempt_revision_cannot_be_relabelled_after_amendment(self):
         accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)
-        self.store.replay_outbox(self.hermes, "leader-a", self.fence)
+        self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence)
         self.store.launch(FakeWorker(), FakeTransport("worker"), accepted["attempt_id"], "leader-a", self.fence)
         self.hermes.amend("task-a")
         with self.assertRaises(RevisionConflict):
@@ -139,7 +139,7 @@ class P1CoreTests(unittest.TestCase):
             self.store.submit_result(self.hermes, FakeTransport("worker"), accepted["attempt_id"], 1,
                                      "old-result", owner, fence)
         with self.assertRaises(FenceRejected):
-            self.store.replay_outbox(self.hermes, "replacement", replacement_fence)
+            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "replacement", replacement_fence)
         self.assertEqual(self.hermes.receipt_count("task-a", "attempt_accepted"), 0)
         self.assertGreater(replacement_fence, fence)
 
@@ -182,9 +182,9 @@ class P1CoreTests(unittest.TestCase):
                                           "pending-result", "leader-a", self.fence)
         replacement = self.store.acquire_leader("recovery", takeover=True)
         with self.assertRaises(FenceRejected):
-            self.store.replay_outbox(self.hermes, "recovery", replacement)
+            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery", replacement)
         self.store.recover_after_crash(self.fence, "recovery", replacement)
-        self.assertEqual(self.store.replay_outbox(self.hermes, "recovery", replacement),
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery", replacement),
                          ["attempt-accepted:attempt-00000001", result])
         self.assertEqual(self.hermes.receipt_count("task-a", "attempt_result"), 1)
 
@@ -194,7 +194,7 @@ class P1CoreTests(unittest.TestCase):
         second = self.store.accept(self.hermes, FakeTransport("worker"), self.request("task-c", "alpha", key="second"),
                                    "leader-a", self.fence)
         self.hermes.amend("task-a")
-        self.assertEqual(self.store.replay_outbox(self.hermes, "leader-a", self.fence), [second["receipt"]])
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence), [second["receipt"]])
         self.assertEqual(self.store.outbox_delivery(first["receipt"]), "revision_conflict")
         self.assertEqual(self.hermes.receipt_count("task-c", "attempt_accepted"), 1)
 
@@ -206,7 +206,7 @@ class P1CoreTests(unittest.TestCase):
         with self.store.db:
             self.store.db.execute("UPDATE outbox SET body=? WHERE receipt=?", (json.dumps(body), accepted["receipt"]))
         with self.assertRaisesRegex(Exception, "outbox envelope mismatch"):
-            self.store.replay_outbox(self.hermes, "leader-a", self.fence)
+            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence)
         self.assertEqual(self.hermes.receipt_count("task-a"), 0)
 
     def test_s05_transport_identity_project_idempotency_and_revocation(self):
@@ -228,7 +228,7 @@ class P1CoreTests(unittest.TestCase):
         with self.assertRaises(PermissionDenied):
             self.store.accept(self.hermes, FakeTransport("worker"), request, "leader-a", self.fence)
         with self.assertRaises(PermissionDenied):
-            self.store.replay_outbox(self.hermes, "leader-a", self.fence)
+            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence)
         self.assertEqual(self.store.outbox_delivery(first["receipt"]), "pending")
 
 

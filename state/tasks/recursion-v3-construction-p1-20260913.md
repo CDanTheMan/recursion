@@ -72,3 +72,12 @@ effect; retained revised-task evidence; terminalized revision-conflicted outbox 
 blocking unrelated rows; strengthened exact envelope checks; and added recovery/idempotency
 and real crash fixtures. The scoped suite passed 12 tests after remediation. A fresh Muse
 review of the next exact commit is still required.
+
+Checkpoint 4 (2026-09-13): the second independent Muse review also rejected its reviewed
+commit. Its valid local-boundary findings were remediated by making delivery-fence authority
+explicit, requiring a transport identity at replay, making final launch-receipt persistence
+transactional, retaining launched crash state as unknown/held, and refusing stale conflict
+replays. Hermes and execution SQLite stores remain intentionally separate: exactly-once
+canonical transition is established by a durable idempotency receipt across their unavoidable
+cross-store crash seam, not by claiming a distributed transaction. The revised scoped suite
+passed 12 tests; a new exact-commit review remains required.
