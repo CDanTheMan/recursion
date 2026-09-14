@@ -81,3 +81,14 @@ replays. Hermes and execution SQLite stores remain intentionally separate: exact
 canonical transition is established by a durable idempotency receipt across their unavoidable
 cross-store crash seam, not by claiming a distributed transaction. The revised scoped suite
 passed 12 tests; a new exact-commit review remains required.
+
+Checkpoint 5 (2026-09-13): the third Muse review rejected checkpoint 4 for three further
+bounded replay/recovery defects. The candidate now returns a recovered idempotency receipt
+with its current `unknown` state rather than stale launch authority; records immutable
+`origin_fence` separately from the current delivery fence at the fake Hermes boundary; and
+terminalizes revoked, identity-mismatched, and envelope-tampered outbox rows so they cannot
+block an unrelated valid receipt. Old delivery fences remain an explicit refusal until a
+recorded recovery adopts them. The scoped suite passed 13 tests, including abrupt process
+exit/reopen, independently started leader-election processes, current-task-revision
+conflicts, retained unknown charges, and revoked-outbox non-blocking replay. Fresh exact
+candidate adversarial review remains required.

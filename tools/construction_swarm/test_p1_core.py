@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .p1_core import (
     FakeHermes, FakeTransport, FakeWorker, FenceRejected, GOAL_ID,
-    IdempotencyConflict, P1Store, PermissionDenied, REQUIREMENTS_DIGEST,
+    IdempotencyConflict, P1Refused, P1Store, PermissionDenied, REQUIREMENTS_DIGEST,
     RevisionConflict, SOURCE_COMMIT, request_digest,
 )
 
@@ -65,14 +65,21 @@ class P1CoreTests(unittest.TestCase):
         attempt = self.store.attempt("attempt-00000001")
         self.assertEqual((attempt["state"], attempt["charge_state"]), ("unknown", "held"))
         self.assertEqual(self.store.attempts_count(), 1)
-        self.assertEqual(self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="crash-reservation"),
-                                           "recovery-incarnation", recovery_fence)["attempt_id"], "attempt-00000001")
+        replayed = self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="crash-reservation"),
+                                     "recovery-incarnation", recovery_fence)
+        self.assertEqual(replayed["attempt_id"], "attempt-00000001")
+        self.assertEqual((replayed["state"], replayed["fence"]), ("unknown", attempt["fence"]))
+        with self.assertRaises(P1Refused):
+            self.store.begin_launch(FakeTransport("worker"), replayed["attempt_id"], "recovery-incarnation", recovery_fence)
         self.assertEqual(self.store.outbox_delivery("attempt-accepted:attempt-00000001"), "pending")
         self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery-incarnation", recovery_fence),
                          ["attempt-accepted:attempt-00000001"])
         self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery-incarnation", recovery_fence), [])
         self.assertEqual(self.store.outbox_delivery("attempt-accepted:attempt-00000001"), "delivered")
         self.assertEqual(self.hermes.receipt_count("task-a", "attempt_accepted"), 1)
+        canonical = self.hermes.receipt("attempt-accepted:attempt-00000001")
+        self.assertEqual((json.loads(canonical["body"])["origin_fence"], canonical["delivery_fence"]),
+                         (attempt["fence"], recovery_fence))
 
     def test_s01_attempt_revision_cannot_be_relabelled_after_amendment(self):
         accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)
@@ -205,8 +212,8 @@ class P1CoreTests(unittest.TestCase):
         body["identity"] = "forged-worker"
         with self.store.db:
             self.store.db.execute("UPDATE outbox SET body=? WHERE receipt=?", (json.dumps(body), accepted["receipt"]))
-        with self.assertRaisesRegex(Exception, "outbox envelope mismatch"):
-            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence)
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence), [])
+        self.assertEqual(self.store.outbox_delivery(accepted["receipt"]), "envelope_refused")
         self.assertEqual(self.hermes.receipt_count("task-a"), 0)
 
     def test_s05_transport_identity_project_idempotency_and_revocation(self):
@@ -227,9 +234,21 @@ class P1CoreTests(unittest.TestCase):
         self.store.revoke("grant-worker-alpha")
         with self.assertRaises(PermissionDenied):
             self.store.accept(self.hermes, FakeTransport("worker"), request, "leader-a", self.fence)
-        with self.assertRaises(PermissionDenied):
-            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence)
-        self.assertEqual(self.store.outbox_delivery(first["receipt"]), "pending")
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence), [])
+        self.assertEqual(self.store.outbox_delivery(first["receipt"]), "grant_revoked")
+
+    def test_s05_revoked_outbox_does_not_block_a_later_valid_receipt(self):
+        first = self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="revoked"), "leader-a", self.fence)
+        self.hermes.create_task("task-c", "alpha")
+        self.store.grant("grant-worker-alpha-fresh", "worker", "alpha")
+        second = self.store.accept(
+            self.hermes, FakeTransport("worker"),
+            self.request("task-c", "alpha", grant="grant-worker-alpha-fresh", key="fresh"), "leader-a", self.fence)
+        self.store.revoke("grant-worker-alpha")
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence),
+                         [second["receipt"]])
+        self.assertEqual(self.store.outbox_delivery(first["receipt"]), "grant_revoked")
+        self.assertEqual(self.store.outbox_delivery(second["receipt"]), "delivered")
 
 
 if __name__ == "__main__":

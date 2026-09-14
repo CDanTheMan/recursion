@@ -80,7 +80,9 @@ class FakeHermes:
                 task_id TEXT PRIMARY KEY, project TEXT NOT NULL, revision INTEGER NOT NULL,
                 goal_id TEXT NOT NULL, source_commit TEXT NOT NULL, requirements_digest TEXT NOT NULL,
                 state TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS receipts (receipt TEXT PRIMARY KEY, body TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS receipts (
+                receipt TEXT PRIMARY KEY, body TEXT NOT NULL, delivery_fence INTEGER NOT NULL,
+                delivery_identity TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS transitions (
                 receipt TEXT PRIMARY KEY, task_id TEXT NOT NULL, event TEXT NOT NULL);
         """)
@@ -113,7 +115,7 @@ class FakeHermes:
         with self.db:
             self.db.execute("UPDATE tasks SET revision=revision+1,state='open' WHERE task_id=?", (task_id,))
 
-    def deliver(self, receipt, body):
+    def deliver(self, receipt, body, delivery_fence, delivery_identity):
         """Idempotent canonical transition receipt, called only from an effect boundary."""
         self.db.execute("BEGIN IMMEDIATE")
         try:
@@ -124,7 +126,8 @@ class FakeHermes:
                 self.db.commit()
                 return {"receipt": receipt, "duplicate": True}
             self.assert_binding(body)
-            self.db.execute("INSERT INTO receipts VALUES(?,?)", (receipt, _json(body)))
+            self.db.execute("INSERT INTO receipts VALUES(?,?,?,?)",
+                            (receipt, _json(body), delivery_fence, delivery_identity))
             self.db.execute("INSERT INTO transitions VALUES(?,?,?)", (receipt, body["task_id"], body["event"]))
             state = "attempt_accepted" if body["event"] == "attempt_accepted" else "result_received"
             self.db.execute("UPDATE tasks SET state=? WHERE task_id=?", (state, body["task_id"]))
@@ -137,6 +140,10 @@ class FakeHermes:
     def receipt_count(self, task_id, event=None):
         rows = [json.loads(row[0]) for row in self.db.execute("SELECT body FROM receipts")]
         return sum(body["task_id"] == task_id and (event is None or body["event"] == event) for body in rows)
+
+    def receipt(self, receipt):
+        row = self.db.execute("SELECT * FROM receipts WHERE receipt=?", (receipt,)).fetchone()
+        return dict(row) if row else None
 
 
 class FakeWorker:
@@ -282,12 +289,16 @@ class P1Store:
                     raise IdempotencyConflict("idempotency key reused with different body")
                 if prior["fence"] != fence:
                     raise FenceRejected("idempotent request belongs to a retired fence")
-                prior_attempt = self.db.execute("SELECT state FROM attempts WHERE attempt_id=?",
+                prior_attempt = self.db.execute("SELECT fence,state FROM attempts WHERE attempt_id=?",
                                                 (json.loads(prior["response"])["attempt_id"],)).fetchone()
                 if prior_attempt and prior_attempt["state"] == "revision_conflict":
                     raise RevisionConflict("prior attempt has a canonical revision conflict")
                 self.db.commit()
-                return json.loads(prior["response"])
+                response = json.loads(prior["response"])
+                if prior_attempt:
+                    # The receipt is immutable, but recovery must never return stale authority.
+                    response.update(fence=prior_attempt["fence"], state=prior_attempt["state"])
+                return response
             attempt_id = "attempt-%08d" % (self.db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0] + 1)
             receipt = "attempt-accepted:" + attempt_id
             self.db.execute("INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
@@ -298,7 +309,7 @@ class P1Store:
                      "expected_revision": request["expected_revision"], "attempt_id": attempt_id,
                      "goal_id": request["goal_id"], "source_commit": request["source_commit"],
                      "requirements_digest": request["requirements_digest"], "content_digest": request["content_digest"],
-                     "fence": fence, "identity": identity, "grant_id": request["grant_id"]}
+                     "origin_fence": fence, "identity": identity, "grant_id": request["grant_id"]}
             self.db.execute("INSERT INTO outbox(receipt,attempt_id,delivery_fence,identity,grant_id,body) VALUES(?,?,?,?,?,?)",
                             (receipt, attempt_id, fence, identity, request["grant_id"], _json(event)))
             response = {"attempt_id": attempt_id, "receipt": receipt, "fence": fence, "state": "reserved"}
@@ -326,20 +337,31 @@ class P1Store:
                     raise FenceRejected("pending outbox belongs to a retired fence")
                 body = json.loads(row["body"])
                 if transport.identity != row["identity"]:
-                    raise PermissionDenied("transport identity differs from outbox contributor")
-                self._grant(row["grant_id"], row["identity"], body["project"])
+                    self.db.execute("UPDATE outbox SET delivery='identity_refused' WHERE receipt=?", (receipt,))
+                    self.db.commit()
+                    continue
+                try:
+                    self._grant(row["grant_id"], row["identity"], body["project"])
+                except PermissionDenied:
+                    self.db.execute("UPDATE outbox SET delivery='grant_revoked' WHERE receipt=?", (receipt,))
+                    self.db.commit()
+                    continue
                 attempt = self.db.execute("SELECT * FROM attempts WHERE attempt_id=?", (row["attempt_id"],)).fetchone()
                 _require(attempt is not None, "outbox attempt missing")
                 expected = {"attempt_id": attempt["attempt_id"], "task_id": attempt["task_id"],
                             "project": attempt["project"], "expected_revision": attempt["task_revision"],
                             "goal_id": attempt["goal_id"], "source_commit": attempt["source_commit"],
                             "requirements_digest": attempt["requirements_digest"], "content_digest": attempt["content_digest"],
-                            "identity": attempt["identity"], "grant_id": attempt["grant_id"], "fence": attempt["fence"]}
+                            "identity": attempt["identity"], "grant_id": attempt["grant_id"],
+                            "origin_fence": attempt["fence"]}
                 expected["event"] = ("attempt_accepted" if receipt == "attempt-accepted:" + attempt["attempt_id"]
                                      else "attempt_result" if receipt == "attempt-result:" + attempt["attempt_id"] else None)
-                _require(expected["event"] is not None and body == expected, "outbox envelope mismatch")
+                if expected["event"] is None or body != expected:
+                    self.db.execute("UPDATE outbox SET delivery='envelope_refused' WHERE receipt=?", (receipt,))
+                    self.db.commit()
+                    continue
                 try:
-                    hermes.deliver(receipt, body)
+                    hermes.deliver(receipt, body, row["delivery_fence"], transport.identity)
                 except RevisionConflict:
                     self.db.execute("UPDATE outbox SET delivery='revision_conflict' WHERE receipt=?", (receipt,))
                     self.db.execute("UPDATE attempts SET state='revision_conflict' WHERE attempt_id=?", (attempt["attempt_id"],))
@@ -456,7 +478,7 @@ class P1Store:
                      "expected_revision": attempt["task_revision"], "attempt_id": attempt_id,
                      "goal_id": attempt["goal_id"], "source_commit": attempt["source_commit"],
                      "requirements_digest": attempt["requirements_digest"], "content_digest": attempt["content_digest"],
-                     "fence": fence, "identity": attempt["identity"], "grant_id": attempt["grant_id"]}
+                     "origin_fence": attempt["fence"], "identity": attempt["identity"], "grant_id": attempt["grant_id"]}
             try:
                 hermes.assert_binding(event)
             except RevisionConflict:
