@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 import socket
@@ -94,6 +95,7 @@ if hasattr(socket, "AF_UNIX"):
                     "capabilities": ["read"],
                 },
             ]
+            self.grants = grants
             self.grants_path.write_text(json.dumps(grants), encoding="utf-8")
             self.alpha_artifacts = self.root / "alpha-artifacts"
             self.beta_artifacts = self.root / "beta-artifacts"
@@ -374,6 +376,41 @@ if hasattr(socket, "AF_UNIX"):
             stale = alpha.request("status", {"project": "alpha"}, allow_stale=True)
             self.assertEqual(stale["freshness"]["state"], "stale_disconnected")
 
+        def test_authentication_refusal_invalidates_entire_credential_endpoint_cache(self):
+            cache = self.root / "expiry-cache.json"
+            client = self.client(cache=cache)
+            self.assertTrue(client.request("status", {"project": "alpha"})["ok"])
+            task_params = {"project": "alpha", "limit": 1, "page_token": 0}
+            self.assertTrue(client.request("tasks", task_params)["ok"])
+            self.stop_service()
+            self.grants[0]["expires_at"] = "2000-01-01T00:00:00Z"
+            self.grants_path.write_text(json.dumps(self.grants), encoding="utf-8")
+            self.start_service()
+            refused = client.request("status", {"project": "alpha"})
+            self.assertFalse(refused["ok"])
+            self.assertEqual(refused["error"]["code"], "authentication_refused")
+            self.stop_service()
+            with self.assertRaises(AccessRefused):
+                client.request("tasks", task_params, allow_stale=True)
+
+        def test_permission_refusal_invalidates_all_cached_operations_for_project(self):
+            cache = self.root / "permission-cache.json"
+            client = self.client(cache=cache)
+            status_params = {"project": "alpha"}
+            task_params = {"project": "alpha", "limit": 1, "page_token": 0}
+            self.assertTrue(client.request("status", status_params)["ok"])
+            self.assertTrue(client.request("tasks", task_params)["ok"])
+            self.stop_service()
+            self.grants[0]["projects"] = ["beta"]
+            self.grants_path.write_text(json.dumps(self.grants), encoding="utf-8")
+            self.start_service()
+            refused = client.request("status", status_params)
+            self.assertFalse(refused["ok"])
+            self.assertEqual(refused["error"]["code"], "permission_denied")
+            self.stop_service()
+            with self.assertRaises(AccessRefused):
+                client.request("tasks", task_params, allow_stale=True)
+
         def test_event_replay_gap_demands_snapshot_refresh(self):
             gap = self.client().request("events", {"project": "alpha", "after_cursor": 0, "limit": 2})
             self.assertFalse(gap["ok"])
@@ -474,8 +511,54 @@ if hasattr(socket, "AF_UNIX"):
                     with self.assertRaises(AccessRefused) as refused:
                         adapter.read("artifact", "alpha", {"handle": "race", "offset": 0, "limit": 7})
                 self.assertEqual(refused.exception.code, "artifact_refused")
+
+                target.unlink()
+                target.write_bytes(b"inside")
+                real_compare = hmac.compare_digest
+
+                def change_after_compare(actual, expected):
+                    matched = real_compare(actual, expected)
+                    if matched:
+                        target.write_bytes(b"changed-after-hash")
+                    return matched
+
+                with mock.patch("tools.construction_swarm.p2_access.hmac.compare_digest",
+                                side_effect=change_after_compare):
+                    stable = adapter.read(
+                        "artifact", "alpha", {"handle": "race", "offset": 0, "limit": 7},
+                    )
+                returned = base64.b64decode(stable["data"]["content"])
+                self.assertEqual(returned, b"inside")
+                self.assertEqual(hashlib.sha256(returned).hexdigest(), stable["data"]["sha256"])
             finally:
                 adapter.close()
+
+        def test_fifo_artifact_is_nonblocking_and_does_not_consume_read_slots(self):
+            pipe = self.alpha_artifacts / "pipe"
+            os.mkfifo(pipe)
+            self.fixture["projects"]["alpha"]["artifacts"].append({
+                "handle": "pipe", "project": "alpha", "path": "pipe", "sha256": "0" * 64,
+            })
+            self.write_fixture()
+            outcomes = []
+
+            def read_pipe():
+                outcomes.append(self.client().request("artifact", {
+                    "project": "alpha", "handle": "pipe", "offset": 0, "limit": 8,
+                }))
+
+            workers = [threading.Thread(target=read_pipe) for _ in range(2)]
+            began = time.monotonic()
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join(2)
+            self.assertTrue(all(not worker.is_alive() for worker in workers))
+            self.assertEqual(len(outcomes), 2)
+            self.assertTrue(all(item["error"]["code"] == "artifact_refused" for item in outcomes))
+            task = self.client().request("task", {"project": "alpha", "task_id": "a-1"})
+            self.assertTrue(task["ok"])
+            self.assertLess(time.monotonic() - began, 1.0)
 
         def test_disappeared_fixture_ledger_returns_structured_unavailable_response(self):
             missing = self.fixture_path.with_suffix(".missing")
@@ -580,6 +663,32 @@ if hasattr(socket, "AF_UNIX"):
                 thread_line = next(line for line in status_text.splitlines() if line.startswith("Threads:"))
                 self.assertLessEqual(int(thread_line.split()[1]), 5, thread_line)
                 time.sleep(1.3)
+                status_text = Path(f"/proc/{self.process.pid}/status").read_text(encoding="utf-8")
+                thread_line = next(line for line in status_text.splitlines() if line.startswith("Threads:"))
+                self.assertLessEqual(int(thread_line.split()[1]), 2, thread_line)
+            finally:
+                for channel in channels:
+                    channel.close()
+
+        def test_partial_frame_trickle_cannot_extend_total_handshake_deadline(self):
+            channels = []
+            try:
+                for _ in range(4):
+                    channel = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    channel.settimeout(0.5)
+                    channel.connect(str(self.socket_path))
+                    channels.append(channel)
+                deadline = time.monotonic() + 1.5
+                while time.monotonic() < deadline:
+                    for channel in channels:
+                        try:
+                            channel.sendall(b" ")
+                        except OSError:
+                            pass
+                    time.sleep(0.2)
+                time.sleep(0.2)
+                status = self.client().request("status", {"project": "alpha"})
+                self.assertTrue(status["ok"])
                 status_text = Path(f"/proc/{self.process.pid}/status").read_text(encoding="utf-8")
                 thread_line = next(line for line in status_text.splitlines() if line.startswith("Threads:"))
                 self.assertLessEqual(int(thread_line.split()[1]), 2, thread_line)

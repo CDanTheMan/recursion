@@ -409,7 +409,7 @@ class FixtureCanonicalAdapter:
                 os.close(directory_descriptor)
                 directory_descriptor = next_descriptor
             file_descriptor = os.open(
-                relative_path.parts[-1], os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                relative_path.parts[-1], os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
                 dir_fd=directory_descriptor,
             )
             information = os.fstat(file_descriptor)
@@ -419,16 +419,22 @@ class FixtureCanonicalAdapter:
                      size=size, max_artifact_size=self.max_artifact_size)
             _require(type(offset) is int and 0 <= offset <= size,
                      "malformed_request", "artifact offset is invalid")
-            digest = hashlib.sha256()
             with os.fdopen(file_descriptor, "rb", closefd=True) as stream:
                 file_descriptor = None
-                while chunk := stream.read(64 * 1024):
-                    digest.update(chunk)
-                actual_digest = digest.hexdigest()
+                captured = bytearray()
+                remaining = size
+                while remaining:
+                    chunk = stream.read(min(64 * 1024, remaining))
+                    _require(chunk, "artifact_refused", "artifact changed during bounded read")
+                    captured.extend(chunk)
+                    remaining -= len(chunk)
+                _require(not stream.read(1) and os.fstat(stream.fileno()).st_size == size,
+                         "artifact_refused", "artifact size changed during bounded read")
+                captured = bytes(captured)
+                actual_digest = hashlib.sha256(captured).hexdigest()
                 _require(hmac.compare_digest(actual_digest, expected_digest),
                          "artifact_refused", "artifact content digest differs from manifest")
-                stream.seek(offset)
-                content = stream.read(limit)
+                content = captured[offset:offset + limit]
         except AccessRefused:
             raise
         except FileNotFoundError as exc:
@@ -619,6 +625,47 @@ def _send(stream, value):
     stream.flush()
 
 
+class _SocketFrames:
+    """Bounded newline frames with a total, not inactivity, deadline."""
+
+    def __init__(self, channel, timeout):
+        self.channel = channel
+        self.timeout = timeout
+        self.buffer = bytearray()
+
+    def read(self):
+        deadline = time.monotonic() + self.timeout
+        while b"\n" not in self.buffer:
+            _require(len(self.buffer) <= MAX_REQUEST_BYTES,
+                     "request_too_large", "request exceeds byte bound",
+                     max_request_bytes=MAX_REQUEST_BYTES)
+            remaining = deadline - time.monotonic()
+            _require(remaining > 0, "request_timeout", "request frame deadline exceeded")
+            self.channel.settimeout(remaining)
+            try:
+                chunk = self.channel.recv(min(4096, MAX_REQUEST_BYTES + 2 - len(self.buffer)))
+            except TimeoutError as exc:
+                raise AccessRefused("request_timeout", "request frame deadline exceeded") from exc
+            _require(chunk, "connection_closed", "connection closed")
+            self.buffer.extend(chunk)
+        line, _, retained = self.buffer.partition(b"\n")
+        self.buffer = bytearray(retained)
+        _require(len(line) <= MAX_REQUEST_BYTES,
+                 "request_too_large", "request exceeds byte bound",
+                 max_request_bytes=MAX_REQUEST_BYTES)
+        try:
+            return _strict_json(bytes(line))
+        except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+            raise AccessRefused("malformed_request", "request is not strict JSON") from exc
+
+
+def _send_socket(channel, value):
+    encoded = _json_bytes(value) + b"\n"
+    _require(len(encoded) <= MAX_RESPONSE_BYTES,
+             "response_too_large", "response exceeds service byte bound")
+    channel.sendall(encoded)
+
+
 class _AccessHandler(socketserver.StreamRequestHandler):
     def setup(self):
         self.request.settimeout(self.server.access.request_timeout)
@@ -627,21 +674,22 @@ class _AccessHandler(socketserver.StreamRequestHandler):
     def handle(self):
         request_id = None
         grant = None
+        frames = _SocketFrames(self.request, self.server.access.request_timeout)
         try:
-            auth = _decode_line(self.rfile)
+            auth = frames.read()
             request_id = auth.get("request_id") if isinstance(auth, dict) else None
             grant = self.server.access.authenticate(auth)
-            _send(self.wfile, self.server.access.envelope(
+            _send_socket(self.request, self.server.access.envelope(
                 request_id, ok=True,
                 view={"data": {"authenticated": True, "identity": grant.identity},
                       "unavailable_fields": ["canonical.adapter", "canonical.ledger",
                                              "canonical_revision", "last_event_cursor"]},
                 caller_identity=grant.identity,
             ))
-            request = _decode_line(self.rfile)
+            request = frames.read()
             request_id = request.get("request_id") if isinstance(request, dict) else None
             view = self.server.access.dispatch(grant, request)
-            _send(self.wfile, self.server.access.envelope(
+            _send_socket(self.request, self.server.access.envelope(
                 request_id, ok=True, view=view, caller_identity=grant.identity,
             ))
         except AccessRefused as exc:
@@ -650,7 +698,7 @@ class _AccessHandler(socketserver.StreamRequestHandler):
             if type(exc.detail.get("last_event_cursor")) is int:
                 error_view["last_event_cursor"] = exc.detail["last_event_cursor"]
             try:
-                _send(self.wfile, self.server.access.envelope(
+                _send_socket(self.request, self.server.access.envelope(
                     request_id, ok=False, error=error, view=error_view,
                     caller_identity=grant.identity if grant else None,
                 ))
@@ -660,7 +708,7 @@ class _AccessHandler(socketserver.StreamRequestHandler):
             pass
         except Exception:  # The wire must not disclose internals.
             try:
-                _send(self.wfile, self.server.access.envelope(
+                _send_socket(self.request, self.server.access.envelope(
                     request_id, ok=False,
                     error={"code": "internal_error", "message": "service request failed"},
                 ))
@@ -755,7 +803,10 @@ class AccessClient:
             if len(raw) > MAX_RESPONSE_BYTES:
                 return {}
             value = _strict_json(raw)
-            return value if isinstance(value, dict) else {}
+            if not isinstance(value, dict) or set(value) != {"cache_version", "entries"} or \
+                    value["cache_version"] != 1 or not isinstance(value["entries"], dict):
+                return {}
+            return value["entries"]
         except (OSError, UnicodeDecodeError, ValueError, RecursionError):
             return {}
 
@@ -763,7 +814,7 @@ class AccessClient:
         if not self.cache_path:
             return
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        encoded = _json_bytes(self._cache)
+        encoded = _json_bytes({"cache_version": 1, "entries": self._cache})
         _require(len(encoded) <= MAX_RESPONSE_BYTES, "cache_refused", "client cache exceeds byte bound")
         temporary = self.cache_path.with_name(self.cache_path.name + ".tmp-" + uuid.uuid4().hex)
         temporary.write_bytes(encoded)
@@ -781,6 +832,33 @@ class AccessClient:
             "params": params,
         })).hexdigest()
 
+    def _cache_binding(self, project):
+        return {
+            "credential_sha256": self.credential_digest,
+            "service_endpoint": os.path.abspath(self.socket_path),
+            "project": project,
+        }
+
+    def _invalidate_cache(self, project=None):
+        expected = self._cache_binding(project)
+        removed = False
+        for key, entry in list(self._cache.items()):
+            binding = entry.get("binding") if isinstance(entry, dict) else None
+            if not isinstance(binding, dict):
+                del self._cache[key]
+                removed = True
+                continue
+            same_scope = (
+                binding.get("credential_sha256") == expected["credential_sha256"]
+                and binding.get("service_endpoint") == expected["service_endpoint"]
+                and (project is None or binding.get("project") == project)
+            )
+            if same_scope:
+                del self._cache[key]
+                removed = True
+        if removed:
+            self._save_cache()
+
     @staticmethod
     def _receive(stream):
         line = stream.readline(MAX_RESPONSE_BYTES + 2)
@@ -795,6 +873,7 @@ class AccessClient:
         _require(operation in READ_OPERATIONS, "mutation_refused",
                  "client exposes only read operations")
         _require(isinstance(params, dict), "malformed_request", "params must be an object")
+        project = params.get("project")
         key = self._cache_key(operation, params)
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as channel:
@@ -806,25 +885,28 @@ class AccessClient:
                                "token": self.token, "request_id": auth_id})
                 auth = self._receive(stream)
                 if not auth.get("ok"):
-                    if key in self._cache:
-                        del self._cache[key]
-                        self._save_cache()
+                    self._invalidate_cache()
                     return auth
                 request_id = uuid.uuid4().hex
                 _send(stream, {"protocol_version": PROTOCOL_VERSION, "op": operation,
                                "request_id": request_id, "params": params})
                 response = self._receive(stream)
             if response.get("ok"):
-                self._cache[key] = response
+                self._cache[key] = {
+                    "binding": self._cache_binding(project),
+                    "response": response,
+                }
                 self._save_cache()
             elif response.get("error", {}).get("code") in {"authentication_refused", "permission_denied"}:
-                if key in self._cache:
-                    del self._cache[key]
-                    self._save_cache()
+                self._invalidate_cache(project)
             return response
         except (ConnectionError, OSError, TimeoutError, ValueError, RecursionError) as exc:
             if allow_stale and key in self._cache:
-                stale = copy.deepcopy(self._cache[key])
+                entry = self._cache[key]
+                if not isinstance(entry, dict) or entry.get("binding") != self._cache_binding(project) or \
+                        not isinstance(entry.get("response"), dict):
+                    raise AccessRefused("service_unavailable", "construction access service is unavailable") from exc
+                stale = copy.deepcopy(entry["response"])
                 stale["freshness"] = {
                     "state": "stale_disconnected",
                     "stale": True,
