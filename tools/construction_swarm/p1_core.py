@@ -136,15 +136,22 @@ class FakeHermes:
 class FakeWorker:
     """In-memory fake effect endpoint with a guard evaluated at the effect boundary."""
 
-    def __init__(self, before_effect=None):
+    def __init__(self, before_effect=None, after_authorize=None, after_effect=None):
         self.launches = []
         self.before_effect = before_effect
+        self.after_authorize = after_authorize
+        self.after_effect = after_effect
 
     def launch(self, attempt_id, fence, authorize):
         if self.before_effect:
             self.before_effect()
         authorize()
+        if self.after_authorize:
+            self.after_authorize()
+        authorize()
         self.launches.append({"attempt_id": attempt_id, "fence": fence})
+        if self.after_effect:
+            self.after_effect()
         return "fake-launch:" + attempt_id + ":" + str(fence)
 
 
@@ -177,6 +184,8 @@ class P1Store:
             CREATE TABLE IF NOT EXISTS results (
                 attempt_id TEXT PRIMARY KEY, expected_revision INTEGER NOT NULL, idempotency_key TEXT NOT NULL,
                 body_digest TEXT NOT NULL, receipt TEXT, state TEXT NOT NULL, detail TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS recoveries (
+                crashed_fence INTEGER PRIMARY KEY, recovery_fence INTEGER NOT NULL, recovery_owner TEXT NOT NULL);
         """)
 
     def close(self):
@@ -299,8 +308,19 @@ class P1Store:
                     self.db.commit()
                     continue
                 self._fence(owner, fence)
+                if row["fence"] != fence:
+                    raise FenceRejected("pending outbox belongs to a retired fence")
                 body = json.loads(row["body"])
                 self._grant(row["grant_id"], row["identity"], body["project"])
+                attempt = self.db.execute("SELECT * FROM attempts WHERE attempt_id=?", (row["attempt_id"],)).fetchone()
+                _require(attempt is not None, "outbox attempt missing")
+                expected = {"attempt_id": attempt["attempt_id"], "task_id": attempt["task_id"],
+                            "project": attempt["project"], "expected_revision": attempt["task_revision"],
+                            "goal_id": attempt["goal_id"], "source_commit": attempt["source_commit"],
+                            "requirements_digest": attempt["requirements_digest"], "content_digest": attempt["content_digest"],
+                            "identity": attempt["identity"], "grant_id": attempt["grant_id"], "fence": attempt["fence"]}
+                _require(body.get("event") in {"attempt_accepted", "attempt_result"} and
+                         all(body.get(key) == value for key, value in expected.items()), "outbox envelope mismatch")
                 hermes.deliver(receipt, body)
                 self.db.execute("UPDATE outbox SET delivery='delivered' WHERE receipt=?", (receipt,))
                 self.db.commit()
@@ -348,8 +368,16 @@ class P1Store:
         try:
             self._fence(owner, fence)
             _require(fence != crashed_fence, "recovery requires a replacement fence")
+            _require(fence > crashed_fence, "recovery fence must advance")
+            prior = self.db.execute("SELECT 1 FROM recoveries WHERE crashed_fence=?", (crashed_fence,)).fetchone()
+            _require(prior is None, "fence already recovered")
+            owned = self.db.execute("SELECT COUNT(*) FROM attempts WHERE fence=? AND state IN ('reserved','launch_intent')",
+                                    (crashed_fence,)).fetchone()[0]
+            _require(owned > 0, "no recoverable crashed-fence attempt")
             self.db.execute("UPDATE attempts SET state='unknown' WHERE fence=? AND state IN ('reserved','launch_intent')",
                             (crashed_fence,))
+            self.db.execute("UPDATE outbox SET fence=? WHERE fence=? AND delivery='pending'", (fence, crashed_fence))
+            self.db.execute("INSERT INTO recoveries VALUES(?,?,?)", (crashed_fence, fence, owner))
             self.db.commit()
         except BaseException:
             self.db.rollback()

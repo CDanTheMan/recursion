@@ -10,6 +10,7 @@ from pathlib import Path
 from .p1_core import (
     FakeHermes,
     FakeTransport,
+    FakeWorker,
     GOAL_ID,
     REQUIREMENTS_DIGEST,
     SOURCE_COMMIT,
@@ -48,7 +49,7 @@ def main():
     crash.add_argument("--task", required=True)
     crash.add_argument("--project", required=True)
     crash.add_argument("--grant", required=True)
-    crash.add_argument("--phase", choices=("reserved", "launch_intent"), required=True)
+    crash.add_argument("--phase", choices=("reserved", "launch_intent", "after_effect"), required=True)
     args = parser.parse_args()
     store = P1Store(args.root)
     if args.command == "elect":
@@ -66,6 +67,10 @@ def main():
     accepted = store.accept(hermes, FakeTransport("worker"), _request(args.task, args.project, args.grant), args.owner, fence)
     if args.phase == "launch_intent":
         store.begin_launch(FakeTransport("worker"), accepted["attempt_id"], args.owner, fence)
+    if args.phase == "after_effect":
+        marker = Path(args.root) / "effect-observed"
+        store.launch(FakeWorker(after_effect=lambda: (marker.write_text("effect", encoding="utf-8"), os._exit(19))),
+                     FakeTransport("worker"), accepted["attempt_id"], args.owner, fence)
     # Abruptly exit after the durable reserve or launch intent, before the next effect/receipt.
     os._exit(19)
 

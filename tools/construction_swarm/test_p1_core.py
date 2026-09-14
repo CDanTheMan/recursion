@@ -136,6 +136,9 @@ class P1CoreTests(unittest.TestCase):
         with self.assertRaises(FenceRejected):
             self.store.submit_result(self.hermes, FakeTransport("worker"), accepted["attempt_id"], 1,
                                      "old-result", owner, fence)
+        with self.assertRaises(FenceRejected):
+            self.store.replay_outbox(self.hermes, "replacement", replacement_fence)
+        self.assertEqual(self.hermes.receipt_count("task-a", "attempt_accepted"), 0)
         self.assertGreater(replacement_fence, fence)
 
     def test_s02_crash_after_launch_intent_is_unknown_and_charge_is_retained(self):
@@ -146,13 +149,33 @@ class P1CoreTests(unittest.TestCase):
         self.assertIsNotNone(attempt["launch_identity"])
         self.assertIsNone(attempt["launch_receipt"])
 
+    def test_s02_crash_after_observed_effect_before_receipt_is_unknown_and_held(self):
+        self.child_crash("after_effect")
+        self.assertTrue((self.root / "store" / "effect-observed").is_file())
+        self.recover()
+        attempt = self.store.attempt("attempt-00000001")
+        self.assertEqual((attempt["state"], attempt["charge_state"]), ("unknown", "held"))
+        self.assertIsNotNone(attempt["launch_identity"])
+        self.assertIsNone(attempt["launch_receipt"])
+
     def test_s02_effect_boundary_rechecks_fence_after_takeover(self):
         accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)
-        worker = FakeWorker(lambda: self.store.acquire_leader("racing-replacement", takeover=True))
+        worker = FakeWorker(after_authorize=lambda: self.store.acquire_leader("racing-replacement", takeover=True))
         with self.assertRaises(FenceRejected):
             self.store.launch(worker, FakeTransport("worker"), accepted["attempt_id"], "leader-a", self.fence)
         self.assertEqual(worker.launches, [])
         self.assertEqual(self.store.attempt(accepted["attempt_id"])["state"], "launch_intent")
+
+    def test_s05_tampered_outbox_envelope_cannot_cross_the_fake_boundary(self):
+        accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "leader-a", self.fence)
+        row = self.store.db.execute("SELECT body FROM outbox WHERE receipt=?", (accepted["receipt"],)).fetchone()
+        body = json.loads(row["body"])
+        body["identity"] = "forged-worker"
+        with self.store.db:
+            self.store.db.execute("UPDATE outbox SET body=? WHERE receipt=?", (json.dumps(body), accepted["receipt"]))
+        with self.assertRaisesRegex(Exception, "outbox envelope mismatch"):
+            self.store.replay_outbox(self.hermes, "leader-a", self.fence)
+        self.assertEqual(self.hermes.receipt_count("task-a"), 0)
 
     def test_s05_transport_identity_project_idempotency_and_revocation(self):
         self.hermes.create_task("task-b", "beta")

@@ -58,3 +58,9 @@ launch-intent crash ambiguity, and missing envelope bindings. The revised fake-o
 seven tests successfully, including abrupt child-process reserve/launch-intent loss and a
 synchronized two-process election. No live qualification or activation occurred. Exact
 candidate review remains required before this packet can pass.
+
+Checkpoint 2 (2026-09-13): second adversarial remediation added explicit recovery adoption
+for only known crashed-fence outbox intents, stale-outbox refusal after ordinary takeover,
+launch receipt uncertainty after an observed fake effect, and outbox-envelope tamper refusal.
+The real child-process/competing-process suite passed 9 tests. This is still fake-boundary
+evidence only; it is neither a live transport nor fleet qualification.
