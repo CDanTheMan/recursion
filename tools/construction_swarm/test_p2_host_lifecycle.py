@@ -506,6 +506,46 @@ class HostLifecycleTests(unittest.TestCase):
         self.assertEqual(failed["controller_id"], controller.controller_id)
         self.assertIsNone(canary.poll())
 
+    def test_replacement_domain_read_failure_persists_unavailable_state(self):
+        config = lifecycle.load_config(self.config_path)
+        domain = lifecycle.CgroupDomain(config["cgroup_root"], self.state_root)
+        domain.ensure()
+        canary = subprocess.Popen(
+            [sys.executable, "-X", "utf8", "-B", "-c", "import time; time.sleep(12)"],
+            preexec_fn=domain.join_current,
+        )
+        self.unrelated.append(canary)
+        previous = {
+            "state_version": lifecycle.STATE_VERSION,
+            "source_commit": _head(),
+            "controller_id": "dead-controller",
+            "service_incarnation": 5,
+            "service_identity": lifecycle.process_identity(canary.pid),
+            "service_domain": str(domain.path),
+            "restart_count": 1,
+            "health": "running",
+            "unavailable": False,
+        }
+        store = lifecycle.StateStore(self.state_root)
+        store.write(previous)
+        controller = lifecycle.Controller(config)
+        controller.store = store
+        controller.domain = domain
+        with mock.patch.object(
+            domain,
+            "populated",
+            side_effect=lifecycle.LifecycleRefused("cleanup_unknown", "injected events read failure"),
+        ):
+            with self.assertRaises(lifecycle.LifecycleRefused):
+                controller._reconcile_previous(previous)
+        failed = store.read()
+        self.assertEqual(failed["health"], "outage")
+        self.assertTrue(failed["unavailable"])
+        self.assertEqual(failed["outage_reason"], "cleanup_unknown")
+        self.assertFalse(failed["cleanup"]["quiescent"])
+        self.assertEqual(failed["controller_id"], controller.controller_id)
+        self.assertIsNone(canary.poll())
+
     def test_stop_cleans_only_owned_process_tree(self):
         self.write_fixture("stable", grandchild=True)
         unrelated = subprocess.Popen(["sleep", "12"])

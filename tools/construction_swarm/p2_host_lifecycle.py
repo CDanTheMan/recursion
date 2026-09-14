@@ -802,22 +802,44 @@ class Controller:
             recorded_domain = previous.get("service_domain")
             domain_exists = self.domain.path.exists()
             if domain_exists:
-                self.domain.inspect_existing()
-                populated = self.domain.populated()
                 _require(recorded_domain == str(self.domain.path),
                          "state_refused", "existing service domain is not authorized by prior state")
+                self.domain_authorized = True
+                try:
+                    self.domain.inspect_existing()
+                    populated = self.domain.populated()
+                except LifecycleRefused as exc:
+                    cleanup = {
+                        "term_sent": False,
+                        "kill_sent": False,
+                        "quiescent": False,
+                        "member_count": None,
+                        "ownership_domain": "cgroup_v2",
+                        "domain": str(self.domain.path),
+                        "error": exc.code,
+                    }
+                    self.last_cleanup = cleanup
+                    self.service_identity = identity
+                    self._write(
+                        prior_incarnation,
+                        restart_count,
+                        "outage",
+                        outage_reason="cleanup_unknown",
+                        cleanup=cleanup,
+                        reconciliation=notes,
+                    )
+                    raise
             else:
                 populated = False
                 _require(recorded_domain in {None, str(self.domain.path)},
                          "state_refused", "prior service ownership domain differs")
+                self.domain_authorized = True
         else:
             domain_exists = self.domain.path.exists()
-            if domain_exists:
-                self.domain.inspect_existing()
-                _require(False, "state_refused", "existing service domain has no prior ownership state")
+            _require(not domain_exists, "state_refused",
+                     "existing service domain has no prior ownership state")
             populated = False
-
-        self.domain_authorized = True
+            self.domain_authorized = True
         if populated:
             cleanup = self._cleanup_current_safely()
             self.last_cleanup = cleanup

@@ -76,6 +76,13 @@ existing-domain inspection, authorizes exact prior source/domain state before an
 and persists a current-controller unavailable/non-quiescent outage when authorized cleanup fails.
 Both actual-canary boundaries now have focused regressions.
 
+Astra review of exact candidate `ceec469c05eea83feb3c80ab342f4ff1e58135dc` closed both
+counterexamples but injected one adjacent matched-takeover failure: an unreadable `cgroup.events`
+observation occurred before the durable uncertainty path and left the prior controller's stale
+available state. The fifth remediation authorizes the exact recorded source/domain before fallible
+inspection, then publishes current-controller unavailable/non-quiescent state for inspection or
+population-read failure without touching mismatched domains.
+
 ## Coverage so far
 
 Native Linux under WSL Ubuntu-24.04:
@@ -109,6 +116,10 @@ Native Linux under WSL Ubuntu-24.04:
   P2 access 19 pass in 5.603 seconds, with preservation/scope/diff passing. Astra reran 19 in 4.222
   seconds, 18 in 2.121 seconds and 19 in 5.596 seconds before its admission probes failed it.
 - First non-mutating-admission suite: 20 tests, pass, 4.043 seconds.
+- Clean non-mutating candidate: lifecycle 20 pass in 4.668 seconds, P1 18 pass in 3.386 seconds and
+  P2 access 19 pass in 5.615 seconds, with preservation/scope/diff passing. Astra reran 20 in 4.250
+  seconds, 18 in 2.118 seconds and 19 in 5.641 seconds before its control-read probe failed it.
+- First matched-inspection uncertainty suite: 21 tests, pass, 4.230 seconds.
 - Real fixture processes covered competing watchdogs, client disconnect, crash/restart, restart
   exhaustion, stale and active socket handling, stale unrelated PID preservation, old-incarnation
   health rejection, owned-tree cleanup and PAUSE/disabled refusal.
@@ -153,6 +164,9 @@ Not run:
 - Astra review of `02e8aa50c50817f321fd1a842505769e929c2a07` returned two actionable admission-side
   findings despite all 56 supplied tests passing. Its canaries, fixture processes and cgroups were
   cleaned; the candidate was not treated as final.
+- Astra review of `ceec469c05eea83feb3c80ab342f4ff1e58135dc` returned one actionable matched-domain
+  inspection finding despite all 57 supplied tests passing. Its canaries, fixtures and cgroups
+  were cleaned; the candidate was not treated as final.
 - The first expanded remediation suite completed 15 tests in 3.403 seconds with one error: the
   restart receipt assertion expected `cleanup` in the new running state. The implementation now
   intentionally carries the most recent verified receipt as `last_cleanup`; the corrected suite
