@@ -32,7 +32,10 @@ bounded exponential backoff. After the configured restart cap, the controller ex
 transition carries an observation timestamp. This is transition freshness, not a continuous
 application-level probe.
 
-An operator stop first binds and proves the recorded controller pidfd before signaling it. It
+An existing service domain is inspected without mutation. Its source and exact domain record must
+authorize takeover before cleanup or `pids.max` changes are armed; otherwise startup refuses with
+no domain effect. An authorized takeover cleanup failure replaces stale available state with an
+unavailable, non-quiescent receipt. An operator stop first binds and proves the recorded controller pidfd before signaling it. It
 returns success only after the same controller records stopped, unavailable and a quiescent cleanup
 receipt for the service incarnation. The controller never searches by process name. An inactive
 Unix socket is removed only after two inode checks, including before every restart; an

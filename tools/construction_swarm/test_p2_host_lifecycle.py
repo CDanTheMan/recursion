@@ -444,6 +444,7 @@ class HostLifecycleTests(unittest.TestCase):
         config = lifecycle.load_config(self.config_path)
         domain = lifecycle.CgroupDomain(config["cgroup_root"], self.state_root)
         domain.ensure()
+        (domain.path / "pids.max").write_text("512", encoding="ascii")
         canary = subprocess.Popen(
             [sys.executable, "-X", "utf8", "-B", "-c", "import time; time.sleep(12)"],
             preexec_fn=domain.join_current,
@@ -462,6 +463,47 @@ class HostLifecycleTests(unittest.TestCase):
         output, error = controller.communicate(timeout=CHILD_DEADLINE)
         self.assertEqual(controller.returncode, 3, output + error)
         self.assertIn("prior state source differs", output)
+        self.assertIsNone(canary.poll())
+        self.assertEqual((domain.path / "pids.max").read_text(encoding="ascii").strip(), "512")
+
+    def test_replacement_cleanup_failure_persists_unavailable_state(self):
+        config = lifecycle.load_config(self.config_path)
+        domain = lifecycle.CgroupDomain(config["cgroup_root"], self.state_root)
+        domain.ensure()
+        canary = subprocess.Popen(
+            [sys.executable, "-X", "utf8", "-B", "-c", "import time; time.sleep(12)"],
+            preexec_fn=domain.join_current,
+        )
+        self.unrelated.append(canary)
+        previous = {
+            "state_version": lifecycle.STATE_VERSION,
+            "source_commit": _head(),
+            "controller_id": "dead-controller",
+            "service_incarnation": 4,
+            "service_identity": lifecycle.process_identity(canary.pid),
+            "service_domain": str(domain.path),
+            "restart_count": 1,
+            "health": "running",
+            "unavailable": False,
+        }
+        store = lifecycle.StateStore(self.state_root)
+        store.write(previous)
+        controller = lifecycle.Controller(config)
+        controller.store = store
+        controller.domain = domain
+        with mock.patch.object(
+            domain,
+            "cleanup",
+            side_effect=lifecycle.LifecycleRefused("cleanup_unknown", "injected takeover failure"),
+        ):
+            with self.assertRaises(lifecycle.LifecycleRefused):
+                controller._reconcile_previous(previous)
+        failed = store.read()
+        self.assertEqual(failed["health"], "outage")
+        self.assertTrue(failed["unavailable"])
+        self.assertEqual(failed["outage_reason"], "cleanup_unknown")
+        self.assertFalse(failed["cleanup"]["quiescent"])
+        self.assertEqual(failed["controller_id"], controller.controller_id)
         self.assertIsNone(canary.poll())
 
     def test_stop_cleans_only_owned_process_tree(self):

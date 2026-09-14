@@ -236,6 +236,13 @@ class CgroupDomain:
         self.root = root
         self.path = root / name
 
+    def inspect_existing(self):
+        _require(self.path.is_dir() and not self.path.is_symlink(),
+                 "state_refused", "service cgroup path is unsafe")
+        for name in ("cgroup.procs", "cgroup.events", "cgroup.kill"):
+            _require((self.path / name).is_file(), "platform_unavailable",
+                     "service cgroup lacks required control files")
+
     def ensure(self, *, require_process_bound=True):
         try:
             self.path.mkdir(mode=0o700)
@@ -243,11 +250,7 @@ class CgroupDomain:
             pass
         except OSError as exc:
             raise LifecycleRefused("platform_unavailable", "service cgroup cannot be created") from exc
-        _require(self.path.is_dir() and not self.path.is_symlink(),
-                 "state_refused", "service cgroup path is unsafe")
-        for name in ("cgroup.procs", "cgroup.events", "cgroup.kill"):
-            _require((self.path / name).is_file(), "platform_unavailable",
-                     "service cgroup lacks required control files")
+        self.inspect_existing()
         if require_process_bound:
             limit = self.path / "pids.max"
             _require(limit.is_file(), "platform_unavailable",
@@ -778,6 +781,8 @@ class Controller:
     def _reconcile_previous(self, previous):
         notes = []
         prior_incarnation = 0
+        identity = None
+        restart_count = 0
         if previous is not None:
             _require(
                 previous.get("source_commit") == self.config["source_commit"],
@@ -791,29 +796,75 @@ class Controller:
                 "prior incarnation is invalid",
             )
             identity = previous.get("service_identity")
+            restart_count = previous.get("restart_count", 0)
+            _require(type(restart_count) is int and restart_count >= 0,
+                     "state_refused", "prior restart count is invalid")
             recorded_domain = previous.get("service_domain")
-            populated = self.domain.populated()
-            if populated:
+            domain_exists = self.domain.path.exists()
+            if domain_exists:
+                self.domain.inspect_existing()
+                populated = self.domain.populated()
                 _require(recorded_domain == str(self.domain.path),
-                         "state_refused", "populated service domain is not authorized by prior state")
+                         "state_refused", "existing service domain is not authorized by prior state")
             else:
+                populated = False
                 _require(recorded_domain in {None, str(self.domain.path)},
                          "state_refused", "prior service ownership domain differs")
-            self.domain_authorized = True
-            if populated:
-                cleanup = self.domain.cleanup(self.config["shutdown_timeout_seconds"])
-                _require(cleanup["quiescent"], "cleanup_unknown", "prior owned service did not quiesce")
-                notes.append("prior_owned_service_quiesced")
-            elif isinstance(identity, dict):
-                try:
-                    process_identity(identity.get("pid"))
-                    notes.append("stale_pid_unrelated_preserved")
-                except LifecycleRefused:
-                    notes.append("prior_service_absent")
         else:
-            _require(not self.domain.populated(), "state_refused",
-                     "populated service domain has no prior ownership state")
-            self.domain_authorized = True
+            domain_exists = self.domain.path.exists()
+            if domain_exists:
+                self.domain.inspect_existing()
+                _require(False, "state_refused", "existing service domain has no prior ownership state")
+            populated = False
+
+        self.domain_authorized = True
+        if populated:
+            cleanup = self._cleanup_current_safely()
+            self.last_cleanup = cleanup
+            if not cleanup["quiescent"]:
+                self.service_identity = identity
+                self._write(
+                    prior_incarnation,
+                    restart_count,
+                    "outage",
+                    outage_reason="cleanup_unknown",
+                    cleanup=cleanup,
+                    reconciliation=notes,
+                )
+                raise LifecycleRefused(
+                    "cleanup_unknown",
+                    "prior owned service did not quiesce",
+                )
+            notes.append("prior_owned_service_quiesced")
+        elif isinstance(identity, dict):
+            try:
+                process_identity(identity.get("pid"))
+                notes.append("stale_pid_unrelated_preserved")
+            except LifecycleRefused:
+                notes.append("prior_service_absent")
+
+        try:
+            self.domain.ensure()
+        except LifecycleRefused as exc:
+            self.service_identity = identity
+            cleanup = self.last_cleanup or {
+                "term_sent": False,
+                "kill_sent": False,
+                "quiescent": not populated,
+                "member_count": None,
+                "ownership_domain": "cgroup_v2",
+                "domain": str(self.domain.path),
+                "error": exc.code,
+            }
+            self._write(
+                prior_incarnation,
+                restart_count,
+                "outage",
+                outage_reason=exc.code,
+                cleanup=cleanup,
+                reconciliation=notes,
+            )
+            raise
         notes.append(reconcile_socket(self.config["socket_path"]))
         return prior_incarnation, notes
 
@@ -826,7 +877,6 @@ class Controller:
         try:
             self.store = StateStore(self.root)
             self.domain = CgroupDomain(self.config["cgroup_root"], self.root)
-            self.domain.ensure()
             previous = self.store.read()
             incarnation, reconciliation = self._reconcile_previous(previous)
             restart_count = 0

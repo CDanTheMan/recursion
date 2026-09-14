@@ -68,6 +68,14 @@ case, and arms domain cleanup only after matching prior source/domain state (or 
 domain). Its negative canary test verifies rejected prior state causes no signal. Cleanup also does
 not let membership-count or process-limit observations block an already-authorized `cgroup.kill`.
 
+Astra review of exact candidate `02e8aa50c50817f321fd1a842505769e929c2a07` closed those
+findings but found two remaining admission effects: `pids.max` was still rewritten before a
+mismatched prior state was refused, and an injected authorized takeover-cleanup failure left the
+dead controller's stale `running` state intact. The fourth remediation performs a non-mutating
+existing-domain inspection, authorizes exact prior source/domain state before any control write,
+and persists a current-controller unavailable/non-quiescent outage when authorized cleanup fails.
+Both actual-canary boundaries now have focused regressions.
+
 ## Coverage so far
 
 Native Linux under WSL Ubuntu-24.04:
@@ -97,6 +105,10 @@ Native Linux under WSL Ubuntu-24.04:
 - A final local audit made cleanup-control errors persist explicit non-quiescent uncertainty rather
   than leave the last transition apparently healthy. Its focused regression expanded the suite to
   19 tests, pass, 4.028 seconds.
+- Clean preauthorization candidate: lifecycle 19 pass in 4.161 seconds, P1 18 pass in 2.107 seconds,
+  P2 access 19 pass in 5.603 seconds, with preservation/scope/diff passing. Astra reran 19 in 4.222
+  seconds, 18 in 2.121 seconds and 19 in 5.596 seconds before its admission probes failed it.
+- First non-mutating-admission suite: 20 tests, pass, 4.043 seconds.
 - Real fixture processes covered competing watchdogs, client disconnect, crash/restart, restart
   exhaustion, stale and active socket handling, stale unrelated PID preservation, old-incarnation
   health rejection, owned-tree cleanup and PAUSE/disabled refusal.
@@ -138,6 +150,9 @@ Not run:
 - Astra review of `67b65434419331fcc901628b25b1f69724e675fc` returned two actionable admission
   findings despite all 53 supplied tests passing. The reviewer's disposable canaries and cgroups
   were cleaned; the candidate was not treated as final.
+- Astra review of `02e8aa50c50817f321fd1a842505769e929c2a07` returned two actionable admission-side
+  findings despite all 56 supplied tests passing. Its canaries, fixture processes and cgroups were
+  cleaned; the candidate was not treated as final.
 - The first expanded remediation suite completed 15 tests in 3.403 seconds with one error: the
   restart receipt assertion expected `cleanup` in the new running state. The implementation now
   intentionally carries the most recent verified receipt as `last_cleanup`; the corrected suite
