@@ -19,14 +19,16 @@ gaps return `replay_gap` with `snapshot_required=true`. Artifact handles are pro
 absolute paths, `..`, symlinks, non-files and files beyond the configured limit are refused.
 Artifact roots are pinned as directory descriptors; every path component is opened relative to a
 pinned descriptor with no-follow flags. Size, manifest SHA-256, returned bytes and pagination all
-come from the same opened file descriptor, so a pathname swap cannot redirect or version-mix a read.
+come from one size-capped capture of the same nonblocking file descriptor, so pathname replacement,
+in-place writes and special files cannot redirect, version-mix or permanently block a read.
 
 Status has a separate two-slot bounded path from the bounded general read slots. Accepted
 connections and handshake/read lifetimes are also bounded. A disconnected client can return only
 the same-operation cached snapshot when explicitly enabled; the cache key also binds the credential
-digest and absolute service endpoint. The result is relabelled `stale_disconnected` and adds
-`service.connection` to unavailable fields. Reconnection always asks the service again, clears a
-relevant authorization refusal and replaces the cache.
+digest and absolute service endpoint. Authentication refusal clears that complete credential and
+endpoint scope; project refusal clears every cached operation for the affected project. The result
+is relabelled `stale_disconnected` and adds `service.connection` to unavailable fields. Reconnection
+always asks the service again and replaces the cache.
 
 There is deliberately no real canonical adapter in this packet. Starting without the test fixture
 adapter returns `None`, never zero/healthy, for unknown canonical fields and identifies both
@@ -120,7 +122,7 @@ python -X utf8 -B -m unittest -v tools.construction_swarm.test_p2_access
 python -X utf8 -B -m unittest -v tools.construction_swarm.test_p1_core
 ```
 
-On the qualified Windows host, the first command uses `wsl.exe` to run the fifteen real Unix-socket
+On the qualified Windows host, the first command uses `wsl.exe` to run the nineteen real Unix-socket
 cases under WSL2. Each service, CLI and MCP child has a bounded timeout and is cleaned by its owning
 test. On a native Linux host the same command runs those cases directly.
 

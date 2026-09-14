@@ -120,3 +120,24 @@ After committing remediation evidence, the complete gate was run again: focused 
 
 The final exact-candidate Astra receipt is reported with the handoff rather than inserted here:
 inserting a receipt into this tracked file would create a different, unreviewed candidate.
+
+The next exact candidate `ee457eda66bde0b96f957ea7e76940f24012dfc8` also passed Astra's
+15-case gate (4.339 seconds WSL, 7.689 seconds Windows wrapper), 18-case P1 regression
+(2.403 seconds), diff and scope checks. Astra confirmed the original cache, pathname, connection,
+cursor, digest and missing-ledger counterexamples closed, then found four deeper cases: mutation of
+an opened inode after hashing, blocking FIFO open, authentication refusal clearing only one cached
+operation, and partial-frame trickle extending the inactivity timeout.
+
+Commit `aff5a21` addresses those cases. Artifact bytes are captured within the bounded hash pass and
+returned only after digest verification; growth/truncation is refused and final opens are
+nonblocking before regular-file validation. Cache entries carry explicit credential/endpoint/project
+bindings, with credential-scope invalidation on authentication refusal and project-scope
+invalidation on permission refusal. Socket framing now uses a monotonic total deadline independent
+of arriving bytes. The gate adds concurrent in-place-write, FIFO slot-retention, credential/project
+cache invalidation and partial-frame trickle regressions, bringing the native suite to 19 cases.
+
+Post-remediation rerun: focused gate exit 0, all 19 WSL cases in 6.655 seconds and Windows wrapper
+in 9.494 seconds; P1 exit 0, all 18 cases in 1.899 seconds; tracked and working-tree diff checks
+exit 0.
+
+As above, the next final Astra receipt must remain external to the reviewed candidate.
