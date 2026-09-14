@@ -20,6 +20,7 @@ import re
 import signal
 import socket
 import socketserver
+import stat
 import threading
 import time
 import uuid
@@ -50,7 +51,21 @@ class AccessRefused(RuntimeError):
 
 
 def _json_bytes(value):
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+                      allow_nan=False).encode("utf-8")
+
+
+def _strict_json(raw):
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            if key in value:
+                raise ValueError("duplicate JSON key")
+            value[key] = item
+        return value
+
+    return json.loads(raw, object_pairs_hook=pairs,
+                      parse_constant=lambda value: (_ for _ in ()).throw(ValueError("non-finite JSON number")))
 
 
 def _utc_now():
@@ -64,7 +79,10 @@ def _timestamp(value):
 def _parse_timestamp(value):
     if not isinstance(value, str):
         raise ValueError("timestamp is not a string")
-    return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
+    parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+        raise ValueError("timestamp must be UTC")
+    return parsed.astimezone(dt.timezone.utc)
 
 
 def _require(condition, code, message, **detail):
@@ -101,8 +119,8 @@ class GrantStore:
         raw = path.read_bytes()
         _require(len(raw) <= 1024 * 1024, "configuration_refused", "grant store exceeds size limit")
         try:
-            values = json.loads(raw)
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            values = _strict_json(raw)
+        except (UnicodeDecodeError, ValueError, RecursionError) as exc:
             raise AccessRefused("configuration_refused", "grant store is not strict JSON") from exc
         _require(isinstance(values, list) and values, "configuration_refused", "at least one grant is required")
         grants = []
@@ -200,15 +218,38 @@ class FixtureCanonicalAdapter:
         self.max_page_size = max_page_size
         self.max_artifact_read = max_artifact_read
         self.max_artifact_size = max_artifact_size
+        _require(os.name == "posix", "platform_unavailable",
+                 "fixture artifact adapter requires POSIX descriptor-relative access")
+        self._root_descriptors = {}
+        flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW
+        try:
+            for project, root in self.artifact_roots.items():
+                self._root_descriptors[project] = os.open(root, flags)
+        except OSError as exc:
+            self.close()
+            raise AccessRefused("configuration_refused", "artifact root could not be pinned") from exc
+
+    def close(self):
+        for descriptor in self._root_descriptors.values():
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        self._root_descriptors.clear()
 
     def _load(self):
-        path = self.filename.resolve(strict=True)
-        _require(path.is_file(), "canonical_unavailable", "fixture adapter source is not a regular file")
-        raw = path.read_bytes()
+        try:
+            path = self.filename.resolve(strict=True)
+            _require(path.is_file(), "canonical_unavailable", "fixture adapter source is not a regular file")
+            raw = path.read_bytes()
+        except AccessRefused:
+            raise
+        except OSError as exc:
+            raise AccessRefused("canonical_unavailable", "fixture canonical ledger is unavailable") from exc
         _require(len(raw) <= MAX_FIXTURE_BYTES, "canonical_unavailable", "fixture adapter source is oversized")
         try:
-            value = json.loads(raw)
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            value = _strict_json(raw)
+        except (UnicodeDecodeError, ValueError, RecursionError) as exc:
             raise AccessRefused("canonical_unavailable", "fixture adapter source is malformed") from exc
         _require(isinstance(value, dict) and isinstance(value.get("projects"), dict),
                  "canonical_unavailable", "fixture adapter source has no projects")
@@ -302,13 +343,23 @@ class FixtureCanonicalAdapter:
             cursors = [item.get("cursor") for item in events]
             _require(all(type(cursor) is int and cursor >= 0 for cursor in cursors) and cursors == sorted(set(cursors)),
                      "canonical_unavailable", "fixture event cursors are invalid")
+            latest = fixture.get("last_event_cursor")
+            _require(type(latest) is int and latest >= 0,
+                     "canonical_unavailable", "fixture last event cursor is unavailable")
+            history_start = project_value.get("event_history_start")
+            _require(type(history_start) is int and 0 <= history_start <= latest + 1,
+                     "canonical_unavailable", "fixture event history watermark is unavailable")
+            _require((not cursors and history_start == latest + 1) or
+                     (cursors and history_start == cursors[0] and cursors[-1] <= latest),
+                     "canonical_unavailable", "fixture event history watermark is inconsistent")
             after = params.get("after_cursor")
             _require(type(after) is int and after >= 0, "malformed_request", "after_cursor is required")
             limit = self._limit(params)
-            if cursors and after < cursors[0] - 1:
+            if after < history_start - 1 or after > latest:
                 raise AccessRefused(
                     "replay_gap", "event cursor is outside retained history",
-                    snapshot_required=True, first_available_cursor=cursors[0], last_event_cursor=fixture.get("last_event_cursor"),
+                    snapshot_required=True, first_available_cursor=history_start,
+                    last_event_cursor=latest,
                 )
             items = [copy.deepcopy(item) for item in events if item["cursor"] > after][:limit]
             next_cursor = items[-1]["cursor"] if items else after
@@ -338,41 +389,63 @@ class FixtureCanonicalAdapter:
         relative_path = Path(relative)
         _require(not relative_path.is_absolute() and ".." not in relative_path.parts,
                  "artifact_refused", "artifact path escape refused")
-        root_value = self.artifact_roots.get(project)
-        _require(root_value is not None, "canonical_unavailable", "project artifact root is unavailable")
-        _require(not root_value.is_symlink(), "artifact_refused", "symlink artifact root refused")
-        root = root_value.resolve(strict=True)
-        _require(root.is_dir(), "artifact_refused", "artifact root is not a stable directory")
-        cursor = root
-        for part in relative_path.parts:
-            cursor = cursor / part
-            _require(cursor.exists(), "not_found", "artifact is unavailable")
-            _require(not cursor.is_symlink(), "artifact_refused", "symlink artifact path refused")
-        resolved = cursor.resolve(strict=True)
-        try:
-            resolved.relative_to(root)
-        except ValueError as exc:
-            raise AccessRefused("artifact_refused", "artifact path escape refused") from exc
-        _require(resolved.is_file(), "artifact_refused", "artifact is not a regular file")
-        size = resolved.stat().st_size
-        _require(size <= self.max_artifact_size, "artifact_refused", "artifact exceeds configured size bound",
-                 size=size, max_artifact_size=self.max_artifact_size)
+        _require(relative_path.parts, "artifact_refused", "artifact path is invalid")
+        expected_digest = record.get("sha256")
+        _require(isinstance(expected_digest, str) and re.fullmatch(r"[0-9a-f]{64}", expected_digest),
+                 "artifact_refused", "artifact manifest digest is missing or invalid")
+        root_descriptor = self._root_descriptors.get(project)
+        _require(root_descriptor is not None, "canonical_unavailable", "project artifact root is unavailable")
         offset = params.get("offset", 0)
         limit = params.get("limit", DEFAULT_ARTIFACT_READ)
-        _require(type(offset) is int and 0 <= offset <= size, "malformed_request", "artifact offset is invalid")
         _require(type(limit) is int and 1 <= limit <= self.max_artifact_read,
                  "malformed_request", "artifact read exceeds configured bound",
                  max_artifact_read=self.max_artifact_read)
-        with resolved.open("rb") as stream:
-            stream.seek(offset)
-            content = stream.read(limit)
+        directory_descriptor = os.dup(root_descriptor)
+        file_descriptor = None
+        try:
+            directory_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW
+            for part in relative_path.parts[:-1]:
+                next_descriptor = os.open(part, directory_flags, dir_fd=directory_descriptor)
+                os.close(directory_descriptor)
+                directory_descriptor = next_descriptor
+            file_descriptor = os.open(
+                relative_path.parts[-1], os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                dir_fd=directory_descriptor,
+            )
+            information = os.fstat(file_descriptor)
+            _require(stat.S_ISREG(information.st_mode), "artifact_refused", "artifact is not a regular file")
+            size = information.st_size
+            _require(size <= self.max_artifact_size, "artifact_refused", "artifact exceeds configured size bound",
+                     size=size, max_artifact_size=self.max_artifact_size)
+            _require(type(offset) is int and 0 <= offset <= size,
+                     "malformed_request", "artifact offset is invalid")
+            digest = hashlib.sha256()
+            with os.fdopen(file_descriptor, "rb", closefd=True) as stream:
+                file_descriptor = None
+                while chunk := stream.read(64 * 1024):
+                    digest.update(chunk)
+                actual_digest = digest.hexdigest()
+                _require(hmac.compare_digest(actual_digest, expected_digest),
+                         "artifact_refused", "artifact content digest differs from manifest")
+                stream.seek(offset)
+                content = stream.read(limit)
+        except AccessRefused:
+            raise
+        except FileNotFoundError as exc:
+            raise AccessRefused("not_found", "artifact is unavailable") from exc
+        except OSError as exc:
+            raise AccessRefused("artifact_refused", "descriptor-relative artifact access refused") from exc
+        finally:
+            os.close(directory_descriptor)
+            if file_descriptor is not None:
+                os.close(file_descriptor)
         data = {
             "project": project,
             "handle": handle,
             "offset": offset,
             "size": size,
             "next_offset": offset + len(content) if offset + len(content) < size else None,
-            "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest(),
+            "sha256": actual_digest,
             "encoding": "base64",
             "content": base64.b64encode(content).decode("ascii"),
         }
@@ -381,7 +454,8 @@ class FixtureCanonicalAdapter:
 
 class AccessService:
     def __init__(self, source_commit, grants, adapter=None, instance_id=None, fence=None,
-                 stale_after_seconds=30.0, max_readers=4):
+                 stale_after_seconds=30.0, max_readers=4, max_connections=16,
+                 request_timeout=2.0):
         _require(isinstance(source_commit, str) and re.fullmatch(r"[0-9a-f]{40}", source_commit),
                  "configuration_refused", "source commit must be a full Git SHA-1")
         _require(instance_id is None or (isinstance(instance_id, str) and 0 < len(instance_id) <= 128),
@@ -392,6 +466,10 @@ class AccessService:
                  "configuration_refused", "freshness bound is invalid")
         _require(type(max_readers) is int and 1 <= max_readers <= 64,
                  "configuration_refused", "read concurrency bound is invalid")
+        _require(type(max_connections) is int and max_readers + 2 <= max_connections <= 128,
+                 "configuration_refused", "connection bound must reserve status capacity")
+        _require(type(request_timeout) in {int, float} and 0.1 <= request_timeout <= 30,
+                 "configuration_refused", "request timeout is invalid")
         self.source_commit = source_commit
         self.grants = grants
         self.adapter = adapter or UnavailableCanonicalAdapter()
@@ -401,13 +479,16 @@ class AccessService:
         self.stale_after_seconds = float(stale_after_seconds)
         self.read_slots = threading.BoundedSemaphore(max_readers)
         self.status_slots = threading.BoundedSemaphore(2)
+        self.max_connections = max_connections
+        self.request_timeout = float(request_timeout)
 
-    def envelope(self, request_id, *, ok, view=None, error=None):
+    def envelope(self, request_id, *, ok, view=None, error=None, caller_identity=None):
         now = _utc_now()
         view = view or {}
         observed_at = view.get("observed_at")
         unavailable = set(view.get("unavailable_fields", ()))
         if observed_at is None:
+            unavailable.add("canonical.observed_at")
             freshness = {"state": "unavailable", "stale": True, "age_seconds": None,
                          "stale_after_seconds": self.stale_after_seconds}
         else:
@@ -422,10 +503,17 @@ class AccessService:
                 unavailable.add("canonical.observed_at")
         if self.fence is None:
             unavailable.add("service_fence")
+        if caller_identity is None:
+            unavailable.add("caller_identity")
+        if view.get("canonical_revision") is None:
+            unavailable.add("canonical_revision")
+        if view.get("last_event_cursor") is None:
+            unavailable.add("last_event_cursor")
         result = {
             "protocol_version": PROTOCOL_VERSION,
             "request_id": request_id,
             "ok": bool(ok),
+            "caller_identity": caller_identity,
             "source_commit": self.source_commit,
             "service_instance": self.instance_id,
             "service_fence": self.fence,
@@ -490,13 +578,23 @@ class AccessService:
             acquired = self.status_slots.acquire(timeout=0.1)
             _require(acquired, "status_queue_saturated", "bounded status queue is saturated")
             try:
-                return self.adapter.read(operation, project, clean_params)
+                try:
+                    return self.adapter.read(operation, project, clean_params)
+                except AccessRefused:
+                    raise
+                except (OSError, UnicodeError, ValueError, RecursionError) as exc:
+                    raise AccessRefused("canonical_unavailable", "canonical adapter read failed") from exc
             finally:
                 self.status_slots.release()
         acquired = self.read_slots.acquire(timeout=0.1)
         _require(acquired, "read_queue_saturated", "bounded read queue is saturated")
         try:
-            return self.adapter.read(operation, project, clean_params)
+            try:
+                return self.adapter.read(operation, project, clean_params)
+            except AccessRefused:
+                raise
+            except (OSError, UnicodeError, ValueError, RecursionError) as exc:
+                raise AccessRefused("canonical_unavailable", "canonical adapter read failed") from exc
         finally:
             self.read_slots.release()
 
@@ -507,8 +605,8 @@ def _decode_line(stream, *, limit=MAX_REQUEST_BYTES):
     _require(len(line) <= limit + 1 and line.endswith(b"\n"),
              "request_too_large", "request exceeds byte bound", max_request_bytes=limit)
     try:
-        value = json.loads(line)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = _strict_json(line)
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise AccessRefused("malformed_request", "request is not strict JSON") from exc
     return value
 
@@ -522,6 +620,10 @@ def _send(stream, value):
 
 
 class _AccessHandler(socketserver.StreamRequestHandler):
+    def setup(self):
+        self.request.settimeout(self.server.access.request_timeout)
+        super().setup()
+
     def handle(self):
         request_id = None
         grant = None
@@ -534,15 +636,24 @@ class _AccessHandler(socketserver.StreamRequestHandler):
                 view={"data": {"authenticated": True, "identity": grant.identity},
                       "unavailable_fields": ["canonical.adapter", "canonical.ledger",
                                              "canonical_revision", "last_event_cursor"]},
+                caller_identity=grant.identity,
             ))
             request = _decode_line(self.rfile)
             request_id = request.get("request_id") if isinstance(request, dict) else None
             view = self.server.access.dispatch(grant, request)
-            _send(self.wfile, self.server.access.envelope(request_id, ok=True, view=view))
+            _send(self.wfile, self.server.access.envelope(
+                request_id, ok=True, view=view, caller_identity=grant.identity,
+            ))
         except AccessRefused as exc:
             error = {"code": exc.code, "message": exc.message, **exc.detail}
+            error_view = {}
+            if type(exc.detail.get("last_event_cursor")) is int:
+                error_view["last_event_cursor"] = exc.detail["last_event_cursor"]
             try:
-                _send(self.wfile, self.server.access.envelope(request_id, ok=False, error=error))
+                _send(self.wfile, self.server.access.envelope(
+                    request_id, ok=False, error=error, view=error_view,
+                    caller_identity=grant.identity if grant else None,
+                ))
             except (AccessRefused, BrokenPipeError, ConnectionError, OSError):
                 pass
         except (BrokenPipeError, ConnectionError, OSError):
@@ -565,7 +676,24 @@ if hasattr(socketserver, "UnixStreamServer"):
 
         def __init__(self, socket_path, access):
             self.access = access
+            self._connection_slots = threading.BoundedSemaphore(access.max_connections)
             super().__init__(str(socket_path), _AccessHandler)
+
+        def process_request(self, request, client_address):
+            if not self._connection_slots.acquire(blocking=False):
+                self.shutdown_request(request)
+                return
+            try:
+                super().process_request(request, client_address)
+            except BaseException:
+                self._connection_slots.release()
+                raise
+
+        def process_request_thread(self, request, client_address):
+            try:
+                super().process_request_thread(request, client_address)
+            finally:
+                self._connection_slots.release()
 else:
     class ThreadingUnixAccessServer:  # pragma: no cover - importable Windows refusal path
         def __init__(self, *_args, **_kwargs):
@@ -595,6 +723,9 @@ def serve(socket_path, access):
     finally:
         server.shutdown()
         server.server_close()
+        close = getattr(access.adapter, "close", None)
+        if close:
+            close()
         try:
             path.unlink()
         except FileNotFoundError:
@@ -611,6 +742,7 @@ class AccessClient:
                  "authentication_refused", "invalid client credential")
         self.socket_path = str(socket_path)
         self.token = token
+        self.credential_digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
         self.timeout = float(timeout)
         self.cache_path = Path(cache_path) if cache_path else None
         self._cache = self._load_cache()
@@ -622,9 +754,9 @@ class AccessClient:
             raw = self.cache_path.read_bytes()
             if len(raw) > MAX_RESPONSE_BYTES:
                 return {}
-            value = json.loads(raw)
+            value = _strict_json(raw)
             return value if isinstance(value, dict) else {}
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        except (OSError, UnicodeDecodeError, ValueError, RecursionError):
             return {}
 
     def _save_cache(self):
@@ -641,16 +773,20 @@ class AccessClient:
             pass
         os.replace(temporary, self.cache_path)
 
-    @staticmethod
-    def _cache_key(operation, params):
-        return hashlib.sha256(_json_bytes({"op": operation, "params": params})).hexdigest()
+    def _cache_key(self, operation, params):
+        return hashlib.sha256(_json_bytes({
+            "credential_sha256": self.credential_digest,
+            "service_endpoint": os.path.abspath(self.socket_path),
+            "op": operation,
+            "params": params,
+        })).hexdigest()
 
     @staticmethod
     def _receive(stream):
         line = stream.readline(MAX_RESPONSE_BYTES + 2)
         if not line or len(line) > MAX_RESPONSE_BYTES + 1 or not line.endswith(b"\n"):
             raise ConnectionError("invalid or missing service response")
-        value = json.loads(line)
+        value = _strict_json(line)
         if not isinstance(value, dict):
             raise ConnectionError("service response is not an object")
         return value
@@ -670,6 +806,9 @@ class AccessClient:
                                "token": self.token, "request_id": auth_id})
                 auth = self._receive(stream)
                 if not auth.get("ok"):
+                    if key in self._cache:
+                        del self._cache[key]
+                        self._save_cache()
                     return auth
                 request_id = uuid.uuid4().hex
                 _send(stream, {"protocol_version": PROTOCOL_VERSION, "op": operation,
@@ -678,8 +817,12 @@ class AccessClient:
             if response.get("ok"):
                 self._cache[key] = response
                 self._save_cache()
+            elif response.get("error", {}).get("code") in {"authentication_refused", "permission_denied"}:
+                if key in self._cache:
+                    del self._cache[key]
+                    self._save_cache()
             return response
-        except (ConnectionError, OSError, TimeoutError, json.JSONDecodeError) as exc:
+        except (ConnectionError, OSError, TimeoutError, ValueError, RecursionError) as exc:
             if allow_stale and key in self._cache:
                 stale = copy.deepcopy(self._cache[key])
                 stale["freshness"] = {
@@ -716,6 +859,8 @@ def main(argv=None):
     command.add_argument("--fence", type=int)
     command.add_argument("--stale-after", type=float, default=30.0)
     command.add_argument("--max-readers", type=int, default=4)
+    command.add_argument("--max-connections", type=int, default=16)
+    command.add_argument("--request-timeout", type=float, default=2.0)
     command.add_argument("--max-page-size", type=int, default=MAX_PAGE_SIZE)
     command.add_argument("--max-artifact-read", type=int, default=MAX_ARTIFACT_READ)
     command.add_argument("--max-artifact-size", type=int, default=MAX_ARTIFACT_READ)
@@ -744,6 +889,8 @@ def main(argv=None):
             fence=args.fence,
             stale_after_seconds=args.stale_after,
             max_readers=args.max_readers,
+            max_connections=args.max_connections,
+            request_timeout=args.request_timeout,
         )
         def stop_handler(_number, _frame):
             raise KeyboardInterrupt

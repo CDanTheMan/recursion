@@ -19,9 +19,13 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
-from .p2_access import AccessClient, AccessRefused, MAX_REQUEST_BYTES, PROTOCOL_VERSION, READ_OPERATIONS
+from .p2_access import (
+    AccessClient, AccessRefused, FixtureCanonicalAdapter, MAX_REQUEST_BYTES,
+    PROTOCOL_VERSION, READ_OPERATIONS,
+)
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -140,20 +144,28 @@ if hasattr(socket, "AF_UNIX"):
                             {"cursor": 4, "kind": "running", "task_id": "a-1"},
                             {"cursor": 5, "kind": "review_pending", "task_id": "a-2"},
                         ],
+                        "event_history_start": 3,
                         "artifacts": [
-                            {"handle": "alpha-report", "project": "alpha", "path": "report.txt"},
-                            {"handle": "escape", "project": "alpha", "path": "../outside.txt"},
-                            {"handle": "symlink", "project": "alpha", "path": "link.txt"},
-                            {"handle": "large", "project": "alpha", "path": "large.bin"},
-                            {"handle": "misbound", "project": "beta", "path": "report.txt"},
+                            {"handle": "alpha-report", "project": "alpha", "path": "report.txt",
+                             "sha256": hashlib.sha256(b"bounded-alpha-report").hexdigest()},
+                            {"handle": "escape", "project": "alpha", "path": "../outside.txt",
+                             "sha256": hashlib.sha256(b"outside").hexdigest()},
+                            {"handle": "symlink", "project": "alpha", "path": "link.txt",
+                             "sha256": hashlib.sha256(b"outside").hexdigest()},
+                            {"handle": "large", "project": "alpha", "path": "large.bin",
+                             "sha256": hashlib.sha256(b"x" * 2048).hexdigest()},
+                            {"handle": "misbound", "project": "beta", "path": "report.txt",
+                             "sha256": hashlib.sha256(b"bounded-alpha-report").hexdigest()},
                         ],
                     },
                     "beta": {
                         "status": {**common_status, "active_leases": []},
                         "tasks": [{"task_id": "b-secret", "state": "open"}],
                         "events": [{"cursor": 5, "kind": "created", "task_id": "b-secret"}],
+                        "event_history_start": 5,
                         "artifacts": [
-                            {"handle": "beta-secret", "project": "beta", "path": "secret.txt"},
+                            {"handle": "beta-secret", "project": "beta", "path": "secret.txt",
+                             "sha256": hashlib.sha256(b"beta-secret").hexdigest()},
                         ],
                     },
                 },
@@ -171,6 +183,7 @@ if hasattr(socket, "AF_UNIX"):
                 sys.executable, "-X", "utf8", "-B", "-m", "tools.construction_swarm.p2_access",
                 "serve", "--socket", str(self.socket_path), "--source-commit", source,
                 "--grants", str(self.grants_path), "--max-readers", "2", "--max-page-size", "2",
+                "--max-connections", "4", "--request-timeout", "1.2",
                 "--max-artifact-read", "64", "--max-artifact-size", "1024",
             ]
             if instance:
@@ -225,6 +238,7 @@ if hasattr(socket, "AF_UNIX"):
         def common(self, response):
             self.assertEqual(response["protocol_version"], PROTOCOL_VERSION)
             self.assertEqual(response["source_commit"], SOURCE_A)
+            self.assertEqual(response["caller_identity"], "alpha-reader")
             self.assertIsInstance(response["service_instance"], str)
             self.assertIn("service_fence", response)
             self.assertIn("observation_time", response)
@@ -344,6 +358,22 @@ if hasattr(socket, "AF_UNIX"):
             with self.assertRaises(AccessRefused):
                 client.request("tasks", {"project": "alpha", "limit": 1, "page_token": 0})
 
+        def test_stale_cache_is_bound_to_credential_and_service_endpoint(self):
+            cache = self.root / "shared-cache.json"
+            alpha = self.client(cache=cache)
+            self.assertTrue(alpha.request("status", {"project": "alpha"})["ok"])
+            beta = self.client(token=self.beta_token, cache=cache)
+            denied = beta.request("status", {"project": "alpha"})
+            self.assertFalse(denied["ok"])
+            self.assertEqual(denied["error"]["code"], "permission_denied")
+            self.stop_service()
+            with self.assertRaises(AccessRefused):
+                beta.request("status", {"project": "alpha"}, allow_stale=True)
+            # The originally authorized credential can still inspect its clearly
+            # stale, endpoint-bound copy.
+            stale = alpha.request("status", {"project": "alpha"}, allow_stale=True)
+            self.assertEqual(stale["freshness"]["state"], "stale_disconnected")
+
         def test_event_replay_gap_demands_snapshot_refresh(self):
             gap = self.client().request("events", {"project": "alpha", "after_cursor": 0, "limit": 2})
             self.assertFalse(gap["ok"])
@@ -353,6 +383,17 @@ if hasattr(socket, "AF_UNIX"):
             self.assertTrue(page["ok"])
             self.assertEqual([item["cursor"] for item in page["data"]["items"]], [3, 4])
             self.assertEqual(page["data"]["next_cursor"], 4)
+            future = self.client().request("events", {"project": "alpha", "after_cursor": 99, "limit": 2})
+            self.assertFalse(future["ok"])
+            self.assertEqual(future["error"]["code"], "replay_gap")
+            self.fixture["projects"]["alpha"]["events"] = []
+            self.fixture["projects"]["alpha"]["event_history_start"] = 6
+            self.write_fixture()
+            empty_retention = self.client().request(
+                "events", {"project": "alpha", "after_cursor": 0, "limit": 2},
+            )
+            self.assertFalse(empty_retention["ok"])
+            self.assertTrue(empty_retention["error"]["snapshot_required"])
 
         def test_malformed_and_oversize_requests_are_refused(self):
             malformed = self.raw_request(b"{not-json}\n")
@@ -364,6 +405,11 @@ if hasattr(socket, "AF_UNIX"):
             too_large_page = self.client().request("tasks", {"project": "alpha", "limit": 3, "page_token": 0})
             self.assertFalse(too_large_page["ok"])
             self.assertEqual(too_large_page["error"]["code"], "malformed_request")
+            duplicate = self.raw_request(
+                b'{"protocol_version":1,"op":"status","op":"task","request_id":"d","params":{"project":"alpha"}}\n'
+            )
+            self.assertFalse(duplicate["ok"])
+            self.assertEqual(duplicate["error"]["code"], "malformed_request")
 
         def test_artifacts_are_bounded_and_reject_escape_symlink_and_cross_project(self):
             good = self.client().request("artifact", {
@@ -382,6 +428,67 @@ if hasattr(socket, "AF_UNIX"):
                     })
                     self.assertFalse(response["ok"])
                     self.assertEqual(response["error"]["code"], code)
+
+        def test_artifact_manifest_digest_and_descriptor_open_defeat_replacement(self):
+            record = self.fixture["projects"]["alpha"]["artifacts"][0]
+            record["sha256"] = "0" * 64
+            self.write_fixture()
+            wrong_digest = self.client().request("artifact", {
+                "project": "alpha", "handle": "alpha-report", "offset": 0, "limit": 7,
+            })
+            self.assertFalse(wrong_digest["ok"])
+            self.assertEqual(wrong_digest["error"]["code"], "artifact_refused")
+
+            race_root = self.root / "race-artifacts"
+            race_root.mkdir()
+            target = race_root / "target.txt"
+            target.write_bytes(b"inside")
+            outside = self.root / "race-outside.txt"
+            outside.write_bytes(b"outside")
+            race_fixture = self.root / "race-fixture.json"
+            value = {
+                "canonical_revision": 1,
+                "observed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "last_event_cursor": 0,
+                "projects": {"alpha": {
+                    "status": {}, "tasks": [], "events": [], "event_history_start": 1,
+                    "artifacts": [{"handle": "race", "project": "alpha", "path": "target.txt",
+                                   "sha256": hashlib.sha256(b"inside").hexdigest()}],
+                }},
+            }
+            race_fixture.write_text(json.dumps(value), encoding="utf-8")
+            adapter = FixtureCanonicalAdapter(race_fixture, {"alpha": race_root})
+            real_open = os.open
+            replaced = False
+
+            def replace_then_open(path, flags, *args, **kwargs):
+                nonlocal replaced
+                if path == "target.txt" and not replaced:
+                    replaced = True
+                    target.unlink()
+                    target.symlink_to(outside)
+                return real_open(path, flags, *args, **kwargs)
+
+            try:
+                with mock.patch("tools.construction_swarm.p2_access.os.open", side_effect=replace_then_open):
+                    with self.assertRaises(AccessRefused) as refused:
+                        adapter.read("artifact", "alpha", {"handle": "race", "offset": 0, "limit": 7})
+                self.assertEqual(refused.exception.code, "artifact_refused")
+            finally:
+                adapter.close()
+
+        def test_disappeared_fixture_ledger_returns_structured_unavailable_response(self):
+            missing = self.fixture_path.with_suffix(".missing")
+            self.fixture_path.rename(missing)
+            try:
+                response = self.client().request("status", {"project": "alpha"})
+            finally:
+                missing.rename(self.fixture_path)
+            self.common(response)
+            self.assertFalse(response["ok"])
+            self.assertEqual(response["error"]["code"], "canonical_unavailable")
+            self.assertIn("canonical_revision", response["unavailable_fields"])
+            self.assertIn("last_event_cursor", response["unavailable_fields"])
 
         def test_mcp_disconnect_preserves_service_and_reconnect_sees_current_cursor(self):
             first = self.mcp([
@@ -456,6 +563,29 @@ if hasattr(socket, "AF_UNIX"):
             self.assertTrue(all(item["ok"] for item in outcomes))
             self.assertTrue(status["ok"])
             self.assertLess(elapsed, 0.5, f"reserved status path took {elapsed:.3f}s")
+
+        def test_idle_handshakes_have_bounded_threads_and_lifetimes(self):
+            channels = []
+            try:
+                for _ in range(32):
+                    channel = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    channel.settimeout(0.2)
+                    try:
+                        channel.connect(str(self.socket_path))
+                        channels.append(channel)
+                    except OSError:
+                        channel.close()
+                time.sleep(0.2)
+                status_text = Path(f"/proc/{self.process.pid}/status").read_text(encoding="utf-8")
+                thread_line = next(line for line in status_text.splitlines() if line.startswith("Threads:"))
+                self.assertLessEqual(int(thread_line.split()[1]), 5, thread_line)
+                time.sleep(1.3)
+                status_text = Path(f"/proc/{self.process.pid}/status").read_text(encoding="utf-8")
+                thread_line = next(line for line in status_text.splitlines() if line.startswith("Threads:"))
+                self.assertLessEqual(int(thread_line.split()[1]), 2, thread_line)
+            finally:
+                for channel in channels:
+                    channel.close()
 
 
 if __name__ == "__main__":
