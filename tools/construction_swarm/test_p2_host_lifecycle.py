@@ -60,6 +60,21 @@ def _pid_exists(pid):
 
 
 class HostLifecycleTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.previous_alarm_handler = signal.signal(
+            signal.SIGALRM,
+            lambda _number, _frame: (_ for _ in ()).throw(
+                TimeoutError("focused lifecycle suite exceeded 120 seconds")
+            ),
+        )
+        signal.alarm(120)
+
+    @classmethod
+    def tearDownClass(cls):
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, cls.previous_alarm_handler)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="p2-host-lifecycle-")
         self.root = Path(self.temporary.name)
@@ -210,6 +225,50 @@ class HostLifecycleTests(unittest.TestCase):
         self.assertIsNone(controller.poll())
         self.stop(controller)
 
+    def test_killed_child_reconciles_left_socket_before_restart(self):
+        controller = self.start()
+        first = self.wait_health("running")
+        first_pid = first["service_identity"]["pid"]
+        os.kill(first_pid, signal.SIGKILL)
+        restarted = _wait_until(
+            lambda: (
+                value
+                if (value := self.state()).get("health") == "running"
+                and value.get("restart_count") == 1
+                else None
+            )
+        )
+        self.assertNotEqual(restarted["service_identity"]["pid"], first_pid)
+        self.assertIn("restart_stale_socket_removed", restarted["reconciliation"])
+        self.assertEqual(self.launch_count_path.read_text(encoding="ascii"), "2")
+        self.stop(controller)
+
+    def test_killed_leader_cleans_pinned_descendant_before_restart(self):
+        self.write_fixture("stable", grandchild=True)
+        controller = self.start()
+        first = _wait_until(
+            lambda: (
+                value
+                if (value := self.state()).get("health") == "running"
+                and len(value.get("service_tree", [])) >= 2
+                else None
+            )
+        )
+        old_grandchild = int(self.grandchild_pid_path.read_text(encoding="ascii"))
+        os.kill(first["service_identity"]["pid"], signal.SIGKILL)
+        restarted = _wait_until(
+            lambda: (
+                value
+                if (value := self.state()).get("health") == "running"
+                and value.get("restart_count") == 1
+                else None
+            )
+        )
+        self.assertFalse(_pid_exists(old_grandchild))
+        self.assertTrue(restarted["last_cleanup"]["quiescent"])
+        self.assertTrue(restarted["last_cleanup"]["pidfd_bound"])
+        self.stop(controller)
+
     def test_restart_exhaustion_is_explicit_outage(self):
         self.write_fixture("always_crash")
         controller = self.start()
@@ -277,6 +336,39 @@ class HostLifecycleTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "stale_incarnation")
         self.assertEqual(state_path.read_bytes(), before)
         self.stop(controller)
+
+    def test_current_health_outage_updates_availability_atomically(self):
+        controller = self.start()
+        state = self.wait_health("running")
+        updated = lifecycle.StateStore(self.state_root).publish_health(
+            state["controller_id"],
+            state["service_incarnation"],
+            state["service_identity"],
+            "outage",
+        )
+        self.assertEqual(updated["health"], "outage")
+        self.assertTrue(updated["unavailable"])
+        self.assertEqual(updated["outage_reason"], "health_published_outage")
+        self.stop(controller)
+
+    def test_stop_requires_matching_quiescent_cleanup_receipt(self):
+        fake_root = self.root / "fake-controller-state"
+        fake = subprocess.Popen([sys.executable, "-X", "utf8", "-B", "-c", "import time; time.sleep(12)"])
+        self.unrelated.append(fake)
+        state = {
+            "state_version": lifecycle.STATE_VERSION,
+            "source_commit": _head(),
+            "controller_id": "fake-controller",
+            "controller_identity": lifecycle.process_identity(fake.pid),
+            "service_incarnation": 3,
+            "health": "running",
+            "unavailable": False,
+        }
+        lifecycle.StateStore(fake_root).write(state)
+        with self.assertRaises(lifecycle.LifecycleRefused) as caught:
+            lifecycle.request_stop(fake_root, 2)
+        self.assertEqual(caught.exception.code, "stop_cleanup_unknown")
+        fake.wait(timeout=CHILD_DEADLINE)
 
     def test_stop_cleans_only_owned_process_tree(self):
         self.write_fixture("stable", grandchild=True)
@@ -355,6 +447,10 @@ class HostLifecycleTests(unittest.TestCase):
         self.assertNotIn("--token", command)
         self.assertNotIn("--token-file", command)
         self.assertEqual(command[command.index("--fence") + 1], "9")
+        source = (REPOSITORY / "tools/construction_swarm/p2_host_lifecycle.py").read_text(encoding="utf-8")
+        self.assertNotIn("os.kill(", source)
+        self.assertNotIn("os.killpg(", source)
+        self.assertIn("pidfd_send_signal", source)
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "WSL/Linux qualification only")
     def test_windows_wrapper_constructs_literal_injection_safe_argv(self):

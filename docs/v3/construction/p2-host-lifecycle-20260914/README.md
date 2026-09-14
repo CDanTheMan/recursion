@@ -16,22 +16,25 @@ exclusive watchdog lock and only then reconciles prior state. A competing contro
 
 Each service launch gets a monotonically increasing persisted incarnation. The same integer is
 passed to `p2_access` as its read-service fence and is recorded with the service PID, Linux boot ID,
-`/proc` start ticks, process group and command-line digest. That identity tuple prevents a stale PID
-from authorizing a signal to a reused or unrelated process. A read-service fence is only an access
+`/proc` start ticks, process group and command-line digest. The controller then binds each verified
+identity to a Linux pidfd before any signal; it never signals a numeric PID or process group. A
+bounded set of discovered descendants is persisted and kernel-pinned. Cleanup freezes the pinned
+tree before a final descendant scan, then signals only those handles. A read-service fence is only an access
 service incarnation: state always records `canonical_writer_authority=false`; it is not a Hermes or
 P1 leader fence and grants no mutation authority.
 
-The service starts in a new process session, so native CLI and MCP client exit—and loss of the
-Windows wrapper process—do not signal it. Unexpected child exit advances the incarnation and uses
+The service starts in a new process session, so native CLI and MCP client exit do not signal it.
+Unexpected child exit advances the incarnation and uses
 bounded exponential backoff. After the configured restart cap, the controller exits and persists
 `health=outage`, `unavailable=true` and `outage_reason=restart_exhausted`. `starting`, `backoff`,
 `stopping`, `stopped` and every outage are also unavailable; only `running` is available. Every
 transition carries an observation timestamp. This is transition freshness, not a continuous
 application-level probe.
 
-An operator stop first proves the recorded controller identity before signaling it. The controller
-then signals only the exact process group whose full recorded service identity still matches. It
-never searches by process name. An inactive Unix socket is removed only after two inode checks; an
+An operator stop first binds and proves the recorded controller pidfd before signaling it. It
+returns success only after the same controller records stopped, unavailable and a quiescent cleanup
+receipt for the service incarnation. The controller never searches by process name. An inactive
+Unix socket is removed only after two inode checks, including before every restart; an
 active socket, non-socket path or uncertain probe is refused. An old service incarnation cannot
 publish health over the current one.
 
@@ -68,7 +71,8 @@ these fields:
 }
 ```
 
-`source_commit` must be lowercase 40-character hex and must equal `repository_root` HEAD. The
+`source_commit` must be lowercase 40-character hex and must equal `repository_root` HEAD. Linux
+pidfd support is required. A discovered service tree is capped at 256 members. The
 repository must contain `p2_access.py`; all paths must be absolute. Timeouts are individually
 bounded to 15 seconds and the restart cap to ten. The config and grants paths must be regular,
 non-symlink files. This packet does not create those files or choose their production locations.
@@ -109,7 +113,8 @@ git diff --check e627cd93bac473094bc99e8fa29c8d62bae526a2 FULL_40_CHARACTER_FINA
 ```
 
 The focused tests use only temporary fixture children. Each subprocess deadline is at most 15
-seconds, the command is externally bounded to 120 seconds during qualification, and fixture JSON
+seconds, the suite has an internal 120-second alarm and is also externally bounded to 120 seconds
+during qualification, and fixture JSON
 is capped at 32 MiB. The frozen predecessor integration gate remains frozen and intentionally
 rejects successor files; it is not an acceptance gate for this additive packet.
 
@@ -153,6 +158,8 @@ repair by weakening a gate or deleting evidence.
 - No real canonical Hermes adapter, canonical ledger reader or live artifact manifest exists.
 - The controller records transition health; it does not perform semantic read-protocol liveness
   probes while the child remains running.
+- Tree discovery is bounded to 256 processes and relies on Linux `/proc` plus pidfds; unsupported
+  kernels refuse rather than falling back to numeric PID signaling.
 - Remote transport, grant provisioning/revocation and credential rotation remain outside scope.
 - All disruptive Windows/WSL lifecycle qualification rows above remain `specified_not_run`.
 - This packet does not qualify S03/S04 as a whole, launch providers/workers, mutate canonical

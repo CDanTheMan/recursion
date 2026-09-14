@@ -36,14 +36,33 @@ adds nonblocking watchdog election, persisted incarnation/fence and process iden
 PID/socket reconciliation, bounded restart/backoff/cap, honest outage state, identity-bound tree
 stop, strict PAUSE/disabled refusal, a literal-argv Windows wrapper and bounded fixture coverage.
 
-Documentation and exact final review evidence are recorded in later commits on the same branch.
+Documentation began in `2b28a59` (`Document P2 lifecycle qualification boundary`). Independent
+Astra review of exact candidate `2b28a596978845dce2b732d74bbd93cfea578a4b` required changes:
+restart-time stale sockets exhausted the cap, a dead leader could orphan an unrecorded descendant,
+numeric PID/group signaling had a reuse race, Stop did not require a cleanup receipt, health
+publication could contradict availability, and the source/scope gate was not bound to current HEAD
+and cleanliness.
+
+The remediation replaces numeric signals with verified kernel pidfds, persists bounded discovered
+tree members, freezes and rescans before cleanup, reconciles sockets before restart, binds Stop
+success to a quiescent receipt, updates availability with health, and binds source/scope to exact
+clean HEAD plus five additions. Focused regressions reproduce the review failures. Exact final
+review evidence is recorded in the final documentation commit on this branch.
 
 ## Coverage so far
 
 Native Linux under WSL Ubuntu-24.04:
 
-- Focused lifecycle suite after correction: 11 tests, pass, 2.691 seconds.
+- Focused lifecycle suite after the first correction: 11 tests, pass, 2.691 seconds.
 - A subsequent quiet pre-commit run: 11 tests, pass, 2.742 seconds.
+- First independently reviewed committed candidate: 11 tests passed in 2.622 seconds; Astra's own
+  rerun passed 11 in 2.746 seconds, but independent process probes found the six issues above.
+- First remediation suite run: 15 tests in 3.403 seconds with one test error because the assertion
+  looked for the prior cleanup receipt under the wrong state key. The persisted `last_cleanup`
+  receipt and assertion were aligned.
+- Remediation suite: 15 tests, pass, 3.351 seconds; affected-gate rerun: 15 pass in 3.423 seconds.
+- Affected frozen regressions after remediation: P1 18 pass in 2.113 seconds; P2 access 19 pass in
+  5.577 seconds.
 - Real fixture processes covered competing watchdogs, client disconnect, crash/restart, restart
   exhaustion, stale and active socket handling, stale unrelated PID preservation, old-incarnation
   health rejection, owned-tree cleanup and PAUSE/disabled refusal.
@@ -76,10 +95,22 @@ Not run:
 - The first focused suite run completed 11 tests in 2.603 seconds with one error: the client-exit
   test passed a `Path` instead of `str` to `socket.connect`. The implementation cases had run; the
   test was corrected, pipe cleanup was tightened, and the complete suite passed twice afterward.
+- Astra review of `2b28a596978845dce2b732d74bbd93cfea578a4b` returned six actionable findings despite
+  all 48 supplied tests passing. That failed review receipt is retained above; the exact candidate
+  was not treated as final.
+- The first expanded remediation suite completed 15 tests in 3.403 seconds with one error: the
+  restart receipt assertion expected `cleanup` in the new running state. The implementation now
+  intentionally carries the most recent verified receipt as `last_cleanup`; the corrected suite
+  passed.
+- An initial Windows version probe was malformed by outer-shell variable expansion and returned a
+  parser error. Direct probes then recorded PowerShell 7.6.5 on the host and Windows PowerShell
+  5.1.26100.9444 for the wrapper path.
+- Windows denied the first attempt to remove the task-owned 13,407,032-byte temporary source
+  bundle. Its exact path was revalidated and the file was removed from WSL; absence was verified.
 
 ## Pending final evidence
 
-- Commit this runbook/progress slice.
+- Commit the remediation and evidence slices.
 - Run focused P2 host lifecycle, frozen P1 and P2 access regressions, source/scope, handoff
   preservation and `git diff --check` on a committed candidate.
 - Obtain independent Astra review of the exact candidate, resolve actionable findings, rerun

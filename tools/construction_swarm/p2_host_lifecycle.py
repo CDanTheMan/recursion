@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import re
+import select
 import signal
 import socket
 import stat
@@ -200,50 +201,140 @@ def identity_matches(expected):
         return False
 
 
-def _group_alive(process_group):
+def _open_verified_pidfd(identity):
+    _require(hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"),
+             "platform_unavailable", "Linux pidfd support is required")
     try:
-        os.killpg(process_group, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
+        descriptor = os.pidfd_open(identity["pid"], 0)
+    except (OSError, TypeError, KeyError) as exc:
+        raise LifecycleRefused("process_unavailable", "process handle is unavailable") from exc
+    if not identity_matches(identity):
+        os.close(descriptor)
+        raise LifecycleRefused("process_unavailable", "process identity changed before handle binding")
+    return descriptor
 
 
-def terminate_owned_tree(identity, timeout, reap=None):
-    """Signal only a process group proven to be the recorded owned service."""
-    _require(identity_matches(identity), "cleanup_unknown", "owned process identity no longer matches")
-    process_group = identity["process_group"]
-    _require(
-        process_group == identity["pid"],
-        "cleanup_unknown",
-        "owned service is not its process-group leader",
-    )
-    try:
-        os.killpg(process_group, signal.SIGTERM)
-    except ProcessLookupError:
-        return {"term_sent": False, "kill_sent": False, "quiescent": True}
-    deadline = time.monotonic() + timeout
-    while _group_alive(process_group) and time.monotonic() < deadline:
-        if reap is not None:
-            reap()
-        time.sleep(0.02)
-    kill_sent = False
-    if _group_alive(process_group):
-        os.killpg(process_group, signal.SIGKILL)
-        kill_sent = True
+def _pidfd_alive(descriptor):
+    poller = select.poll()
+    poller.register(descriptor, select.POLLIN)
+    return not poller.poll(0)
+
+
+def _descendant_pids(root_pid):
+    parents = {}
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            raw = (entry / "stat").read_text(encoding="utf-8")
+            closing = raw.rfind(")")
+            fields = raw[closing + 2 :].split()
+            if closing > 0 and len(fields) >= 2 and fields[0] != "Z":
+                parents[int(entry.name)] = int(fields[1])
+        except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError):
+            continue
+    descendants = set()
+    frontier = {root_pid}
+    while frontier:
+        found = {pid for pid, parent in parents.items() if parent in frontier and pid not in descendants}
+        descendants.update(found)
+        frontier = found
+    return descendants
+
+
+class OwnedTree:
+    """Kernel-pinned handles for one service tree; never signals numeric PIDs."""
+
+    MAX_MEMBERS = 256
+
+    def __init__(self, root_identity, *, known=(), process=None):
+        self.root_identity = root_identity
+        self.process = process
+        self.handles = {}
+        for identity in (root_identity, *known):
+            if isinstance(identity, dict):
+                self._pin(identity, required=identity is root_identity)
+
+    def _pin(self, identity, *, required=False):
+        pid = identity.get("pid") if isinstance(identity, dict) else None
+        if pid in self.handles:
+            return False
+        try:
+            descriptor = _open_verified_pidfd(identity)
+        except LifecycleRefused:
+            if required:
+                raise
+            return False
+        _require(len(self.handles) < self.MAX_MEMBERS, "cleanup_unknown", "owned process tree exceeds bound")
+        self.handles[pid] = (dict(identity), descriptor)
+        return True
+
+    def refresh(self):
+        added = False
+        root_pid = self.root_identity.get("pid")
+        for pid in sorted(_descendant_pids(root_pid)):
+            if pid in self.handles:
+                continue
+            try:
+                identity = process_identity(pid)
+            except LifecycleRefused:
+                continue
+            if self._pin(identity):
+                added = True
+        return added
+
+    def identities(self):
+        return [self.handles[pid][0] for pid in sorted(self.handles)]
+
+    def _alive(self):
+        return [(pid, value) for pid, value in self.handles.items() if _pidfd_alive(value[1])]
+
+    @staticmethod
+    def _signal(values, number):
+        sent = False
+        for _pid, (_identity, descriptor) in values:
+            try:
+                signal.pidfd_send_signal(descriptor, number)
+                sent = True
+            except ProcessLookupError:
+                pass
+        return sent
+
+    def cleanup(self, timeout):
+        # Freeze the root first, then discover/freeze descendants to close the
+        # fork-vs-signal window. All later signals use the pinned pidfds.
+        alive = self._alive()
+        if not alive:
+            return {"term_sent": False, "kill_sent": False, "quiescent": True,
+                    "member_count": len(self.handles), "pidfd_bound": True}
+        self._signal(alive, signal.SIGSTOP)
+        while self.refresh():
+            self._signal(self._alive(), signal.SIGSTOP)
+        alive = sorted(self._alive(), key=lambda item: item[0] == self.root_identity["pid"])
+        term_sent = self._signal(alive, signal.SIGTERM)
+        self._signal(alive, signal.SIGCONT)
         deadline = time.monotonic() + timeout
-        while _group_alive(process_group) and time.monotonic() < deadline:
-            if reap is not None:
-                reap()
+        while self._alive() and time.monotonic() < deadline:
+            if self.process is not None:
+                self.process.poll()
             time.sleep(0.02)
-    if reap is not None:
-        reap()
-    return {
-        "term_sent": True,
-        "kill_sent": kill_sent,
-        "quiescent": not _group_alive(process_group),
-    }
+        remaining = self._alive()
+        kill_sent = self._signal(remaining, signal.SIGKILL) if remaining else False
+        deadline = time.monotonic() + timeout
+        while self._alive() and time.monotonic() < deadline:
+            if self.process is not None:
+                self.process.poll()
+            time.sleep(0.02)
+        if self.process is not None:
+            self.process.poll()
+        return {"term_sent": term_sent, "kill_sent": kill_sent,
+                "quiescent": not self._alive(), "member_count": len(self.handles),
+                "pidfd_bound": True}
+
+    def close(self):
+        for _identity, descriptor in self.handles.values():
+            os.close(descriptor)
+        self.handles.clear()
 
 
 class WatchdogLock:
@@ -316,6 +407,9 @@ class StateStore:
             )
             updated = dict(current)
             updated["health"] = health
+            updated["unavailable"] = health != "running"
+            if health == "outage" and not updated.get("outage_reason"):
+                updated["outage_reason"] = "health_published_outage"
             updated["observation_time"] = _utc_now()
             _atomic_write(self.path, updated)
             return updated
@@ -552,6 +646,8 @@ class Controller:
         self.stop = threading.Event()
         self.process = None
         self.service_identity = None
+        self.service_tree = None
+        self.last_cleanup = None
         self.state = None
 
     def _base_state(self, incarnation, restart_count, health, **detail):
@@ -564,6 +660,7 @@ class Controller:
             "service_fence": incarnation,
             "canonical_writer_authority": False,
             "service_identity": self.service_identity,
+            "service_tree": self.service_tree.identities() if self.service_tree is not None else [],
             "socket_path": self.config["socket_path"],
             "health": health,
             "unavailable": health != "running",
@@ -571,6 +668,8 @@ class Controller:
             "restart_count": restart_count,
             "restart_cap": self.config["restart_cap"],
         }
+        if self.last_cleanup is not None:
+            value["last_cleanup"] = self.last_cleanup
         value.update(detail)
         return value
 
@@ -635,12 +734,20 @@ class Controller:
             start_new_session=True,
             close_fds=True,
         )
-        self.service_identity = process_identity(self.process.pid)
+        try:
+            self.service_identity = process_identity(self.process.pid)
+        except LifecycleRefused:
+            if self.process.poll() is not None:
+                self.service_identity = None
+                self.service_tree = None
+                return
+            raise
         _require(
             self.service_identity["process_group"] == self.process.pid,
             "launch_refused",
             "service did not become process-group leader",
         )
+        self.service_tree = OwnedTree(self.service_identity, process=self.process)
 
     def _ready(self):
         deadline = time.monotonic() + self.config["startup_timeout_seconds"]
@@ -654,15 +761,11 @@ class Controller:
         return False
 
     def _cleanup_current(self):
-        if self.process is None or self.service_identity is None:
-            return {"term_sent": False, "kill_sent": False, "quiescent": True}
-        if self.process.poll() is not None and not _group_alive(self.service_identity["process_group"]):
-            return {"term_sent": False, "kill_sent": False, "quiescent": True}
-        return terminate_owned_tree(
-            self.service_identity,
-            self.config["shutdown_timeout_seconds"],
-            reap=self.process.poll,
-        )
+        if self.service_tree is None:
+            return {"term_sent": False, "kill_sent": False, "quiescent": True,
+                    "member_count": 0, "pidfd_bound": True}
+        self.service_tree.refresh()
+        return self.service_tree.cleanup(self.config["shutdown_timeout_seconds"])
 
     def _reconcile_previous(self, previous):
         notes = []
@@ -680,8 +783,15 @@ class Controller:
                 "prior incarnation is invalid",
             )
             identity = previous.get("service_identity")
-            if isinstance(identity, dict) and identity_matches(identity):
-                cleanup = terminate_owned_tree(identity, self.config["shutdown_timeout_seconds"])
+            recorded_tree = previous.get("service_tree", [])
+            _require(isinstance(recorded_tree, list), "state_refused", "prior service tree is invalid")
+            known = [item for item in recorded_tree if isinstance(item, dict) and item != identity]
+            matching = [item for item in ([identity] + known) if isinstance(item, dict) and identity_matches(item)]
+            if matching:
+                root = identity if isinstance(identity, dict) and identity_matches(identity) else matching[0]
+                tree = OwnedTree(root, known=[item for item in matching if item != root])
+                cleanup = tree.cleanup(self.config["shutdown_timeout_seconds"])
+                tree.close()
                 _require(cleanup["quiescent"], "cleanup_unknown", "prior owned service did not quiesce")
                 notes.append("prior_owned_service_quiesced")
             elif isinstance(identity, dict):
@@ -720,6 +830,7 @@ class Controller:
                     return 5
                 incarnation += 1
                 self.service_identity = None
+                self.service_tree = None
                 self._write(
                     incarnation,
                     restart_count,
@@ -735,6 +846,8 @@ class Controller:
                 )
                 ready = self._ready()
                 if ready:
+                    if self.service_tree is not None:
+                        self.service_tree.refresh()
                     self._write(
                         incarnation,
                         restart_count,
@@ -742,10 +855,18 @@ class Controller:
                         reconciliation=reconciliation,
                     )
                 while ready and not self.stop.is_set() and self.process.poll() is None:
+                    if self.service_tree is not None and self.service_tree.refresh():
+                        self._write(
+                            incarnation,
+                            restart_count,
+                            "running",
+                            reconciliation=reconciliation,
+                        )
                     time.sleep(0.03)
                 if self.stop.is_set():
                     self._write(incarnation, restart_count, "stopping", reconciliation=reconciliation)
                     cleanup = self._cleanup_current()
+                    self.last_cleanup = cleanup
                     health = "stopped" if cleanup["quiescent"] else "outage"
                     self._write(
                         incarnation,
@@ -755,12 +876,42 @@ class Controller:
                         cleanup=cleanup,
                         outage_reason=None if cleanup["quiescent"] else "cleanup_unknown",
                     )
+                    if self.service_tree is not None:
+                        self.service_tree.close()
                     return 0 if cleanup["quiescent"] else 6
                 exit_code = self.process.poll()
-                if exit_code is None:
-                    self._cleanup_current()
-                    exit_code = self.process.wait(timeout=self.config["shutdown_timeout_seconds"])
-                self.service_identity = None
+                cleanup = self._cleanup_current()
+                self.last_cleanup = cleanup
+                exit_code = self.process.poll() if self.process is not None else exit_code
+                if not cleanup["quiescent"]:
+                    self._write(
+                        incarnation,
+                        restart_count,
+                        "outage",
+                        reconciliation=reconciliation,
+                        outage_reason="cleanup_unknown",
+                        last_exit_code=exit_code,
+                        cleanup=cleanup,
+                    )
+                    if self.service_tree is not None:
+                        self.service_tree.close()
+                    return 6
+                try:
+                    socket_note = reconcile_socket(self.config["socket_path"])
+                    reconciliation = reconciliation + ["restart_" + socket_note]
+                except LifecycleRefused as exc:
+                    self._write(
+                        incarnation,
+                        restart_count,
+                        "outage",
+                        reconciliation=reconciliation,
+                        outage_reason=exc.code,
+                        last_exit_code=exit_code,
+                        cleanup=cleanup,
+                    )
+                    if self.service_tree is not None:
+                        self.service_tree.close()
+                    return 6
                 if restart_count >= self.config["restart_cap"]:
                     self._write(
                         incarnation,
@@ -769,7 +920,10 @@ class Controller:
                         reconciliation=reconciliation,
                         outage_reason="restart_exhausted",
                         last_exit_code=exit_code,
+                        cleanup=cleanup,
                     )
+                    if self.service_tree is not None:
+                        self.service_tree.close()
                     return 4
                 restart_count += 1
                 backoff = min(
@@ -783,6 +937,7 @@ class Controller:
                     reconciliation=reconciliation,
                     backoff_seconds=backoff,
                     last_exit_code=exit_code,
+                    cleanup=cleanup,
                 )
                 if self.stop.wait(backoff):
                     self._write(
@@ -792,13 +947,19 @@ class Controller:
                         reconciliation=reconciliation,
                         cleanup={"term_sent": False, "kill_sent": False, "quiescent": True},
                     )
+                    if self.service_tree is not None:
+                        self.service_tree.close()
                     return 0
+                if self.service_tree is not None:
+                    self.service_tree.close()
         finally:
-            if self.process is not None and self.process.poll() is None:
+            if self.service_tree is not None and self.service_tree._alive():
                 try:
                     self._cleanup_current()
                 except LifecycleRefused:
                     pass
+            if self.service_tree is not None and self.service_tree.handles:
+                self.service_tree.close()
             for number, handler in old_handlers.items():
                 signal.signal(number, handler)
             self.lock.release()
@@ -815,13 +976,49 @@ def request_stop(state_root, timeout):
     state = store.read()
     _require(state is not None, "stop_refused", "lifecycle state is unavailable")
     identity = state.get("controller_identity")
-    _require(identity_matches(identity), "stop_refused", "recorded controller identity does not match")
-    os.kill(identity["pid"], signal.SIGTERM)
+    controller_id = state.get("controller_id")
+    incarnation = state.get("service_incarnation")
+    try:
+        descriptor = _open_verified_pidfd(identity)
+    except LifecycleRefused as exc:
+        raise LifecycleRefused("stop_refused", "recorded controller identity does not match") from exc
+    try:
+        signal.pidfd_send_signal(descriptor, signal.SIGTERM)
+    except ProcessLookupError as exc:
+        os.close(descriptor)
+        raise LifecycleRefused("stop_refused", "controller exited before stop signal") from exc
     deadline = time.monotonic() + timeout
-    while identity_matches(identity) and time.monotonic() < deadline:
-        time.sleep(0.02)
-    _require(not identity_matches(identity), "stop_timeout", "controller did not stop within bound")
-    return {"status": "STOPPED", "controller_pid": identity["pid"]}
+    receipt = None
+    try:
+        while time.monotonic() < deadline:
+            current = store.read()
+            matching_receipt = (
+                current is not None
+                and current.get("controller_id") == controller_id
+                and current.get("service_incarnation") == incarnation
+                and current.get("health") == "stopped"
+                and current.get("unavailable") is True
+                and isinstance(current.get("cleanup"), dict)
+                and current["cleanup"].get("quiescent") is True
+            )
+            if matching_receipt:
+                receipt = current
+            if not _pidfd_alive(descriptor):
+                if receipt is not None:
+                    return {
+                        "status": "STOPPED",
+                        "controller_pid": identity["pid"],
+                        "service_incarnation": incarnation,
+                        "cleanup": receipt["cleanup"],
+                    }
+                raise LifecycleRefused(
+                    "stop_cleanup_unknown",
+                    "controller exited without a matching quiescent cleanup receipt",
+                )
+            time.sleep(0.02)
+    finally:
+        os.close(descriptor)
+    raise LifecycleRefused("stop_timeout", "controller did not stop within bound")
 
 
 def source_scope_check(repository, candidate):
@@ -850,15 +1047,25 @@ def source_scope_check(repository, candidate):
 
     resolved = git("rev-parse", "--verify", candidate + "^{commit}").strip()
     _require(resolved == candidate, "source_scope_refused", "candidate resolution differs")
+    _require(git("rev-parse", "HEAD").strip() == candidate,
+             "source_scope_refused", "checked-out HEAD differs from candidate")
+    _require(not git("status", "--porcelain=v1", "--untracked-files=all").strip(),
+             "source_scope_refused", "candidate worktree is not clean")
     git("merge-base", "--is-ancestor", TASK_BASE, candidate)
     changed = tuple(sorted(line for line in git("diff", "--name-only", TASK_BASE, candidate).splitlines() if line))
     _require(changed == ALLOWED_PATHS, "source_scope_refused", "changed path set differs", changed=list(changed))
+    statuses = tuple(sorted(line for line in git("diff", "--name-status", TASK_BASE, candidate).splitlines() if line))
+    expected_statuses = tuple(sorted("A\t" + path for path in ALLOWED_PATHS))
+    _require(statuses == expected_statuses, "source_scope_refused",
+             "packet paths are not exactly five additions", statuses=list(statuses))
     git("diff", "--check", TASK_BASE, candidate)
     return {
         "status": "SOURCE_SCOPE_PASS",
         "task_base": TASK_BASE,
         "candidate": candidate,
         "changed_paths": list(changed),
+        "path_statuses": list(statuses),
+        "head_and_worktree_bound": True,
         "integration_gate_modified": False,
     }
 
