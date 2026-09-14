@@ -250,6 +250,19 @@ class P1CoreTests(unittest.TestCase):
         self.assertEqual(self.store.outbox_delivery(first["receipt"]), "grant_revoked")
         self.assertEqual(self.store.outbox_delivery(second["receipt"]), "delivered")
 
+    def test_s05_foreign_transport_keeps_a_valid_receipt_pending_for_its_bound_identity(self):
+        self.hermes.create_task("task-c", "alpha")
+        self.store.grant("grant-other-alpha", "other", "alpha")
+        first = self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="worker"), "leader-a", self.fence)
+        second = self.store.accept(
+            self.hermes, FakeTransport("other"),
+            self.request("task-c", "alpha", grant="grant-other-alpha", key="other"), "leader-a", self.fence)
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "leader-a", self.fence),
+                         [first["receipt"]])
+        self.assertEqual(self.store.outbox_delivery(second["receipt"]), "pending")
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("other"), "leader-a", self.fence),
+                         [second["receipt"]])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

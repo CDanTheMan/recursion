@@ -92,3 +92,10 @@ recorded recovery adopts them. The scoped suite passed 13 tests, including abrup
 exit/reopen, independently started leader-election processes, current-task-revision
 conflicts, retained unknown charges, and revoked-outbox non-blocking replay. Fresh exact
 candidate adversarial review remains required.
+
+Checkpoint 6 (2026-09-13): while independently replaying the exact checkpoint-5 candidate,
+the Muse reviewer found that a valid receipt for a second transport identity was being
+terminalized if an earlier replay used a different identity. The corrected replay leaves that
+receipt pending (and makes no effect) until its transport-bound identity presents the current
+grant; revoked grants and malformed envelopes remain terminal evidence. The scoped suite
+passed 14 tests after the fix. This checkpoint supersedes checkpoint 5 as the review target.

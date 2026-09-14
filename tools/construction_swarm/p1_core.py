@@ -337,7 +337,6 @@ class P1Store:
                     raise FenceRejected("pending outbox belongs to a retired fence")
                 body = json.loads(row["body"])
                 if transport.identity != row["identity"]:
-                    self.db.execute("UPDATE outbox SET delivery='identity_refused' WHERE receipt=?", (receipt,))
                     self.db.commit()
                     continue
                 try:
