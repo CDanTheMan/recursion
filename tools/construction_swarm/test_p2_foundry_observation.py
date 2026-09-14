@@ -231,6 +231,34 @@ class FoundryObservationTests(unittest.TestCase):
                 self.assertEqual(item["attempt"]["effect_state"], effect)
                 self.assertFalse(item["result"]["worker_returned"])
 
+    def test_conflicting_job_and_current_attempt_states_are_refused(self):
+        cases = (
+            ("accepted-attempt-unknown", "accepted", "unknown",
+             "job and current attempt states conflict"),
+            ("unknown-attempt-failed", "unknown", "failed",
+             "job and current attempt states conflict"),
+        )
+        for name, job_id, attempt_state, expected in cases:
+            with self.subTest(name=name):
+                root = _make_run(self.base, name, SOURCE_A)
+                db = sqlite3.connect(root / "ledger.sqlite")
+                db.execute("UPDATE attempts SET state=? WHERE job=? AND number=1",
+                           (attempt_state, job_id))
+                db.commit()
+                db.close()
+                adapter = FoundryObservationAdapter({name: root})
+                with self.assertRaisesRegex(AccessRefused, expected):
+                    self.read_only(adapter, "status", name, roots=[root])
+
+        missing_root = _make_run(self.base, "missing-current", SOURCE_A)
+        db = sqlite3.connect(missing_root / "ledger.sqlite")
+        db.execute("DELETE FROM attempts WHERE job='unknown' AND number=1")
+        db.commit()
+        db.close()
+        missing = FoundryObservationAdapter({"missing-current": missing_root})
+        with self.assertRaisesRegex(AccessRefused, "attempts are not a complete admitted prefix"):
+            self.read_only(missing, "status", "missing-current", roots=[missing_root])
+
     def test_missing_malformed_and_partial_records_are_bounded(self):
         missing = FoundryObservationAdapter({"missing": self.base / "absent"})
         with self.assertRaisesRegex(AccessRefused, "run directory is unavailable"):
