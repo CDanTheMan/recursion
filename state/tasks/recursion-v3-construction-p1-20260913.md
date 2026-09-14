@@ -51,3 +51,10 @@ may be called complete.
 
 Checkpoint 0 (2026-09-13): packet recorded before implementation. Fresh clean worktree at
 `8568b8a4e95171803cf126ce417cdfd775a71eb4`; no service or provider was launched.
+
+Checkpoint 1 (2026-09-13): P1 implementation candidate expanded after independent Luna
+adversarial audits identified stale idempotent/fence paths, caller-controlled result revision,
+launch-intent crash ambiguity, and missing envelope bindings. The revised fake-only suite ran
+seven tests successfully, including abrupt child-process reserve/launch-intent loss and a
+synchronized two-process election. No live qualification or activation occurred. Exact
+candidate review remains required before this packet can pass.
