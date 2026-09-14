@@ -2,7 +2,7 @@ schema_version: 1
 id: recursion-v3-construction-p1-20260913
 goal_id: goal-recursion-v2-execution-fabric
 project_id: recursion
-status: active
+status: candidate
 product_target: v3
 
 Bounded P1 implementation packet for the continuous WSL construction-service
@@ -106,3 +106,12 @@ unrecovered old-fence receipt without publishing it, allowing independent curren
 to progress; the retained row can only be adopted through recorded recovery. Stale leaders
 are still refused before replay. The added regression suite passed 15 tests. A new exact
 candidate review is required.
+
+Checkpoint 8 (2026-09-13): independent OpenCode Go Muse Spark 1.3 Contributor review
+passed exact implementation commit `26d42d9be7ae7ae98b837519946e69407f2038a5`. The reviewer
+reran the scoped suite (15 tests) and independently probed the cross-store receipt seam,
+all three real abrupt crash phases, stale-caller refusal, retained old-fence non-effect,
+current-fence non-starvation, foreign-identity replay ordering, revisions, grant revocation,
+idempotency, and tampered envelopes. Its verdict was PASS with no in-scope reproduction.
+This is a verified fake-boundary P1 candidate only. No live transport/fleet qualification,
+activation, auth/config/cron/autonomy change, publishing, or merge occurred.
