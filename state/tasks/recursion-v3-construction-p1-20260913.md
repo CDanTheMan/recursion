@@ -86,9 +86,9 @@ Checkpoint 5 (2026-09-13): the third Muse review rejected checkpoint 4 for three
 bounded replay/recovery defects. The candidate now returns a recovered idempotency receipt
 with its current `unknown` state rather than stale launch authority; records immutable
 `origin_fence` separately from the current delivery fence at the fake Hermes boundary; and
-terminalizes revoked, identity-mismatched, and envelope-tampered outbox rows so they cannot
-block an unrelated valid receipt. Old delivery fences remain an explicit refusal until a
-recorded recovery adopts them. The scoped suite passed 13 tests, including abrupt process
+terminalizes revoked and envelope-tampered outbox rows while leaving foreign-identity receipts
+pending for their bound transport. Old delivery fences remain retained no-effect evidence until
+a recorded recovery adopts them. The scoped suite passed 13 tests, including abrupt process
 exit/reopen, independently started leader-election processes, current-task-revision
 conflicts, retained unknown charges, and revoked-outbox non-blocking replay. Fresh exact
 candidate adversarial review remains required.
@@ -99,3 +99,10 @@ terminalized if an earlier replay used a different identity. The corrected repla
 receipt pending (and makes no effect) until its transport-bound identity presents the current
 grant; revoked grants and malformed envelopes remain terminal evidence. The scoped suite
 passed 14 tests after the fix. This checkpoint supersedes checkpoint 5 as the review target.
+
+Checkpoint 7 (2026-09-13): one fresh Muse review passed checkpoint 6; a second independent
+Muse review rejected it for a real stale-fence head-of-line case. Current replay now skips an
+unrecovered old-fence receipt without publishing it, allowing independent current-fence work
+to progress; the retained row can only be adopted through recorded recovery. Stale leaders
+are still refused before replay. The added regression suite passed 15 tests. A new exact
+candidate review is required.

@@ -145,8 +145,7 @@ class P1CoreTests(unittest.TestCase):
         with self.assertRaises(FenceRejected):
             self.store.submit_result(self.hermes, FakeTransport("worker"), accepted["attempt_id"], 1,
                                      "old-result", owner, fence)
-        with self.assertRaises(FenceRejected):
-            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "replacement", replacement_fence)
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "replacement", replacement_fence), [])
         self.assertEqual(self.hermes.receipt_count("task-a", "attempt_accepted"), 0)
         self.assertGreater(replacement_fence, fence)
 
@@ -188,8 +187,7 @@ class P1CoreTests(unittest.TestCase):
         result = self.store.submit_result(self.hermes, FakeTransport("worker"), accepted["attempt_id"], 1,
                                           "pending-result", "leader-a", self.fence)
         replacement = self.store.acquire_leader("recovery", takeover=True)
-        with self.assertRaises(FenceRejected):
-            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery", replacement)
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery", replacement), [])
         self.store.recover_after_crash(self.fence, "recovery", replacement)
         self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "recovery", replacement),
                          ["attempt-accepted:attempt-00000001", result])
@@ -262,6 +260,18 @@ class P1CoreTests(unittest.TestCase):
         self.assertEqual(self.store.outbox_delivery(second["receipt"]), "pending")
         self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("other"), "leader-a", self.fence),
                          [second["receipt"]])
+
+    def test_s02_unrecovered_old_fence_receipt_cannot_starve_current_leader_work(self):
+        self.hermes.create_task("task-c", "alpha")
+        old = self.store.accept(self.hermes, FakeTransport("worker"), self.request(key="old"), "leader-a", self.fence)
+        replacement = self.store.acquire_leader("replacement", takeover=True)
+        current = self.store.accept(self.hermes, FakeTransport("worker"),
+                                    self.request("task-c", "alpha", key="current"), "replacement", replacement)
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "replacement", replacement),
+                         [current["receipt"]])
+        self.assertEqual(self.store.outbox_delivery(old["receipt"]), "pending")
+        self.assertEqual(self.hermes.receipt_count("task-a"), 0)
+        self.assertEqual(self.hermes.receipt_count("task-c"), 1)
 
 
 if __name__ == "__main__":

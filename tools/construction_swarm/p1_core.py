@@ -334,7 +334,10 @@ class P1Store:
                     continue
                 self._fence(owner, fence)
                 if row["delivery_fence"] != fence:
-                    raise FenceRejected("pending outbox belongs to a retired fence")
+                    # A current leader cannot publish an unrecovered old-fence intent, but
+                    # that retained evidence must not starve independent current work.
+                    self.db.commit()
+                    continue
                 body = json.loads(row["body"])
                 if transport.identity != row["identity"]:
                     self.db.commit()
