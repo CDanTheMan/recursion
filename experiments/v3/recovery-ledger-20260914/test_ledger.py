@@ -441,6 +441,17 @@ class RecoveryLedgerTests(unittest.TestCase):
             PREFIX_CASES["unknown-reset-restart"]["expected"][-1][0][0][1],
         )
         self.assertEqual(json.loads(reopened.to_json()), json.loads(state.to_json()))
+        reopened.append(
+            settle(
+                "unknown-6",
+                "s-unknown",
+                "r-unknown",
+                "unknown",
+                TOKENS,
+                2,
+            )
+        )
+        self.assertEqual(boundary_signature(reopened, "unknown")[2:5], (2, 0, 8))
 
     def test_duplicate_settlement_charges_once(self):
         duplicate = settle("dup-new-event", "s-partial", "r-partial", "partial", TOKENS, 3)
@@ -483,6 +494,15 @@ class RecoveryLedgerTests(unittest.TestCase):
         state = replay(events)
         self.assertEqual(boundary_signature(state, "preserve")[2:5], (2, 6, 2))
         self.assertEqual(boundary_signature(Ledger.from_json(state.to_json()), "preserve")[2:5], (2, 6, 2))
+        state.append(reset("preserve-7", "preserve", TOKENS, "unknown"))
+        self.assertEqual(boundary_signature(state, "preserve")[2:5], (2, 6, None))
+        assert_raises(
+            AdmissionError,
+            state.append,
+            reserve("preserve-8", "r-reset-blocked", "preserve", TOKENS, 1),
+        )
+        state.append(reset("preserve-9", "preserve", TOKENS, "reconciled"))
+        self.assertEqual(boundary_signature(state, "preserve")[2:5], (2, 6, 2))
 
     def test_recovery_cost_not_normal_use(self):
         state = replay(PARTIAL_EVENTS)
@@ -523,6 +543,13 @@ class RecoveryLedgerTests(unittest.TestCase):
             variants.append(freeze("invalid-quantum-" + repr(quantum), "invalid-q-" + repr(quantum), bind, 10, 1, 10))
         for event in variants:
             assert_raises(ValidationError, replay, (event,))
+        state = replay((freeze("invalid-r-1", "invalid-r", TOKENS, 100, 1, 10),))
+        for amount in (True, -1, 0, 1.5):
+            assert_raises(
+                ValidationError,
+                state.append,
+                reserve("invalid-r-" + repr(amount), "invalid-res-" + repr(amount), "invalid-r", TOKENS, amount),
+            )
 
     def test_componentwise_parent_pool_resource(self):
         state = replay(COMPONENT_EVENTS)
@@ -537,6 +564,26 @@ class RecoveryLedgerTests(unittest.TestCase):
             state.append,
             reserve("component-6", "r-component-2", "component", TOKENS, 1, extra_claims),
         )
+        component_actual = (
+            claim("parent-cap", "tokens", 1, "provider-window-1", 4),
+            claim("pool-cap", "tokens", 1, "provider-window-1", 4),
+            claim("resource-cap", "quota-points", 1, "quota-window-1", 2),
+        )
+        settlement = settle(
+            "component-7",
+            "s-component",
+            "r-component",
+            "component",
+            TOKENS,
+            4,
+            component_actual,
+        )
+        state.append(settlement)
+        self.assertEqual(cap_signature(state, "pool-cap")[3:6], (4, 0, 3))
+        duplicate = copy.deepcopy(settlement)
+        duplicate["event_id"] = "component-8"
+        self.assertEqual(state.append(duplicate), "duplicate")
+        self.assertEqual(cap_signature(state, "pool-cap")[3:6], (4, 0, 3))
 
     def test_unlike_units_never_combine(self):
         state = replay(UNLIKE_EVENTS)
@@ -607,4 +654,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
