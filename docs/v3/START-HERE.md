@@ -4,6 +4,11 @@ Reviewed 2026-09-13 against GitHub master `797be4f18edf3f9e0f2dbac9432f190dbe1ed
 This is a source orientation snapshot, not live machine status or a new operating policy.
 Lucas's current request is to repair repository orientation and verify the v3 specifications.
 
+The subsequent [continuous WSL construction specification](construction-swarm/CONTINUOUS-OPERATION.md)
+defines proposed 24/7 scheduling, Cursor/Codex participation, contributed agents, quality
+controls and staged acceptance. It is not an enabled service. Its authoring gate is
+separate from the frozen orientation-repair gate below.
+
 Read [CONTROL_PLANE](../../CONTROL_PLANE.md) first, then [ANCHOR](../../ANCHOR.md),
 [AGENTS](../../AGENTS.md), and this page. The current development target is **Recursion v3**.
 V1/v2 remain historical implementation and regression references. Do not infer a v2

@@ -1,0 +1,530 @@
+{
+  "schema_version": 1,
+  "status": "proposed_not_implemented",
+  "activation_enabled": false,
+  "baseline": "ba6720c262a1293bd132b5c83504fd6a52e9de72",
+  "parent_goal": "goal-recursion-v2-execution-fabric",
+  "specification": "CONTINUOUS-OPERATION.md",
+  "pilot_proposals": {
+    "standing_days": 7,
+    "soak_hours": 72,
+    "worker_slots": 5,
+    "burst_ceiling": 8,
+    "reserved_verifier_slots": 1,
+    "command_slots": 4,
+    "command_seconds": 60,
+    "batch_seconds_max": 28800,
+    "closeout_seconds_min": 600,
+    "known_failure_retries_max": 2,
+    "unknown_retries": 0,
+    "pending_integration_candidates_max": 3,
+    "metered_spend_enabled": false,
+    "auto_merge": false,
+    "auto_reset": false,
+    "host_awake_availability_percent": 99.5,
+    "status_p95_seconds": 2,
+    "ack_seconds": 5,
+    "outage_detection_seconds": 30,
+    "recovery_seconds": 120,
+    "short_profile_stop_quiescence_seconds": 30
+  },
+  "requirements": [
+    {
+      "id": "CW-01",
+      "scenarios": [
+        "S01"
+      ]
+    },
+    {
+      "id": "CW-02",
+      "scenarios": [
+        "S01",
+        "S02",
+        "S13",
+        "S26"
+      ]
+    },
+    {
+      "id": "CW-03",
+      "scenarios": [
+        "S03",
+        "S20",
+        "S22"
+      ]
+    },
+    {
+      "id": "CW-04",
+      "scenarios": [
+        "S04"
+      ]
+    },
+    {
+      "id": "CW-05",
+      "scenarios": [
+        "S05",
+        "S19",
+        "S25"
+      ]
+    },
+    {
+      "id": "CW-06",
+      "scenarios": [
+        "S06",
+        "S21",
+        "S25"
+      ]
+    },
+    {
+      "id": "CW-07",
+      "scenarios": [
+        "S07"
+      ]
+    },
+    {
+      "id": "CW-08",
+      "scenarios": [
+        "S08",
+        "S24"
+      ]
+    },
+    {
+      "id": "CW-09",
+      "scenarios": [
+        "S09"
+      ]
+    },
+    {
+      "id": "CW-10",
+      "scenarios": [
+        "S10",
+        "S21",
+        "S24"
+      ]
+    },
+    {
+      "id": "CW-11",
+      "scenarios": [
+        "S11",
+        "S21",
+        "S23"
+      ]
+    },
+    {
+      "id": "CW-12",
+      "scenarios": [
+        "S12"
+      ]
+    },
+    {
+      "id": "CW-13",
+      "scenarios": [
+        "S13",
+        "S14"
+      ]
+    },
+    {
+      "id": "CW-14",
+      "scenarios": [
+        "S15",
+        "S26"
+      ]
+    },
+    {
+      "id": "CW-15",
+      "scenarios": [
+        "S16"
+      ]
+    },
+    {
+      "id": "CW-16",
+      "scenarios": [
+        "S17",
+        "S18"
+      ]
+    },
+    {
+      "id": "CW-17",
+      "scenarios": [
+        "S19",
+        "S20"
+      ]
+    },
+    {
+      "id": "CW-18",
+      "scenarios": [
+        "S22",
+        "S23"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "id": "P1",
+      "depends_on": [],
+      "deliverable": "Fenced task/attempt core",
+      "scenarios": [
+        "S01",
+        "S02",
+        "S05"
+      ]
+    },
+    {
+      "id": "P2",
+      "depends_on": [],
+      "deliverable": "Read-only client access and host lifecycle",
+      "scenarios": [
+        "S03",
+        "S04"
+      ]
+    },
+    {
+      "id": "P3",
+      "depends_on": [
+        "P1",
+        "P2"
+      ],
+      "deliverable": "Leases, shared admission and control",
+      "scenarios": [
+        "S06",
+        "S07",
+        "S08",
+        "S11",
+        "S19",
+        "S20",
+        "S25"
+      ]
+    },
+    {
+      "id": "P4",
+      "depends_on": [
+        "P3"
+      ],
+      "deliverable": "Standing envelope, quotas and event supervision",
+      "scenarios": [
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S26"
+      ]
+    },
+    {
+      "id": "P5",
+      "depends_on": [
+        "P4"
+      ],
+      "deliverable": "Evidence, research depth and independent verification",
+      "scenarios": [
+        "S09",
+        "S10",
+        "S16",
+        "S24"
+      ]
+    },
+    {
+      "id": "P6",
+      "depends_on": [
+        "P5"
+      ],
+      "deliverable": "Integration and publication",
+      "scenarios": [
+        "S17",
+        "S18"
+      ]
+    },
+    {
+      "id": "P7",
+      "depends_on": [
+        "P6"
+      ],
+      "deliverable": "Actual-host single-worker and five-worker canary",
+      "scenarios": [
+        "S21"
+      ]
+    },
+    {
+      "id": "P8",
+      "depends_on": [
+        "P7"
+      ],
+      "deliverable": "Soak and comparative scaling",
+      "scenarios": [
+        "S22",
+        "S23"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S01",
+      "phase": "P1",
+      "requirements": [
+        "CW-01",
+        "CW-02"
+      ],
+      "trigger": "Crash after attempt acceptance but before canonical-task acknowledgement; replay the outbox twice.",
+      "expected": "Exactly one attempt and one canonical transition; missing acknowledgement blocks dependent work; no competing task registry.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S02",
+      "phase": "P1",
+      "requirements": [
+        "CW-02"
+      ],
+      "trigger": "Start two leaders; crash the winner between reservation and launch; submit an old-fence result.",
+      "expected": "One launch authority; uncertain launch stays charged and held; old fence cannot mutate or publish.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S03",
+      "phase": "P2",
+      "requirements": [
+        "CW-03"
+      ],
+      "trigger": "On the actual Windows account, test boot, sign-out, lock, closing every editor, WSL shutdown, sleep and wake.",
+      "expected": "Record which startup modes work; healthy host recovers within target; outage is explicit; no duplicate controller; sleep is never called uptime.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S04",
+      "phase": "P2",
+      "requirements": [
+        "CW-04"
+      ],
+      "trigger": "Attach Cursor and Codex simultaneously through stdio; disconnect one and reconnect with an expired event cursor.",
+      "expected": "Both observe the same instance/revision; work survives disconnect; cursor gap triggers snapshot; stale client cannot mutate.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S05",
+      "phase": "P1",
+      "requirements": [
+        "CW-05"
+      ],
+      "trigger": "Spoof Owner in the request body, cross projects, replay an idempotency key with a different body, and revoke a grant.",
+      "expected": "Transport-bound identities prevail; forbidden mutations fail; identical retries return one receipt; changed bodies conflict; revoked grants fail.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S06",
+      "phase": "P3",
+      "requirements": [
+        "CW-06"
+      ],
+      "trigger": "Two clients claim one task and offer five children each; then a leased client disappears and returns late.",
+      "expected": "One task lease; every admitted child has a counted reservation; unknown cleanup retains holds; late results cannot advance newer incarnation.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S07",
+      "phase": "P3",
+      "requirements": [
+        "CW-07"
+      ],
+      "trigger": "Offer a new agent while the frozen native campaign owns the pool lock.",
+      "expected": "Offer is acknowledged and queued; plan bytes unchanged; no second campaign or bypass; queued state visible until next admitted batch.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S08",
+      "phase": "P3",
+      "requirements": [
+        "CW-08"
+      ],
+      "trigger": "Submit packets without parent, requirement, exact source, gate or tool scope; offer v2 work under a v3-only grant.",
+      "expected": "Invalid/out-of-scope packets refuse before inference; valid v3 packet preserves every binding and declared oracle.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S09",
+      "phase": "P5",
+      "requirements": [
+        "CW-09"
+      ],
+      "trigger": "Return two non-novel accepted research filings, a meaningful negative result and a long admitted experiment.",
+      "expected": "Repeated lane suspends for re-scoping; negative evidence may close the claim; long work is not killed merely for sparse chatter.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S10",
+      "phase": "P5",
+      "requirements": [
+        "CW-10"
+      ],
+      "trigger": "Submit self-approved code, forged PASS, a changed candidate, missing tool receipts and a dissenting independent review.",
+      "expected": "None bypass gates; exact independent evidence required; original dissent retained; no vote or silent verifier downgrade.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S11",
+      "phase": "P3",
+      "requirements": [
+        "CW-11"
+      ],
+      "trigger": "Offer more local/remote agents during command saturation, low memory, stale quota, retained holds and review backlog.",
+      "expected": "Admission uses binding global/host/account constraints; four command slots remain; verifier/control reserve survives; excess offers receive reasons.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S12",
+      "phase": "P4",
+      "requirements": [
+        "CW-12"
+      ],
+      "trigger": "Keep workers healthy without events, then deliver the same failed-gate event repeatedly while advisor quota is exhausted.",
+      "expected": "Idle model dispatches zero; duplicates coalesce; one durable blocker; safe existing work continues but judgment-dependent actions wait.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S13",
+      "phase": "P4",
+      "requirements": [
+        "CW-13",
+        "CW-02"
+      ],
+      "trigger": "Cross a quota reset and standing-grant expiry; restart with old plan/reset IDs, rollback the clock and retain an unknown attempt.",
+      "expected": "No extension of old batch; fresh plan only within valid grant after reconciliation; unknown charges persist; uncertain clock stops admission.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S14",
+      "phase": "P4",
+      "requirements": [
+        "CW-13"
+      ],
+      "trigger": "Connect two clients on one Codex account plus Cognition; remove a quota field and attempt paid fallback/reset redemption.",
+      "expected": "Shared accounts aggregate once; account windows remain distinct; unknown telemetry refuses affected admission; paid fallback and resets stay disabled.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S15",
+      "phase": "P4",
+      "requirements": [
+        "CW-14"
+      ],
+      "trigger": "Inject prelaunch rejection, postlaunch timeout, malformed completed filing and repeated provider errors.",
+      "expected": "At most two bounded known-failure retries; no uncertain replay; route backoff/circuit is visible; restart does not erase attempts or holds.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S16",
+      "phase": "P5",
+      "requirements": [
+        "CW-15"
+      ],
+      "trigger": "Compact a task containing revoked authority, negative results, a staged diff and an uncertain effect; change source before resume.",
+      "expected": "Original evidence recoverable; revocation/unknown survive; stale source/lease refuses resume; task identity and remaining budget persist.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S17",
+      "phase": "P6",
+      "requirements": [
+        "CW-16"
+      ],
+      "trigger": "Integrate two overlapping proposals and move the integration base after first verification.",
+      "expected": "Serial composition; conflicts surfaced; exact combined gate/review rerun; prior PASS cannot certify new bytes.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S18",
+      "phase": "P6",
+      "requirements": [
+        "CW-16"
+      ],
+      "trigger": "Lose push and PR acknowledgements, then retry; propose master merge; fill the three-candidate review queue.",
+      "expected": "Remote intent reconciles to one review branch/PR; no default merge; candidate cap stops more integration and preserves useful review work.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S19",
+      "phase": "P3",
+      "requirements": [
+        "CW-17",
+        "CW-05"
+      ],
+      "trigger": "Issue Owner Stop/PAUSE while launch, artifact adoption and publication race; attempt contributor resume.",
+      "expected": "Fresh fencing prevents new effects; owned cleanup observed separately; contributor cannot resume; awareness remains and delivery obeys PAUSE.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S20",
+      "phase": "P3",
+      "requirements": [
+        "CW-17",
+        "CW-03"
+      ],
+      "trigger": "Saturate build/worker queues while querying status, subscribing to events and issuing authorized Stop.",
+      "expected": "Control queue remains responsive within targets; last-observed state is marked stale on outage; acknowledgement never claims completed cleanup.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S21",
+      "phase": "P7",
+      "requirements": [
+        "CW-06",
+        "CW-10",
+        "CW-11"
+      ],
+      "trigger": "After separate activation, run one pinned live SWE-2 job and independent verifier on the actual WSL host.",
+      "expected": "Exact identity/tool/receipt and cgroup cleanup evidence; no host writable mounts or credentials in worker artifacts; scale only after pass.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S22",
+      "phase": "P8",
+      "requirements": [
+        "CW-03",
+        "CW-18"
+      ],
+      "trigger": "Run a 72-hour authorized five-worker soak with outages, recovery, quota changes and continuous client access probes.",
+      "expected": "Host-awake availability at least 99.5%; zero integrity breaches; bounded spend; outages classified; requirements or falsifiable claims actually closed.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S23",
+      "phase": "P8",
+      "requirements": [
+        "CW-11",
+        "CW-18"
+      ],
+      "trigger": "Compare five versus eight total workers on matched pinned tasks with equal research depth and independent acceptance.",
+      "expected": "Measure full cost, reviewer time and escaped defects; expand only on higher verified throughput without quality regression; inconclusive retains five.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S24",
+      "phase": "P5",
+      "requirements": [
+        "CW-08",
+        "CW-10"
+      ],
+      "trigger": "Request live research sources or a build exceeding the offline 60-second command profile.",
+      "expected": "Declared profile refusal; reviewed source acquisition or separately qualified long-build route required; no host-shell escape or reduced test depth.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S25",
+      "phase": "P3",
+      "requirements": [
+        "CW-05",
+        "CW-06"
+      ],
+      "trigger": "GrokBot contributes using computer access and submits an uncontained desktop result.",
+      "expected": "Named authenticated identity and task scope required; result remains a proposal until isolated import and independent verification; no implicit Owner authority.",
+      "status": "specified_not_run"
+    },
+    {
+      "id": "S26",
+      "phase": "P4",
+      "requirements": [
+        "CW-02",
+        "CW-14"
+      ],
+      "trigger": "Restore an interrupted ledger/artifact backup and simulate ext4 or D: exhaustion and a missing artifact.",
+      "expected": "No admitted duplicate/unknown effect; source/evidence gaps visible; admission stops with reserved closeout space; restore evidence binds actual bytes.",
+      "status": "specified_not_run"
+    }
+  ]
+}
