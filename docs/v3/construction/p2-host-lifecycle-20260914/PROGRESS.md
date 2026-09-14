@@ -177,10 +177,28 @@ Not run:
 - Windows denied the first attempt to remove the task-owned 13,407,032-byte temporary source
   bundle. Its exact path was revalidated and the file was removed from WSL; absence was verified.
 
-## Pending final evidence
+## Reviewed candidate evidence
 
-- Commit the remediation and evidence slices.
-- Run focused P2 host lifecycle, frozen P1 and P2 access regressions, source/scope, handoff
-  preservation and `git diff --check` on a committed candidate.
-- Obtain independent Astra review of the exact candidate, resolve actionable findings, rerun
-  affected gates and record the exact reviewed final commit.
+Exact implementation candidate `8b505d3a48bcf437df725fa4a9c4767a08c0e664` was clean and passed:
+
+- Focused lifecycle: 21 tests in 4.306 seconds.
+- Frozen P1: 18 tests in 2.112 seconds.
+- Frozen P2 access: 19 tests in 5.597 seconds.
+- Handoff preservation: `HANDOFF_SOURCE_PASS`, 49 specifications unchanged.
+- Additive source/scope: `SOURCE_SCOPE_PASS`, exact HEAD, clean worktree and exactly five `A` paths
+  from TASK_BASE; the frozen integration gate remained unmodified.
+- `git diff --check` from TASK_BASE: pass.
+
+Independent Astra review of that exact candidate returned `REVIEW_PASS` with no actionable
+findings. Its reruns passed lifecycle 21 in 4.189 seconds, P1 18 in 2.096 seconds and P2 access 19
+in 5.586 seconds, plus preservation, source/scope and diff. Independent actual-process probes
+closed every retained finding: matched inspection/population/cleanup failures persisted current
+unavailable non-quiescent state; mismatched source/domain/no-state preserved the canary and sampled
+controls; delegated `pids.max=256`, pre-exec containment, fork/reparent cleanup, observation-failure
+cleanup, controller-crash recovery, socket reconciliation and Stop receipt all passed. The reviewer
+reported zero remaining fixture processes/cgroups and made no repository edits.
+
+After that review, a read-only check again found the branch clean, exactly the five allowed
+additions, no lifecycle fixture process or test cgroup, no temporary source bundle, and an unchanged
+Windows reference worktree. This evidence-only update changes no executable behavior; the exact
+final commit still requires the final external handoff report to name its full SHA and Astra receipt.
