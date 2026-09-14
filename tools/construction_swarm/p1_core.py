@@ -441,7 +441,12 @@ class P1Store:
             _require(prior is None, "fence already recovered")
             owned = self.db.execute("SELECT COUNT(*) FROM attempts WHERE fence=? AND state IN ('reserved','launch_intent','launched')",
                                     (crashed_fence,)).fetchone()[0]
-            _require(owned > 0, "no recoverable crashed-fence attempt")
+            pending = self.db.execute("SELECT COUNT(*) FROM outbox WHERE delivery_fence=? AND delivery='pending'",
+                                      (crashed_fence,)).fetchone()[0]
+            # Recovery can crash after adopting another incarnation's receipts.
+            # Their immutable attempt origin stays old; current delivery ownership
+            # is sufficient to adopt them again, without granting launch authority.
+            _require(owned > 0 or pending > 0, "no recoverable crashed-fence attempt or receipt")
             self.db.execute("UPDATE attempts SET state='unknown' WHERE fence=? AND state IN ('reserved','launch_intent','launched')",
                             (crashed_fence,))
             self.db.execute("UPDATE outbox SET delivery_fence=? WHERE delivery_fence=? AND delivery='pending'", (fence, crashed_fence))

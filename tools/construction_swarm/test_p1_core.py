@@ -273,6 +273,42 @@ class P1CoreTests(unittest.TestCase):
         self.assertEqual(self.hermes.receipt_count("task-a"), 0)
         self.assertEqual(self.hermes.receipt_count("task-c"), 1)
 
+    def assert_recovery_survives_another_crash(self, phase):
+        accepted = self.store.accept(self.hermes, FakeTransport("worker"), self.request(),
+                                     "leader-a", self.fence)
+        self.store.close()
+        self.hermes.close()
+        result = subprocess.run([
+            sys.executable, "-X", "utf8", "-B", "-m", "tools.construction_swarm.p1_fixture_worker",
+            "recover-crash", "--root", str(self.root / "store"), "--hermes", str(self.hermes_path),
+            "--crashed-fence", str(self.fence), "--phase", phase,
+        ], cwd=Path(__file__).parents[2], capture_output=True, timeout=20)
+        self.hermes = FakeHermes(self.hermes_path)
+        self.store = P1Store(self.root / "store")
+        self.assertEqual(result.returncode, 19, result.stderr.decode())
+        crashed = self.store.leader()["fence"]
+        fence = self.store.acquire_leader("third", takeover=True)
+        self.store.recover_after_crash(crashed, "third", fence)
+        with self.assertRaises(FenceRejected):
+            self.store.replay_outbox(self.hermes, FakeTransport("worker"), "crashed-recovery", crashed)
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "third", fence),
+                         [accepted["receipt"]])
+        self.assertEqual(self.store.replay_outbox(self.hermes, FakeTransport("worker"), "third", fence), [])
+        self.assertEqual(self.hermes.receipt_count("task-a", "attempt_accepted"), 1)
+        attempt = self.store.attempt(accepted["attempt_id"])
+        self.assertEqual((attempt["fence"], attempt["state"], attempt["charge_state"]),
+                         (self.fence, "unknown", "held"))
+        retry = self.store.accept(self.hermes, FakeTransport("worker"), self.request(), "third", fence)
+        self.assertEqual((retry["state"], retry["fence"]), ("unknown", self.fence))
+        with self.assertRaises(P1Refused):
+            self.store.begin_launch(FakeTransport("worker"), retry["attempt_id"], "third", fence)
+
+    def test_s02_recovery_crash_after_adoption_can_be_recovered_again(self):
+        self.assert_recovery_survives_another_crash("after_adoption")
+
+    def test_s01_recovery_crash_after_canonical_commit_delivers_once(self):
+        self.assert_recovery_survives_another_crash("after_canonical_commit")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

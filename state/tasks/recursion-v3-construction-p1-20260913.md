@@ -115,3 +115,11 @@ current-fence non-starvation, foreign-identity replay ordering, revisions, grant
 idempotency, and tampered envelopes. Its verdict was PASS with no in-scope reproduction.
 This is a verified fake-boundary P1 candidate only. No live transport/fleet qualification,
 activation, auth/config/cron/autonomy change, publishing, or merge occurred.
+
+2026-09-14 repair slice 1: Lucas requested fixes after an independent audit of
+`60697e5`. Two new abrupt-child-exit regressions reproduced stranded delivery after
+a recovery controller itself exits, both before send and after canonical commit.
+Recovery now considers pending delivery ownership as well as original attempt
+ownership. Origin fences and unknown charges remain unchanged; stale callers cannot
+replay or relaunch. Both regressions failed before the fix; the 17-test suite passes
+afterward. Fresh independent review of the repaired candidate remains required.

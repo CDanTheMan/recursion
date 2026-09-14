@@ -50,6 +50,11 @@ def main():
     crash.add_argument("--project", required=True)
     crash.add_argument("--grant", required=True)
     crash.add_argument("--phase", choices=("reserved", "launch_intent", "after_effect"), required=True)
+    recovery = commands.add_parser("recover-crash")
+    recovery.add_argument("--root", required=True)
+    recovery.add_argument("--hermes", required=True)
+    recovery.add_argument("--crashed-fence", type=int, required=True)
+    recovery.add_argument("--phase", choices=("after_adoption", "after_canonical_commit"), required=True)
     args = parser.parse_args()
     store = P1Store(args.root)
     if args.command == "elect":
@@ -63,6 +68,20 @@ def main():
         store.close()
         return 0
     hermes = FakeHermes(args.hermes)
+    if args.command == "recover-crash":
+        owner = "crashed-recovery"
+        fence = store.acquire_leader(owner, takeover=True)
+        store.recover_after_crash(args.crashed_fence, owner, fence)
+        if args.phase == "after_canonical_commit":
+            deliver = hermes.deliver
+
+            def crash_after_delivery(*values):
+                deliver(*values)
+                os._exit(19)
+
+            hermes.deliver = crash_after_delivery
+            store.replay_outbox(hermes, FakeTransport("worker"), owner, fence)
+        os._exit(19)
     fence = store.acquire_leader(args.owner, takeover=True)
     accepted = store.accept(hermes, FakeTransport("worker"), _request(args.task, args.project, args.grant), args.owner, fence)
     if args.phase == "launch_intent":
