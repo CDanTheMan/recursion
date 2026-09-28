@@ -6,7 +6,7 @@ last-updated: 2026-09-07
 
 # Recursion v3 execution fabric hypothesis
 
-## Deferred candidates and recovery commands — 2026-09-07
+## Deferred candidates and recovery commands â€” 2026-09-07
 
 RSM-001: the [RESET mapping packet](construction/reset-mapping-20260907/handoff.md) replaces
 forced recovery after a locally suppressed candidate with deferred admission in its new narrow
@@ -25,9 +25,9 @@ Consequently accepted-reset may still carry requires_reset=true. Do not turn tha
 another RESET command: the recovered trace would refuse an unexpected RESET. A runtime adapter
 needs separately established current recovery state; changing M1B is outside this packet.
 
-## Preventive admission versus retained wire evidence — 2026-09-07
+## Preventive admission versus retained wire evidence â€” 2026-09-07
 
-FMC-004: the [paired immutable-oracle controls](construction/formal-comparison-20260907/results.json)
+FMC-004: the paired immutable-oracle controls
 expose an unresolved adapter seam. A preventive model can withhold an exhausted second EVENT,
 retain admitted cursor 1, and request RESET. If the actual wire omits that EVENT, the M1B audit has
 no observed recovery cause and refuses RESET as unexpected. If the rejected EVENT is included,
@@ -41,7 +41,7 @@ Check that sequence against unchanged M1B rules and both models. Do not invent a
 forge a gap, erase a rejected event, or weaken the immutable validator. M1A/M1C joining, PAUSE
 classification and OR-015's common-writer migration remain separately unresolved.
 
-## Observed accounting boundaries — 2026-09-07
+## Observed accounting boundaries â€” 2026-09-07
 
 IPR-003: the installed Codex fixture emitted cumulative totals of 15, 30, 45, 60 and 75,
 then a fork inherited 30 and the restarted original session replayed 75 without another
@@ -115,7 +115,7 @@ configured primary model. Unknown internal helper closure is an adapter blocker;
 admitted eligible upstream session remains the functional alternative. CMP-011, CMP-017, CMP-032.
 
 
-## Mark 3 communication and authority projection — 2026-09-07
+## Mark 3 communication and authority projection â€” 2026-09-07
 
 OR-036/037 settle the proof-boundary and amendment choices while retaining current integrity
 contracts. OR-038 requires direct assistant/Head consultation across compatible sessions and
@@ -133,7 +133,7 @@ Model comparison must use identical queue/relaunch/RESET, lease/revocation, conf
 consultation, update/Stop, partition/reconnect and ambiguous-effect traces. Neither direct
 messaging nor richer working relationships changes who can amend a GoalSpec or write canonical state.
 
-## Role execution and accounting closure — proposed 2026-09-07
+## Role execution and accounting closure â€” proposed 2026-09-07
 
 MKR-002/MKR-008 extend the existing Route/WorkPacket projection, not the M1 wire schema.
 Admission resolves every model-using dependency before starting the workflow:
@@ -168,7 +168,7 @@ accounting and status are deterministic and event driven. Model inference is inv
 semantic work. A provider session can accelerate continuation; it is not the canonical writer,
 authority source or scheduler. Native and upstream implementations share the same integrity path.
 
-## Native and delegated engine accommodation — proposed
+## Native and delegated engine accommodation â€” proposed
 
 A provider adapter maps inference requests and billing fields; an engine adapter maps another
 harness's lifecycle/tools/session; a Recursion plugin contributes optional admitted behavior.
@@ -374,7 +374,7 @@ nonempty finite controls, all prefixes of 12 historical controls, four special c
 each retained model witness. Actual emitted-exhaustion recovery remains in literal controls;
 the normal-source product admits only funded emissions. No general adapter equivalence, storage
 implementation or common-writer migration clearance follows.
-See [executed results](construction/flow-recovery-integration-20260907/results.json).
+See executed results.
 
 ## Replay evidence admission, 2026-09-07
 
@@ -392,15 +392,15 @@ The cross-arm research adds concrete adapter discriminators: friendly-ID child r
 
 ## Generation and effect composition, 2026-09-08
 
-GCM-002 separates immutable fork history, resident generation capacity and a live invocation pin in a checked finite composition. Under the declared two-slot/one-capsule bound, G3 can activate after G1 local quiescence and staged reclamation even while a detached remote operation is unresolved. Its uncertainty and separate attempt accounting remain. A resident-only G1 fork instead produces visible G3 hold. This is existential recovery under explicit finite assumptions, not unconditional liveness or measured capsule fidelity/cost. A capsule never permits unloading an in-process invocation still using that generation. The remote operation in this model has no remaining local runtime dependency after owned wait; other host-call cases need separate evidence. [Composed ordered witness](construction/composition-model-20260908/results.json).
+GCM-002 separates immutable fork history, resident generation capacity and a live invocation pin in a checked finite composition. Under the declared two-slot/one-capsule bound, G3 can activate after G1 local quiescence and staged reclamation even while a detached remote operation is unresolved. Its uncertainty and separate attempt accounting remain. A resident-only G1 fork instead produces visible G3 hold. This is existential recovery under explicit finite assumptions, not unconditional liveness or measured capsule fidelity/cost. A capsule never permits unloading an in-process invocation still using that generation. The remote operation in this model has no remaining local runtime dependency after owned wait; other host-call cases need separate evidence. Composed ordered witness.
 
 ## Restricted literal effect join, 2026-09-08
 
-EEJ-001 adds local fixture support for the M1A→M1C seam. Require original key, target, payload, dispatch command, intent/admission and ordered attempts; retain exact packet, GoalSpec, plan, lease, route and budget references and internal cross-record relationships. Keep collector, dispatcher and observer roles separate. M1A command acceptance records the supplied aggregate label; it does not authenticate an external result. Missing or contradictory supplemental evidence blocks the join rather than creating replacement observations.
+EEJ-001 adds local fixture support for the M1Aâ†’M1C seam. Require original key, target, payload, dispatch command, intent/admission and ordered attempts; retain exact packet, GoalSpec, plan, lease, route and budget references and internal cross-record relationships. Keep collector, dispatcher and observer roles separate. M1A command acceptance records the supplied aggregate label; it does not authenticate an external result. Missing or contradictory supplemental evidence blocks the join rather than creating replacement observations.
 
 Bind the original observation to its historical evidence prefix and classify the full trusted cut separately. A valid late same-attempt receipt or reconciliation may settle M1C while the original ambiguous record stays byte-identical. Preserve original receipt and operation digests with explicit codecs; neither effect capability keys nor packet attempt numbers identify provider operations or effect attempts. Current epoch assessment does not rewrite historical admission. The adapter's separate unsettled-attempt diagnostic can retain a hold even when literal M1C reports an earlier success. This supplies no runtime write/retry authority and does not close the common-writer migration blocker. [Bounded evidence](construction/effect-evidence-20260908/evidence.json).
 
-## Evidence cuts and independent ownership — 2026-09-08
+## Evidence cuts and independent ownership â€” 2026-09-08
 
 SCM-002 adds a bounded shared-model obligation: presentation recovery installs a
 particular historical evidence cut without replacing the current inventory,
@@ -423,7 +423,7 @@ retains local Stop versus recipient-installed fencing and lifetime-spend versus
 quota-reset distinctions. It does not complete original trace03/21/27, grant new
 operational authority or resolve common-writer migration.
 
-## Uncertain-effect reservations — 2026-09-08
+## Uncertain-effect reservations â€” 2026-09-08
 
 SWR-002 stores a fixed pool/goal/operation/attempt/payload/owner/amount binding for
 each admitted reservation. A matching duplicate retains its terminal disposition;
@@ -440,27 +440,27 @@ bridge or proof of provider authentication. Existing dispatch envelopes, integra
 roles/routes, eight experiment families and full workflow requirements remain.
 [Scoped sources and results](construction/shared-reservations-20260908/evidence.json).
 
-## SC-WIRE-02 — 2026-09-08
+## SC-WIRE-02 â€” 2026-09-08
 
 WIR-002 checks that an old zero-reservation presentation snapshot cannot release a current six-unit uncertain reservation. Install, receiver restart, quota and control preserve its fixed owner binding. The literal wire oracle cannot inspect this authority; independent local guards reject corruption. This is a held-reservation boundary, while original6+6-from10 admission remains in SC-WR-01. The full coupled product and common-writer migration remain unresolved.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
 
-## SC-EPOCH-03 — 2026-09-08
+## SC-EPOCH-03 â€” 2026-09-08
 
 EPC-001 binds consultation to typed goal, lease, issuer, requester incarnation, delivery generation, context/payload and existing operation grant. Received stale advice and valid historical adoption remain evidence; adoption and continuation each recheck current authority. Actual request payload conflicts remain distinct from matching duplicates. Owner-only GoalSpec amendment is unchanged; literal M1A stale-authority checks remain separate from this proposed application relation.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
 
-## SC-COUPLED-01 — 2026-09-08
+## SC-COUPLED-01 â€” 2026-09-08
 
 CPL-002 separates transported advice, current adoption/wake and bound terminal effect reconciliation. Old snapshots, ACKs, requester restart, quota reset and Stop cannot release uncertainty. Success consumes six permanently; only proven nonexecution plus reconciliation permits the competing six-unit request. Atomic durable commits, truthful authenticated receipts and same-run catalogue availability remain premises.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
 
-## Coupled evidence cut and PAUSE — 2026-09-08
+## Coupled evidence cut and PAUSE â€” 2026-09-08
 
 CCP-002 checks the actual joined observation through literal M1A: fresh PAUSE refusal, exact duplicate receipt and awareness-journal growth remain distinct from runtime events and pure classification.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
 
-## Retained-cut publication — 2026-09-08
+## Retained-cut publication â€” 2026-09-08
 
 CPB-002: Existing retained-cut reader pins bind exact generation and actor nonce through new
 selection/restart. Fresh pin admission checks current selection; owned wait/release precedes
@@ -470,7 +470,7 @@ A restarted reader cannot steal an old live pin; physical orphan recovery is unc
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
 
-## Complete-source reservation boundary — 2026-09-08
+## Complete-source reservation boundary â€” 2026-09-08
 
 The bounded source protocol preserves actual A6/B6 pool10. Registration-only source
 change invalidates fresh publication and selected-cut reconciliation even with identical

@@ -61,7 +61,7 @@ these fields:
   "version": 1,
   "enabled": true,
   "source_commit": "FULL_40_CHARACTER_REVIEWED_COMMIT",
-  "repository_root": "/opt/recursion-foundry/repos/recursion-qualified",
+  "repository_root": "<repo>-foundry/repos/recursion-qualified",
   "python_executable": "/usr/bin/python3",
   "socket_path": "/run/user/1000/recursion-construction-read.sock",
   "grants_file": "/var/lib/recursion-foundry/access/read-grants.json",
@@ -95,7 +95,7 @@ python3 -X utf8 -B -m tools.construction_swarm.p2_host_lifecycle run --config /A
 Manual Windows-to-WSL start:
 
 ```text
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/construction_swarm/p2_windows_watchdog.ps1 -Distro Ubuntu-24.04 -LinuxRepository /opt/recursion-foundry/repos/recursion-qualified -Config /ABSOLUTE/UNTRACKED/lifecycle.json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/construction_swarm/p2_windows_watchdog.ps1 -Distro Ubuntu-24.04 -LinuxRepository <repo>-foundry/repos/recursion-qualified -Config /ABSOLUTE/UNTRACKED/lifecycle.json
 ```
 
 Manual bounded stop from Linux/WSL:
@@ -107,7 +107,7 @@ python3 -X utf8 -B -m tools.construction_swarm.p2_host_lifecycle stop --state-ro
 State is in `state.json` beneath the configured state root and names the exact service cgroup.
 Operators must treat missing state,
 non-`running` health, a stale `observation_time`, an identity mismatch or a failed read as
-unavailable—not infer health from a PID alone. `PAUSE`/disabled inputs prevent a new controller
+unavailableâ€”not infer health from a PID alone. `PAUSE`/disabled inputs prevent a new controller
 start and are not changed by the controller.
 
 ## Acceptance
@@ -128,7 +128,7 @@ during qualification, and fixture JSON
 is capped at 32 MiB. The frozen predecessor integration gate remains frozen and intentionally
 rejects successor files; it is not an acceptance gate for this additive packet.
 
-## Draft host qualification runbook — all trials specified, not run
+## Draft host qualification runbook â€” all trials specified, not run
 
 This runbook is a proposal for a separately approved, human-provisioned finite trial on the named
 Windows account. It does not authorize installing Task Scheduler/systemd services, editing startup

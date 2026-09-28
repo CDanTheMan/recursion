@@ -1,11 +1,11 @@
-# Morning brief — 2026-09-09
+# Morning brief â€” 2026-09-09
 
 SC-CUT-SOURCE-01 remains incomplete. The continuation preserves the original
 03:40:33UTC activation, amended15:30UTC deadline (08:30 Los Angeles) and12:30UTC
 discovery cutoff. Astra High Standard is unchanged; no reset or new metered spend
 has been used. Latest recorded capacity before this candidate:65% remaining.
 
-The prior finite slice remains in draft [PR111](https://github.com/NotSkittlz/recursion/pull/111)
+The prior finite slice remains in draft [PR111](https://github.com/recursion/pull/111)
 at89ea639:51 profiles,104 environments,17966 states/31140 edges per representation,
 zero frontier within those domains. Its historical gates, reviews, failed and
 superseded evidence remain immutable. Broader research convergence was premature.

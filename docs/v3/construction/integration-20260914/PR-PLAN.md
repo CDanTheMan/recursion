@@ -10,7 +10,7 @@ Prepare these requirement-sized review changes:
 | 2, parallel after 1 | codex/p1-readonly-service-20260914 at 7111669 | Add authenticated read access for external v3 construction | Six access/CLI/MCP/test/document files. |
 | 3, parallel after 1 | codex/v3-recovery-reservation-ledger-20260914 at f64c5bd | Model cumulative recovery reservations and reset reconciliation | Five inert product experiment/test/document files. |
 | 4, parallel after 1 | codex/v3-delegated-q-coupling-20260914 at 8fa7e2c | Add prospective delegated-Q coupling checker and auditor | Seven source/fake experiment files; DQ-16 explicitly unexecuted. |
-| 5, after 2–4 | codex/v3-integration-20260914 at final reviewed HEAD | Validate composition and record the next v3 fleet work | Five integration files after predecessor diffs are present. |
+| 5, after 2â€“4 | codex/v3-integration-20260914 at final reviewed HEAD | Validate composition and record the next v3 fleet work | Five integration files after predecessor diffs are present. |
 
 The last source includes local merge commits retaining every reviewed origin. Those are review-branch merges only. Lucas performs GitHub/default-branch merges. Re-fetch and compare the actual base before opening or retargeting each PR; if the base moves, rerun relevant composed checks and review. Do not assume a squash preserves original ancestry: the pinned source candidates and receipts must remain available, while the current acceptance gate remains tied to the reviewed local composition.
 
@@ -24,6 +24,6 @@ Description drafts:
 
 Publishing uses the repository's existing approved publisher route. scripts/publish.sh requires a canonical loop/work task ref, an active registered clone, a passed canonical task, configured publisher key, push permission and no PAUSE. This document does not create registry state or satisfy those operational conditions. Existing codex/ refs are source references, not an exception to the publisher rule. The earlier Windows exception covered one different branch only.
 
-Read-only SSH observation on 2026-09-14 confirmed that gs-recursion's /opt/recursion/state/PAUSE exists and its publisher script is present. Publication is therefore blocked through that route; this session has not changed PAUSE or push flags. The prior branch-specific Windows exception does not cover these five refs. A new explicit bounded exception or an authorized publisher-state change is required before publication. Do not infer either from a review PASS.
+Read-only SSH observation on 2026-09-14 confirmed that the coordinator host's <repo>/state/PAUSE exists and its publisher script is present. Publication is therefore blocked through that route; this session has not changed PAUSE or push flags. The prior branch-specific Windows exception does not cover these five refs. A new explicit bounded exception or an authorized publisher-state change is required before publication. Do not infer either from a review PASS.
 
 No PR has been opened by this local integration. Prepare exact review refs/bundles and descriptions before any publication approval or publisher action; never bypass the route, change autonomy flags, raw-push or merge on Lucas's behalf.

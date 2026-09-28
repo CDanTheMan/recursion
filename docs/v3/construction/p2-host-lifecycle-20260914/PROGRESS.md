@@ -13,7 +13,7 @@ Source branch: `codex/v3-integration-20260914`
 Work branch: `codex/p2-host-lifecycle-20260914`
 
 Native WSL worktree:
-`/opt/recursion-foundry/worktrees/recursion-host-lifecycle-20260914`
+`<repo>-foundry/worktrees/recursion-host-lifecycle-20260914`
 
 Windows reference worktree `C:\r3i` was read only. The older checkout
 `C:\Users\Lucas\Documents\GitHub\recursion` was not used for task writes.
@@ -22,7 +22,7 @@ Windows reference worktree `C:\r3i` was read only. The older checkout
 
 - Remote `refs/heads/codex/v3-integration-20260914` resolved to TASK_BASE before construction.
 - The native Linux worktree was created at TASK_BASE. Its `.git` pointer is Linux-native under
-  `/opt/recursion-foundry`; no Windows worktree Git pointer is used from Linux.
+  `<repo>-foundry`; no Windows worktree Git pointer is used from Linux.
 - Before editing, the handoff-preservation check passed in the native worktree with candidate
   `e627cd93bac473094bc99e8fa29c8d62bae526a2`: `HANDOFF_SOURCE_PASS`, three packets, zero provider
   calls, no scientific result, no construction service and 49 unchanged specification files.
@@ -146,7 +146,7 @@ Not run:
   native clone, and its origin was reset to the GitHub URL.
 - The first preservation invocation used WSL while its current directory was `C:\r3i`; Git rejected
   the Windows worktree pointer as not a Linux repository. The check was rerun from the native
-  `/opt/recursion-foundry` worktree and passed before editing.
+  `<repo>-foundry` worktree and passed before editing.
 - One intermediate inspection command had invalid nested shell quoting and did not execute the
   intended AST read. A direct Python compile check then passed.
 - The first focused suite run completed 11 tests in 2.603 seconds with one error: the client-exit

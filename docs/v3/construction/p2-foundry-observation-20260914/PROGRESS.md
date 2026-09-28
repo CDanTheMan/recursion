@@ -69,7 +69,7 @@ the new adapter was not yet committed. That failure was not reclassified.
 
 Candidate `c4af7b454b7d914296bda411524bcbf48a9dd62d` passed the clean 12-case
 focused gate. A native Ubuntu-24.04 clone was created at
-`/opt/recursion-foundry/p2-foundry-observation-20260914` rather than using Windows
+`<repo>-foundry/p2-foundry-observation-20260914` rather than using Windows
 worktree Git pointers. On that candidate:
 
 - focused observation gate: exit 0, 12 tests;
