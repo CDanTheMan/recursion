@@ -4,14 +4,15 @@
 [the current v3 development guide](docs/v3/START-HERE.md). It maps the intact product
 specifications, completed bounded work, remaining blockers and task-specific gates.
 V1/v2 remain implementation and regression references, not the default development target.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get involved.
 
 **Who decides:** `CONTROL_PLANE.md` — the authority constitution (adopted 2026-08-06,
 D-010). Hermes is the executive control plane; Claude Code is a bounded executor; Lucas is
 final authority and merges every review branch himself. Read it before changing how the
 loop is driven.
 
-This repository contains the existing supervisory system and the specifications,
-experiments and construction tooling for Recursion v3, a provider-neutral agent platform.
+This repository contains the existing supervisory system and the specifications and
+experiments for Recursion v3, a provider-neutral agent platform.
 
 **Not** part of Golden Stallion or CSL Labs — it supervises them without being one of them.
 
@@ -33,7 +34,6 @@ experiments and construction tooling for Recursion v3, a provider-neutral agent 
 | `docs/v3/START-HERE.md` | Reviewed | Current v3 orientation, specification map, source status and gates |
 | `schemas/control-plane/v3/` / `scripts/v3/` | Reviewed | Bounded v3 contracts and planning replay |
 | `experiments/v3/` | Reviewed | Scoped experiments and evidence checks |
-| `tools/construction_swarm/` | Reviewed | Bounded Devin construction tooling, separate from the v3 product |
 | `config/v2/` | Reviewed | Versioned engines, providers, pools, hosts, sandboxes, projects, and routing policies |
 | `schemas/control-plane/v2/` | Reviewed | Strict wire contracts for control-plane records |
 | `scripts/mvp_*.py` | Reviewed | MVP contracts, packet kernel, adapters, orchestration, and control surface |
