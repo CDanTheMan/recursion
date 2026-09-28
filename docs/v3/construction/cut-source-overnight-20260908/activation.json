@@ -1,5 +1,5 @@
 {
-  "external_path": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion\\.git\\research-attestations\\cut-source-overnight\\activation.json",
+  "external_path": "recursion\\.git\\research-attestations\\cut-source-overnight\\activation.json",
   "sha256": "e1a5d883866a3833fd952865895719cd1a52ed38c10bcedd17f7b06ca0fbad8f",
   "goal": {
     "schema_version": 1,
@@ -68,7 +68,7 @@
     "start_commit": "ec4232e95722d58dc0eff03289fb629b58d29247",
     "discovery_cutoff_utc": "2026-09-09T12:40:33Z",
     "branch": "codex/v3-cut-source-overnight-20260908",
-    "worktree": "C:\\Users\\Lucas\\Documents\\GitHub\\recursion-v3-cut-source-overnight-20260908",
+    "worktree": "recursion-v3-cut-source-overnight-20260908",
     "preparation_commit": "ab9fbd7525849a75ac13443ed5a37683a4d570b6"
   },
   "recorded_at": "2026-09-09T03:43:12.045647+00:00",

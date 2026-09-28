@@ -47,18 +47,14 @@ framework, spending policy, or autonomous operating mode from a research recomme
 
 | Layer | Source-backed state | Limits / next prerequisite |
 |---|---|---|
-| V2 implementation | Source-only MVP and regression baseline | Its tests do not certify v3 or establish deployed state. |
+| V1/v2 (retired) | Removed 2026-09-28; preserved at tag `pre-v3-clean-cut-20260928` | Not a dependency of v3 and not part of this repository's current scope. |
 | V3 M1A | Planning schema, validation, literal fixtures and in-memory replay | Pure/inert scope; preserve frozen contracts. See [campaign](M1A-CONSTRUCTION-CAMPAIGN.md). |
 | V3 M1B / M1C | Execution and integrity schemas, fixtures and test oracles | These specify behavior; they do not prove live adapters or physical persistence. See [M1B](M1B-CONSTRUCTION-CAMPAIGN.md), [M1C](M1C-CONSTRUCTION-CAMPAIGN.md). |
 | Later v3 experiments | Composition, reservation, wire, consultation, source/publication and bounded comparison work | Full formal comparison, physical recovery and common-writer integration remain open. |
 
-The [2026-09-10 second slice](construction/eight-hour-research-20260910-01a08a22-slice2/README.md)
-records additional bounded histories and explicit unproved cases. The
-[2026-09-11 closeout](construction/swarm-research-20260911-155142/closeout/BRIEF.md)
-records framework repairs but leaves scientific execution blocked. Its
-[continuation](construction/swarm-research-20260911-155142/closeout/CONTINUATION.md)
-identifies controller durability, dependency receipts, additive accounting, budget and
-prospective review prerequisites. Those campaign deadlines have expired.
+The 2026-09-08 through 2026-09-14 formal and coupled comparison experiments added bounded
+evidence to the later v3 experiments above. Full formal comparison, physical recovery and
+common-writer integration remain open, and those campaign deadlines have expired.
 
 PRs 124, 125 and 127 are ancestors of the inspected master. Statements that those PRs
 are open, or that a campaign is running, are dated historical observations.

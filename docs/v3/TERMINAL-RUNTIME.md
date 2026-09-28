@@ -6,7 +6,7 @@ last-updated: 2026-09-07
 
 # Recursion v3 interactive terminal and persistent session runtime
 
-## Conditional replay-store mapping — 2026-09-07
+## Conditional replay-store mapping â€” 2026-09-07
 
 RSM-002: a genuine gap can use HELLO(requested cursor), WELCOME(retention floor, snapshot cursor),
 RESET(snapshot cursor), fresh CREDIT and the next EVENT. The narrow controls require requested
@@ -14,13 +14,13 @@ cursor < retention floor <= snapshot cursor, recorded modeled retention loss and
 snapshot. After WELCOME detects the gap, any non-RESET continuation remains refused.
 
 M1B validates the wire relationships; it cannot authenticate a claimed replay floor or prove that
-a snapshot exists. The [mapping controls](construction/reset-mapping-20260907/results.json) retain
+a snapshot exists. The mapping controls retain
 a wire-only forged-fact control that passes the oracle while separate fact guards reject missing
 loss/snapshot inputs. Those guards operate on modeled inputs, not authenticated store evidence.
 No gap may be invented to recover an event that was merely deferred locally. Physical retention,
 snapshot integrity, SDK loss detection and reconnect provenance remain unimplemented.
 
-## Replay and flow recovery distinction — 2026-09-07
+## Replay and flow recovery distinction â€” 2026-09-07
 
 FMC-001: the immutable [M1B wire profile](M1B-WIRE-PROFILE.md) requires RESET before any further
 same-stream message after detecting a replay gap. ACK, CREDIT, INPUT, RESIZE, HELLO, WELCOME and
@@ -35,7 +35,7 @@ a partial-frame buffer is full. This does not demonstrate a physical reserve thr
 framing, scheduling, canonical writing and view delivery. Signaled loss handling also does not
 establish real SDK loss detection. These remain explicit implementation and mapping assumptions.
 
-## Observed Windows launch gap — 2026-09-07
+## Observed Windows launch gap â€” 2026-09-07
 
 IPR-001: the bounded Windows probe reproduced the create-suspended-before-association gap.
 The observed live child was outside the operation Job and survived broker death. The
@@ -81,7 +81,7 @@ subscriptions; it does not relaunch effects or certify offline termination. Requ
 controls, Aggressive/Full/Lazy Stop, preserved forks and input/resize leases are retained by
 the [comparison probes](foundation-research/mark2-research/mark3-comparison/probes.json).
 
-## Mark 3 multiplexed interaction and control — 2026-09-07
+## Mark 3 multiplexed interaction and control â€” 2026-09-07
 
 OR-038 requires persistent attachable views over durable work, including the questionnaire
 assistant/Head exchange. Multiple windows or clients must not duplicate execution or inference.
@@ -100,7 +100,7 @@ a host can answer an ACP approval without a human prompt. See SRC-V3-226, SRC-V3
 [the bounded source audit](foundation-research/mark2-research/mark3/companion-review.json). These are unrun
 adapter tests, not a new Stop definition or installed-build certification.
 
-## Mark 2 control contract — proposed 2026-09-07
+## Mark 2 control contract â€” proposed 2026-09-07
 
 The ten controls remain required across the platform. The canonical command includes command ID,
 target task/session/attempt/turn, expected epoch/config revision, authority and delivery policy.
@@ -207,7 +207,7 @@ because a second view attaches.
 
 ## Architecture alternatives
 
-1. **Daemon/broker plus thin terminal clients — ratified ownership boundary, implementation unselected.** Recursion owns actor/process lifetime,
+1. **Daemon/broker plus thin terminal clients â€” ratified ownership boundary, implementation unselected.** Recursion owns actor/process lifetime,
    IPC, event cursors and recovery; any terminal can attach. This is portable and gives a future
    GUI the same protocol, but makes daemon/process-broker correctness critical.
 2. **Terminal multiplexer as runtime.** Build directly around tmux, Zellij or an OS terminal
@@ -327,7 +327,7 @@ capacity available.
   restart terminal jobs; both behaviors must be distinguished from broker reconnection.
 
 The platform evidence supports these primitives, not the unqualified claim that every child
-can be contained. “Full-tree termination” is an acceptance result obtained from the supported
+can be contained. â€œFull-tree terminationâ€ is an acceptance result obtained from the supported
 OS matrix.
 
 ## Configuration in the terminal
@@ -437,7 +437,7 @@ See [scope and evidence](construction/flow-recovery-integration-20260907/evidenc
 
 ## Receiver installation evidence, 2026-09-07
 
-RSE-003 separates wire audit recovery from committed application recovery. The local receiver stores content, stream/epoch, last installed snapshot generation and both cursors in one replacement envelope. Kills after RESET emission or staging leave application A/cursor1 despite accepted-reset in the unchanged wire oracle. A kill after envelope publication leaves Aé/cursor2. Fresh readers and receivers complete to AéB/cursor3; a repeated attachment appends nothing. Application generation means the last installed snapshot, so no-reset replay can consume a newer selected store generation without changing that field.
+RSE-003 separates wire audit recovery from committed application recovery. The local receiver stores content, stream/epoch, last installed snapshot generation and both cursors in one replacement envelope. Kills after RESET emission or staging leave application A/cursor1 despite accepted-reset in the unchanged wire oracle. A kill after envelope publication leaves AÃ©/cursor2. Fresh readers and receivers complete to AÃ©B/cursor3; a repeated attachment appends nothing. Application generation means the last installed snapshot, so no-reset replay can consume a newer selected store generation without changing that field.
 
 These are named process-cut observations, not power-loss durability or exactly-once delivery for arbitrary external effects. The [probe dossier](construction/replay-store-evidence-20260907/dossier.md) retains all literal wire traces and application envelopes. Independent control lanes, all ten terminal controls, three Stop modes, forks, persistent assistants and remote recovery budgets remain required; helper termination here does not implement product Stop or node fencing.
 
@@ -455,9 +455,9 @@ GCM-003 checks a previously admitted permit separately from local task revocatio
 
 EEJ-002 observes the literal running/PAUSE pair through the immutable M1A kernel. The same otherwise-valid observation payload accepts while running and refuses `E-PAUSED` after an admitted current-immediate pause. Refusal emits no event and leaves the canonical projection unchanged; its separate receipt journal grows. An exact duplicate accepted before PAUSE returns the original receipt without an event because duplicate handling precedes current admission. Do not describe that as fresh admission.
 
-M1C can classify retained historical evidence while current context is paused; its trace has no current PAUSE-state field. Preserve the original admission's running state and carry current PAUSE outside the trace. Actual M1A ambiguity/quarantine persists after a later admitted success observation. A runtime bridge needs an explicit canonical resolution protocol; an adapter, terminal reconnect or historical classification cannot silently clear it. Three Stop modes, all ten terminal controls and preserved forks remain unchanged. [Literal controls and limits](construction/effect-evidence-20260908/results.json).
+M1C can classify retained historical evidence while current context is paused; its trace has no current PAUSE-state field. Preserve the original admission's running state and carry current PAUSE outside the trace. Actual M1A ambiguity/quarantine persists after a later admitted success observation. A runtime bridge needs an explicit canonical resolution protocol; an adapter, terminal reconnect or historical classification cannot silently clear it. Three Stop modes, all ten terminal controls and preserved forks remain unchanged. Literal controls and limits.
 
-## Shared snapshot installation boundary — 2026-09-08
+## Shared snapshot installation boundary â€” 2026-09-08
 
 SCM-003 distinguishes captured, copied, advertised, emitted and installed content.
 Restart after recovery emission cannot imply application installation. Installation
@@ -479,7 +479,7 @@ See [shared-model evidence](construction/shared-composition-20260908/evidence.js
 and the literal-wire follow-up in
 [next probes](construction/shared-composition-20260908/next-probes.md).
 
-## Presentation and reservation separation — 2026-09-08
+## Presentation and reservation separation â€” 2026-09-08
 
 The SC-WR-01 finite construction installs an old copied view while a newer durable
 reservation remains held. Installed presentation cursor and envelope replay cursor
@@ -490,27 +490,27 @@ queue/credit, framing or ACK correspondence. SC-WIRE-02 remains next, followed b
 a coupled model before aggregate promotion. All ten controls, three Stop modes,
 forks and persistent assistants remain required. [Evidence](construction/shared-reservations-20260908/findings.md).
 
-## SC-WIRE-02 — 2026-09-08
+## SC-WIRE-02 â€” 2026-09-08
 
 WIR-001 distinguishes source future entries, receiver pending entries, immutable snapshot content and installed snapshot cursor. In16 finite configurations, GAP via WELCOME requires RESET, fresh CREDIT and independent application installation before EVENT. Failed ACK holds pending; successful ACK creates no credit. Fixed-epoch receiver restart preserves ownership. Literal M1B cannot prove application installation. Full prior flow/ingress bounds remain separately checked, not imported into this narrow product.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
 
-## SC-EPOCH-03 — 2026-09-08
+## SC-EPOCH-03 â€” 2026-09-08
 
 EPC-002 models the Head/consultation/executor wait cycle, exposes a dependency blocker and releases the sole eligible executor on suspension. Stop of borrowedA retires its alias and continuation while unrelatedB progresses on its separately admitted capacity. Alias retirement is independent of numeric generation: assigning an already-current serial cannot keep delivery live. Cancellation delivery leaves remote outcome unknown and the inherited six-unit reservation held.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
 
-## SC-COUPLED-01 — 2026-09-08
+## SC-COUPLED-01 â€” 2026-09-08
 
 CPL-003 retains four-event costs1,2,1,2 and the full declared stage, in-flight, receiver and frame bounds. Literal M1B acceptance is checked separately from application installation, catalogue binding, ingestion and effect authority. The no-gap witness emits all four events; gap witnesses retain explicit delivered/covered distinctions. Synthetic framing and intact requester restart do not prove physical receiver recovery.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
 
-## Coupled evidence cut and PAUSE — 2026-09-08
+## Coupled evidence cut and PAUSE â€” 2026-09-08
 
 Supplemental retained-cut delivery stays separate from the full four-event stream. ACK/restart/snapshot installation cannot give a stale, foreign or uncertain cut reservation-settlement authority.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
 
-## Retained-cut publication — 2026-09-08
+## Retained-cut publication â€” 2026-09-08
 
 Retained-cut historical installation may expose a pure joined classification under PAUSE
 without changing current selected revision, source incarnation/head, runtime admission or
@@ -520,7 +520,7 @@ No runtime service, operational PAUSE behavior or common-writer bridge is implem
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
 
-## Source collection and retained readers — 2026-09-08
+## Source collection and retained readers â€” 2026-09-08
 
 Complete captured inventory and current reconciliation authority remain separate. The
 source experiment retains copied historical cuts, owned wait/release, typed consultation

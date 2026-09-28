@@ -1,11 +1,17 @@
 ---
 title: Recursion v2 current architecture and v3 migration map
-status: evidence-grounded proposal
+status: superseded-2026-09-28-retired-v2
 last-updated: 2026-09-03
 baseline-commit: 98113d6c6d3debe2a4d207c51bb1780f7356d714
 ---
 
 # Recursion v2 current architecture and v3 migration map
+
+> **Superseded 2026-09-28 - retired, not migrated.** Recursion v3 is a greenfield harness; it
+> inherits nothing from v1/v2 and there is no v2-to-v3 cutover. The v1/v2 control plane was
+> removed from the trunk on 2026-09-28 (tag `pre-v3-clean-cut-20260928`). This document is
+> retained as lineage and provenance only; it does not describe a current plan and authorizes
+> no migration work. The claims below remain true statements about the withdrawn v2 baseline.
 
 This document maps the accepted v2 source baseline to the proposed v3 design. It does not
 claim that the current deployment matches the repository. No deployment host was inspected

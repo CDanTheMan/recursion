@@ -6,7 +6,7 @@ last-updated: 2026-09-07
 
 # Recursion v3 acceptance hypothesis
 
-## RESET mapping packet acceptance — 2026-09-07
+## RESET mapping packet acceptance â€” 2026-09-07
 
 The finite mapper checks 16 configurations spanning event/UTF-8-byte cursor units, one/two-byte
 payloads, one/two-event queue bounds and one/two-payload byte bounds. It checks all 2,576 reachable
@@ -20,9 +20,9 @@ process/recipient/writer/pool/GoalSpec state and does not complete the prior par
 Publication requires two [exact candidate gates](../../experiments/v3/reset-mapping/check.py),
 including unchanged25 regressions and frozen historical checks, plus two independent reviews.
 
-## Formal packet acceptance is scoped — 2026-09-07
+## Formal packet acceptance is scoped â€” 2026-09-07
 
-The first [formal construction results](construction/formal-comparison-20260907/results.json)
+The first formal construction results
 advance foundation readiness to a checked finite preventive subsystem and calibrated checking
 methods. Full contract readiness remains conditional. Traces 01, 02 and 26 have partial modeled
 coverage only; the complete six obligations, 27-row corpus and full core/cross-area profiles remain
@@ -35,7 +35,7 @@ historical checks against their named frozen worktrees. Two complete passes and 
 reviews of the identical clean commit precede review-branch publication; external receipts are
 under `research-attestations/formal-comparison/<candidate>/` in the Git common directory.
 
-## Interface campaign acceptance boundary — 2026-09-07
+## Interface campaign acceptance boundary â€” 2026-09-07
 
 Foundation readiness has advanced to observed installed-harness/OS mechanisms and finite
 contract falsifiers. Full contract readiness remains conditional: the complete ten-control,
@@ -78,7 +78,7 @@ bounds on exact admitted builds. Failed or unknown required capabilities remain 
 benchmark cannot delete them. OR-036 and OR-037 are accepted directions, not pending questions.
 
 
-## Mark 3 accepted choices and additional evidence gates — 2026-09-07
+## Mark 3 accepted choices and additional evidence gates â€” 2026-09-07
 
 OR-036/037 resolve both Owner decisions. Model freeze still requires interface probes and
 combined coverage of all obligations under the approved aggregate/refinement boundary, with
@@ -99,7 +99,7 @@ by deleting an accepted capability. Compare Owner comprehension, coordination bu
 intent continuity, control, specialized help and quality with the original performance/usage
 vector. No runtime outcome is certified by the [Mark 3 documentation gate](foundation-research/mark2-research/mark3/check.py).
 
-## Mark 2 research and contract readiness — 2026-09-07
+## Mark 2 research and contract readiness â€” 2026-09-07
 
 Foundation verdict: sufficient source-grounded design for bounded interface probes under the
 approved proof-boundary direction. Complete contract readiness remains conditional: exact route eligibility,
@@ -125,13 +125,13 @@ assessed executable, history, newest-work and resumability outcomes. Exact candi
 and two independent reviews must be repeated after repairs; final attestations remain outside
 the candidate. OR-015 and current operational authority remain unchanged.
 
-## Mark 2 Owner direction — 2026-09-06
+## Mark 2 Owner direction â€” 2026-09-06
 
 The next acceptance proposal must cover all seven critical integration names, persistent-assistant/session continuity, three Stop modes, preserved forks, browser/MCP/local plugin adaptation, four incompatibility responses, two configuration-propagation choices, six update modes and relative recovery accounting. Keep evidence for working software, readable history, newest-work preservation and resumable tasks separate. OR-031/034 require truthful lean verification and quality through downstream correction. The [Mark 2 handoff](foundation-research/mark2/handoff.md) identifies unproved guarantees and research dispositions; these additions do not certify a runtime or replace immutable M1 receipts.
 
-## First usable platform release — accepted 2026-09-06
+## First usable platform release â€” accepted 2026-09-06
 
-OR-021–OR-025 require native-only, upstream-only and combined workflows. Test every required
+OR-021â€“OR-025 require native-only, upstream-only and combined workflows. Test every required
 reasoning role without hidden connections, the ten terminal controls alone and in combination,
 effective configuration/plugins/setup/updates, context fidelity and Windows/Linux remote
 recovery. The four scenarios are website preview, bug fix, interrupted refactor and a workflow
@@ -156,7 +156,7 @@ Before formal-model freeze, the effect/epoch/writer/PAUSE/partition/broker oblig
 engine admission, prove declared resource mediation and truthful capability refusal under
 `experiment.foundation.adapter`; observational callbacks alone cannot pass. Before optimization
 claims, execute separately authorized comparisons with quality floors and complete cost accounting.
-FND-001–FND-005/FND-011.
+FND-001â€“FND-005/FND-011.
 
 ## Principle
 
@@ -208,9 +208,9 @@ the closed [M1A fixture-oracle blueprint](M1A-FIXTURE-ORACLES.md). The
 canonical lifecycle and transition rules are
 [AUTONOMOUS-PLANNING.md](AUTONOMOUS-PLANNING.md); this section does not redefine them.
 
-The required closure is: authenticated OwnerIntent → Owner-accepted GoalSpec → admitted immutable
-PlanRevision/DAG → ready TaskNode → deterministically derived bounded WorkPacket → exact
-GateResult → bounded retry/replan/escalation → exact plan-verifier decision → terminal-verified
+The required closure is: authenticated OwnerIntent â†’ Owner-accepted GoalSpec â†’ admitted immutable
+PlanRevision/DAG â†’ ready TaskNode â†’ deterministically derived bounded WorkPacket â†’ exact
+GateResult â†’ bounded retry/replan/escalation â†’ exact plan-verifier decision â†’ terminal-verified
 plan. Incomplete/authentication failures, widening, cycles/missing dependencies, ownership
 conflicts, stale packets/leases, non-novel retries, exhaustion, missing/downgraded verification,
 quota/provider blocks, route replacement, PAUSE epochs, ambiguous effects, duplicate commands,
@@ -305,7 +305,7 @@ Measure at minimum on the target coordinator class and one interactive workstati
 - adaptive concurrency response to CPU, RAM, disk I/O, and foreground pressure;
 - context packaging, hydration, and compaction cost;
 - node transfer volume and recovery;
-- 10–12 hour bounded autonomous-session stability.
+- 10â€“12 hour bounded autonomous-session stability.
 
 Thresholds are set from a measured v2/system baseline and documented owner expectations. Any optional subsystem failing its Resource Discipline Contract is disabled or excluded from the affected edition.
 
@@ -456,9 +456,9 @@ The generation/effect composition packet adds partial support for original trace
 
 The [new campaign gate](construction/effect-evidence-20260908/goal.json) requires fresh reproduction of 66 bounded checks:11 positive evidence cuts,47 rejected joins,3 adapter guard mutants and5 literal control groups. Independently reconstruct original fixtures, require exact trace projection and exact historical/current reasons, retain all admitted attempts and source/host/fixture bindings, and challenge the checker bindings. Distinguish strict-wire, literal extended-schema and adapter rejection. The PAUSE guard mutant changes only in-memory membership and restores it; all immutable M1 files remain unchanged.
 
-Run unchanged25 regressions and eight frozen historical gates twice on the identical clean candidate, then obtain two independent exact-candidate approvals before normal review-branch publication. Retain receipts outside the candidate. This adds partial literal support for traces13–15 and four obligations, preserving all six obligations and27 rows. It is not full formal freeze, real provider support, production authentication or a performance ranking. [Coverage and residuals](construction/effect-evidence-20260908/coverage.json).
+Run unchanged25 regressions and eight frozen historical gates twice on the identical clean candidate, then obtain two independent exact-candidate approvals before normal review-branch publication. Retain receipts outside the candidate. This adds partial literal support for traces13â€“15 and four obligations, preserving all six obligations and27 rows. It is not full formal freeze, real provider support, production authentication or a performance ranking. [Coverage and residuals](construction/effect-evidence-20260908/coverage.json).
 
-## Shared composition partial evidence gate — 2026-09-08
+## Shared composition partial evidence gate â€” 2026-09-08
 
 The [shared-composition gate](../../experiments/v3/shared-composition/check.py)
 requires complete finite closure and exact state/edge correspondence for15 declared
@@ -479,7 +479,7 @@ All six original obligations and27 trace rows are retained in
 reservations, shared-pool serialization, full epoch domains, complete M1B wire
 composition and original full core/cross bounds remain explicit residuals.
 
-## Shared-reservation gate — 2026-09-08
+## Shared-reservation gate â€” 2026-09-08
 
 The [SC-WR-01 gate](../../experiments/v3/shared-reservations/check.py) checks original
 6+6-from10 demand, complete declared graphs for central and one-transfer rights
@@ -492,27 +492,27 @@ review publication. Final receipts stay outside the candidate. No finite slice
 pass completes full formal comparison, runtime integration or common-writer migration.
 [Scope and residuals](construction/shared-reservations-20260908/coverage.json).
 
-## SC-WIRE-02 — 2026-09-08
+## SC-WIRE-02 â€” 2026-09-08
 
 SC-WIRE-02 requires two full exact-candidate gates, two independent exact reviews, unchanged25 regressions and eleven frozen predecessors including SC-WR-01. Require complete declared graph closure, literal schema/oracle controls and independent ownership/initialization counterexamples. External completion receipts establish readiness; no discovery pass or documentation promotes full comparison.
 [Evidence and limits](construction/wire-correspondence-20260908/evidence.json).
 
-## SC-EPOCH-03 — 2026-09-08
+## SC-EPOCH-03 â€” 2026-09-08
 
 SC-EPOCH-03 requires two clean exact-candidate full gates, two independent exact reviews, unchanged25 regressions and12 frozen predecessors including SC-WIRE-02. Require full declared finite closure, original06/23/24 ordered witnesses, typed and stale-wake counterexamples, explicit retired aliases and independent initialization/step obligations. External completion receipts determine scoped readiness; no isolated pass promotes aggregate or production completion.
 [Evidence and residuals](construction/typed-consultation-20260908/evidence.json).
 
-## SC-COUPLED-01 — 2026-09-08
+## SC-COUPLED-01 â€” 2026-09-08
 
 SC-COUPLED-01 requires two exact clean full gates,13 frozen predecessors, unchanged25 regressions and two independent exact-candidate reviews. One hundred finite environments and58 cases across29 guard removals add scoped support to four obligations; all6 obligations/27 traces and prior integration requirements remain. No formal freeze, runtime integration or migration promotion follows.
 [Evidence and limits](construction/coupled-construction-20260908/handoff.md).
 
-## Coupled evidence cut and PAUSE — 2026-09-08
+## Coupled evidence cut and PAUSE â€” 2026-09-08
 
 CCP-003 requires complete176-environment exploration,82 guard counterexamples,44 joined observation controls and11 actual PAUSE guard mutations. Fourteen unchanged predecessor gates and25regressions run twice on the exact reviewed candidate.
 See [scoped findings and residuals](construction/coupled-cut-pause-20260908/findings.md). No runtime integration or full formal freeze follows.
 
-## Retained-cut publication — 2026-09-08
+## Retained-cut publication â€” 2026-09-08
 
 CPB-003: SC-CUT-PUB-01 completes44 declared profiles/132 environments:4384 states and6232
 edges per representation,56 guard counterexamples, independent full relation and zero
@@ -523,7 +523,7 @@ formal comparison/runtime integration remain unproved.
 
 See [SC-CUT-PUB-01](construction/cut-publication-20260908/handoff.md) for evidence and limits.
 
-## SC-CUT-SOURCE-01 acceptance — 2026-09-08
+## SC-CUT-SOURCE-01 acceptance â€” 2026-09-08
 
 Require two clean exact-candidate full gates,16 frozen predecessor gates per pass,
 unchanged25 regressions and two independent reviews before normal draft review

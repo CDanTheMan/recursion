@@ -1,4 +1,4 @@
-# External Recursion v3 construction wave â€” 2026-09-14
+# External Recursion v3 construction wave Ã¢â‚¬â€ 2026-09-14
 
 Parent: `goal-recursion-v2-execution-fabric`. Lucas explicitly requested external Devin/SWE-2 agents researching, developing and testing ON Recursion v3 and custom kernels. This is a bounded attended construction campaign, not deployment of agents into the product runtime and not qualification of a continuous service.
 
@@ -13,10 +13,10 @@ Fresh admission:
 
 Work deadline: 2026-09-14T18:24:58.501445+00:00. No automatic window renewal, provider fallback, self-acceptance, publication or merge. A failed or incomplete result remains visible and requires review.
 
-The frozen native source is `/opt/recursion-foundry/v3-source-df158fe`; campaign root is `/var/lib/recursion-foundry/runs/external-v3-20260914-wave01`. Preparation, bundle and operator notes live at `D:/RecursionSwarm/external-v3-20260914/`. Cursor/Codex can inspect:
+The frozen native source is `<repo>-foundry/v3-source-df158fe`; campaign root is `/var/lib/recursion-foundry/runs/external-v3-20260914-wave01`. Preparation, bundle and operator notes live at `D:/RecursionSwarm/external-v3-20260914/`. Cursor/Codex can inspect:
 
 ```powershell
-wsl -d Ubuntu-24.04 --cd /opt/recursion-foundry/v3-source-df158fe -- python3 -B -m tools.construction_swarm.foundry report --root /var/lib/recursion-foundry/runs/external-v3-20260914-wave01
+wsl -d Ubuntu-24.04 --cd <repo>-foundry/v3-source-df158fe -- python3 -B -m tools.construction_swarm.foundry report --root /var/lib/recursion-foundry/runs/external-v3-20260914-wave01
 ```
 
 Proposals and independent review remain external until exact-byte verification. New contributed tasks use separate review packets and the shared admission bridge; this immutable wave cannot accept live task injection. The proposed continuous external service still needs durable scheduling, leased contributions, quota/host rollover and integration gates. Useful bounded work does not require the completed Recursion product runtime.

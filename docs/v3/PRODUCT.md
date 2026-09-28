@@ -6,9 +6,9 @@ last-updated: 2026-09-07
 
 # Recursion v3 product hypothesis
 
-## Accepted working foundation and required collaboration — 2026-09-07
+## Accepted working foundation and required collaboration â€” 2026-09-07
 
-Recursion should stay closely aligned with the user’s goals and adapt its working style to the task. It should support extensive autonomous research and planning when requested, and close collaboration when the user wants to develop something together. Within agreed boundaries, it should use initiative and carry work through. Throughout that work, it should preserve intent, incorporate feedback, surface consequential changes, and remain easy to inspect, redirect and stop.
+Recursion should stay closely aligned with the userâ€™s goals and adapt its working style to the task. It should support extensive autonomous research and planning when requested, and close collaboration when the user wants to develop something together. Within agreed boundaries, it should use initiative and carry work through. Throughout that work, it should preserve intent, incorporate feedback, surface consequential changes, and remain easy to inspect, redirect and stop.
 
 The paragraph above is exact Owner-approved wording (OR-038). Requested direction also requires
 innovative agent communication, terminal multiplexing and coordinated work across compute
@@ -28,7 +28,7 @@ cognitive/coordination burden, intent continuity, clarity, Owner control, qualit
 assistance alongside OR-024's existing ranking and floors. Additional consumption can be a
 chosen tradeoff; no universal feature-cost or plugin-efficiency claim follows.
 
-## Mark 2 capability map — research synthesis 2026-09-07
+## Mark 2 capability map â€” research synthesis 2026-09-07
 
 The first usable release includes native, independently useful upstream-only and combined
 workflows. The accepted ranking is responsiveness, subscription efficiency, then completion,
@@ -50,9 +50,9 @@ MKR-001/MKR-008/MKR-022.
 | Q9 / OR-034 | Context and workflow services reduce repeated instructions and escaped defects where measured | Cold/warm/no-future-work; changed instructions and complete cost; MKR-019/MKR-020 | Paired direct-engine versus platform continuation/performance trials |
 | Q10 / OR-035 | Deterministic resource governor admits representative profiles and operator hard ceilings | CPU/RAM/disk/network/queue/review/pool bounds; personal inventory intentionally unspecified | Calibrate minimum/useful profiles after baseline; never infer requirements from this workstation |
 
-Required compatibility names map to researched entries: Grok → Grok Build; Cursor → first-party
-SDK/ACP and independent ACP paths; Gemini → Gemini CLI; Claude → Claude Code/SDK; Hermes →
-Nous Research Hermes Agent; OpenCode → Anomaly OpenCode; ChatGPT → eligible Codex sign-in path.
+Required compatibility names map to researched entries: Grok â†’ Grok Build; Cursor â†’ first-party
+SDK/ACP and independent ACP paths; Gemini â†’ Gemini CLI; Claude â†’ Claude Code/SDK; Hermes â†’
+Nous Research Hermes Agent; OpenCode â†’ Anomaly OpenCode; ChatGPT â†’ eligible Codex sign-in path.
 Codex remains its own requested entry. BYOK is a category; Muse Code is Meta's terminal beta;
 DeepSeek Harness and Antigravity local/managed paths are separately identified. Grok Bot and
 Pi are assistant references; Perplexity is a prospective research-quality comparator.
@@ -64,13 +64,13 @@ route with missing behavior is not a complete release configuration. Inspect ric
 then expose the gap and next test; a still-missing critical name requires an Owner release
 decision. No such omission is approved here.
 
-## Mark 2 Owner direction — 2026-09-06
+## Mark 2 Owner direction â€” 2026-09-06
 
 OR-026 through OR-035 extend the release direction: seven launch-critical compatibility names (Grok, Cursor, Gemini, Claude, Hermes, OpenCode, ChatGPT), persistent assistants across sessions and goals, local plugin execution, configurable update/recovery behavior and quality-preserving efficiency. Missing critical compatibility requires an Owner release decision. Exact routes and guarantees remain research work. Use the [Mark 2 handoff](foundation-research/mark2/handoff.md); product requirements must not be narrowed to one operator's current hardware or accounts.
 
-## Accepted first usable platform release — 2026-09-06
+## Accepted first usable platform release â€” 2026-09-06
 
-OR-021–OR-025 clarify the release under `docs/v3`; earlier brainstorming "v2" means this
+OR-021â€“OR-025 clarify the release under `docs/v3`; earlier brainstorming "v2" means this
 milestone. Recursion is the common configurable agent platform across models, harnesses,
 subscriptions, tools, workflows and execution machines. The terminal exposes the initial
 platform; the dedicated graphical application follows later.
@@ -92,7 +92,7 @@ implemented substrate, inert fixtures, specified requirements and missing proof.
 platform ambition is carried through [six research deliverables](foundation-research/platform-round/research-brief.md);
 no framework, language, store or complete integration is selected by this ruling.
 
-## Audience and execution-mode findings — 2026-09-05
+## Audience and execution-mode findings â€” 2026-09-05
 
 Historical September 5 finding, refined by OR-021 above: Lucas-first validation remains the
 starting point. Developers are now the selected initial audience, performing bounded repository
@@ -129,7 +129,7 @@ external agent loop without becoming a thin wrapper around that loop:
 
 ## Initial user and deployment
 
-The first user is Lucas. The first deployment is a lightweight coordinator on the existing Hetzner VPS, with heavier work placed on subscriptions, cloud execution, or authenticated registered nodes. The interactive CLI is the canonical local configuration and operation surface; an agent is never required to edit settings. Multiple detachable terminal windows can observe and converse with Head, ARMs and executors without owning their processes. Telegram is an optional interactive surface for Head and ARM conversations. No web, desktop or mobile graphical client is required for v3.
+The first user is Lucas. The first deployment is a lightweight coordinator on the existing coordinator host, with heavier work placed on subscriptions, cloud execution, or authenticated registered nodes. The interactive CLI is the canonical local configuration and operation surface; an agent is never required to edit settings. Multiple detachable terminal windows can observe and converse with Head, ARMs and executors without owning their processes. Telegram is an optional interactive surface for Head and ARM conversations. No web, desktop or mobile graphical client is required for v3.
 
 Public usability remains an explicit design requirement. Users should be able to install a useful minimal edition, bring their own official subscriptions or API credentials, select more capable bundles, and retain complete access to human-readable configuration.
 

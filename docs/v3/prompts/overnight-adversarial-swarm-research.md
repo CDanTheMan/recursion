@@ -1,12 +1,12 @@
 ---
-title: Overnight Codex prompt — adversarial Recursion v3 architecture swarm
+title: Overnight Codex prompt â€” adversarial Recursion v3 architecture swarm
 status: superseded-do-not-run
 last-updated: 2026-09-02
-target-duration: 7–8 productive hours, hard stop at 8 hours
+target-duration: 7â€“8 productive hours, hard stop at 8 hours
 superseded-by: ../FRONTIER-HARNESS-RESEARCH-CAMPAIGN.md
 ---
 
-# Overnight Codex prompt — adversarial Recursion v3 architecture swarm
+# Overnight Codex prompt â€” adversarial Recursion v3 architecture swarm
 
 > **Do not run this prompt.** It predates `OWN-FHAR-001`, the proposed Recursion Head identity,
 > the planning-contract baseline, and the completed frontier-harness campaign. It remains only as
@@ -93,12 +93,12 @@ locally and remain unpublished.
 ## Authority model that every output must preserve
 
 ```text
-Lucas — principal
-  -> Main Assistant / Head Hermes — portfolio executive
-       -> goal-scoped ARM executives — plan, delegate, replan, checkpoint
+Lucas â€” principal
+  -> Main Assistant / Head Hermes â€” portfolio executive
+       -> goal-scoped ARM executives â€” plan, delegate, replan, checkpoint
             -> bounded agents and native/external harness sessions
                  -> machine gates plus independent verification
-       -> deterministic Recursion kernel — authority, state, budgets,
+       -> deterministic Recursion kernel â€” authority, state, budgets,
           routing, leases, PAUSE, evidence, publication
   -> Lucas reviews, merges, provisions credentials, and deploys
 ```
@@ -113,7 +113,7 @@ The current `CONTROL_PLANE.md` remains the constitution. When a provider-neutral
 conflicts with a current constitutional clause, write a proposed reconciliation for Lucas;
 never edit around it or describe it as already ratified.
 
-## Mandatory route preflight — no substitutions
+## Mandatory route preflight â€” no substitutions
 
 Run a read-only capability and privacy preflight before dispatching research. Record only
 provider/model identifiers, CLI versions, success/failure, relevant limits, and source links.
@@ -191,7 +191,7 @@ the shared worktree, commit, or launch their own agents. If the installed toolin
 guarantee that boundary, give it source excerpts or URLs outside the worktree instead of
 repository access.
 
-### Wave 0 — orientation and preflight, about 30 minutes
+### Wave 0 â€” orientation and preflight, about 30 minutes
 
 1. Verify branch, merge base, worktree cleanliness, remotes, and allowed paths.
 2. Read the authority files and all current `docs/v3/**` documents.
@@ -199,27 +199,27 @@ repository access.
 4. Create a research queue and claim ledger skeleton. Assign claim IDs before broad research.
 5. Establish the actual resource/concurrency ceiling for this machine without changing config.
 
-### Wave 1 — independent discovery, about 80 minutes
+### Wave 1 â€” independent discovery, about 80 minutes
 
 Run up to three independent lanes:
 
-1. **Luna xhigh — current-system archaeologist.** Trace the actual v2 control flow, actor
+1. **Luna xhigh â€” current-system archaeologist.** Trace the actual v2 control flow, actor
    hierarchy, planning, dispatch, adapters, state, reconciliation, gates, publication, CLI,
    and tests. Identify duplicate sources of truth and distinguish operational, source-only,
    test-only, documented-only, deployed, and unknown behavior. Cite commit, file, symbol, and
    test evidence.
-2. **Muse Contributor — public harness researcher.** Using public primary sources only,
+2. **Muse Contributor â€” public harness researcher.** Using public primary sources only,
    compare T3 Code, DeepSeek Harness, Hermes Agent, Pi, Claude Code public material, OpenCode,
    and relevant public Codex/Gemini/Cursor material. Pin revisions/licenses and report concrete
    mechanisms worth adopting, adapting, or rejecting. Do not receive local v3 drafts.
-3. **Grok 4.5 conditional — hostile architecture critic.** From a sanitized architecture
+3. **Grok 4.5 conditional â€” hostile architecture critic.** From a sanitized architecture
    brief, try to falsify the proposed Head -> ARM -> worker hierarchy, provider-neutral
    execution fabric, plugin split, node security, SQLite-first state, and context design.
    Look for hidden coupling, unsafe trust expansion, performance cliffs, and migration traps.
 
 The lead performs independent local inspection while workers run. Do not merely wait.
 
-### Wave 2 — cross-family adversarial review, about 75 minutes
+### Wave 2 â€” cross-family adversarial review, about 75 minutes
 
 Give each available family a compact evidence packet produced by another family, with private
 or unpublished material removed before it reaches Muse. Require the reviewer to return:
@@ -237,7 +237,7 @@ public/synthetic projection of Grok or Luna claims, and Grok reviews Luna. If on
 unavailable, use a second independent Luna context plus deterministic source verification,
 and disclose the reduced family diversity.
 
-### Wave 3 — focused falsification and experiments-on-paper, about 75 minutes
+### Wave 3 â€” focused falsification and experiments-on-paper, about 75 minutes
 
 Create short, non-overlapping lanes for the highest-risk questions discovered so far:
 
@@ -255,7 +255,7 @@ Create short, non-overlapping lanes for the highest-risk questions discovered so
 Every lane must propose falsifiable tests and decision rules. Do not report imagined
 benchmarks as measurements. Explicitly separate expected benefit from verified improvement.
 
-### Wave 4 — architecture options and reconciliation, about 60 minutes
+### Wave 4 â€” architecture options and reconciliation, about 60 minutes
 
 Synthesize at least three genuinely distinct v3 runtime options, including:
 
@@ -271,7 +271,7 @@ adversarial evidence pass. State what would falsify the recommendation.
 Reconcile the recommendation with `CONTROL_PLANE.md`. List exact constitutional amendments
 or ratifications Lucas would need to approve; do not edit the constitution.
 
-### Wave 5 — documentation integration, about 90 minutes
+### Wave 5 â€” documentation integration, about 90 minutes
 
 Update the existing `docs/v3/` suite instead of creating a competing specification. Remove
 duplication, strengthen canonical ownership, link related documents, and preserve provenance.
@@ -286,7 +286,7 @@ either as new focused files or clearly identified sections in existing canonical
 - a constitutional reconciliation list;
 - one normalized glossary and object/event ownership model;
 - a provider-route capability matrix with uncertainty and expiry rules;
-- a performance/resource hypothesis plan for workstation and Hetzner-class deployment;
+- a performance/resource hypothesis plan for workstation and server-class deployment;
 - a construction runbook separated from product specification;
 - a prioritized next Grill Me queue and owner decision list;
 - a proposed first autonomous construction milestone with bounded tasks and gates.
@@ -294,7 +294,7 @@ either as new focused files or clearly identified sections in existing canonical
 Update `DECISION-REGISTER.md` without turning evidence, model consensus, or transcript content
 into a decision Lucas did not make.
 
-### Wave 6 — final hostile audit and closure, about 70 minutes
+### Wave 6 â€” final hostile audit and closure, about 70 minutes
 
 Dispatch the smallest available cross-family review set over the integrated architecture.
 Reviewers must look specifically for:
@@ -411,7 +411,7 @@ At minimum answer:
    budgets, context, compaction, refusal fallback, and quota exhaustion interact?
 7. Which context artifacts are provider-neutral, and which server-side caches are necessarily
    model/provider/account specific?
-8. What can run efficiently on the intended Hetzner-class VPS, what belongs on a workstation,
+8. What can run efficiently on the intended server-class VPS, what belongs on a workstation,
    and what must be measured before numeric limits are chosen?
 9. How can plugins and editions provide broad customization with near-zero cost when disabled?
 10. What remote-node controls protect owner privacy, credentials, authority, and replay safety
@@ -490,7 +490,7 @@ Return a concise handoff containing:
 - files added/changed;
 - strongest verified architectural conclusions and their claim IDs;
 - claims rejected, weakened, or still disputed;
-- architecture recommendation, falsifiers, and Hetzner/workstation fit conclusion;
+- architecture recommendation, falsifiers, and server-class/workstation fit conclusion;
 - constitutional items and owner decisions requiring Lucas;
 - next prioritized Grill Me questions;
 - proposed first autonomous construction milestone and exact acceptance gate;

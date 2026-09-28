@@ -1,4 +1,4 @@
-# Combined v3 construction review — 2026-09-14
+# Combined v3 construction review â€” 2026-09-14
 
 Parent: goal-recursion-v2-execution-fabric. Product target: Recursion v3. This integration session reconciles the three handoffs Lucas returned for PR synthesis and the next external fleet work. External agents research, develop and test ON the product.
 
@@ -12,7 +12,7 @@ Run the new composition gate from a clean native Linux clone of the exact integr
 python3 -X utf8 -B docs/v3/construction/integration-20260914/check.py --candidate FULL_SHA --evidence-root EXTERNAL_INTAKE_DIRECTORY --output FRESH_EXTERNAL_DIRECTORY
 ```
 
-The local intake directory is D:/RecursionSwarm/integration-v3-20260914/combined-inputs-1789416331147, accessible as /mnt/d/RecursionSwarm/integration-v3-20260914/combined-inputs-1789416331147 in WSL. Copy its eleven manifest-pinned files together for another host; missing or altered evidence fails. Preserve Git history, including all three original candidates and the ledger's frozen-expectation commit. Keep the native clone under /opt/recursion-foundry and gate outputs under /var/lib/recursion-foundry; exported evidence may be copied to D: outside the VHDX. The observed Ubuntu-24.04 distro is installed at D:/WSL.
+The local intake directory is D:/RecursionSwarm/integration-v3-20260914/combined-inputs-1789416331147, accessible as /mnt/d/RecursionSwarm/integration-v3-20260914/combined-inputs-1789416331147 in WSL. Copy its eleven manifest-pinned files together for another host; missing or altered evidence fails. Preserve Git history, including all three original candidates and the ledger's frozen-expectation commit. Keep the native clone under <repo>-foundry and gate outputs under /var/lib/recursion-foundry; exported evidence may be copied to D: outside the VHDX. The observed Ubuntu-24.04 distro is installed at D:/WSL.
 
 The gate requires exact HEAD, clean checkout, unchanged baseline, original ancestry/tree pins, the exact additive union and matching actual source bytes, including files hidden by Git index flags. It tests four synthetic composition refusals. It reruns the preservation check, 18 P1 cases, 19 WSL P2 cases, the ledger's independent prefix/mutation/component/reset audits and test subprocess, and DQ's exact prospective plan/fake controls. All source/evidence bindings are checked again afterward. No original gate is monkeypatched or reclassified.
 
@@ -24,4 +24,4 @@ Each P2 command remains bounded to 120 seconds; each other selected command to 6
 
 Read [PR-PLAN](PR-PLAN.md) for prerequisite publication order and [NEXT](NEXT.md) for the next parallel assignments. GitHub master was freshly observed at 8568b8a on 2026-09-14, with no open PRs; TASK_BASE contains 20 unpublished prerequisite commits. Do not silently omit them or reinterpret this dated observation as future live status.
 
-P1 remains a fake canonical-boundary candidate; P2 has a read-only fixture adapter; the recovery ledger is inert product accounting; DQ-16 is unexecuted. Their composition does not activate a service, implement a live canonical adapter, demonstrate real consumption admission or finish P2–P8. No configuration, credentials, model routing, startup policy, PAUSE, publication or default-branch merge is changed by this integration.
+P1 remains a fake canonical-boundary candidate; P2 has a read-only fixture adapter; the recovery ledger is inert product accounting; DQ-16 is unexecuted. Their composition does not activate a service, implement a live canonical adapter, demonstrate real consumption admission or finish P2â€“P8. No configuration, credentials, model routing, startup policy, PAUSE, publication or default-branch merge is changed by this integration.

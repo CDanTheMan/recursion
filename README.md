@@ -36,7 +36,7 @@ Start here:
 
 The v1/v2 custom harness — the Hermes executive, supervisor loop, decision queue, project
 pilot and reconciler, `work.sh`/`publish.sh`, the MVP contract kernel, execution fabric,
-remote adapters, the Chiron app, the physics curriculum, and their configs and deployment
-units — was removed from the trunk on 2026-09-28 because it contributed no dependency to v3.
+remote adapters, and their configs and deployment units — was removed from the trunk on
+2026-09-28 because it contributed no dependency to v3.
 Nothing is lost: the complete prior tree is at tag `pre-v3-clean-cut-20260928` and in git
 history.
