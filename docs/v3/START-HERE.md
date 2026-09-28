@@ -4,10 +4,13 @@ Reviewed 2026-09-13 against GitHub master `797be4f18edf3f9e0f2dbac9432f190dbe1ed
 This is a source orientation snapshot, not live machine status or a new operating policy.
 Lucas's current request is to repair repository orientation and verify the v3 specifications.
 
-The subsequent [continuous WSL construction specification](construction-swarm/CONTINUOUS-OPERATION.md)
-defines proposed 24/7 scheduling, Cursor/Codex participation, contributed agents, quality
-controls and staged acceptance. It is not an enabled service. Its authoring gate is
-separate from the frozen orientation-repair gate below.
+The former construction foundry (the WSL Devin/SWE-2 harness under `tools/construction_swarm/`
+and its specs under `docs/v3/construction-swarm/`) was **retired on 2026-09-28**. It is not
+part of the v3 product and not part of the current workflow. Its code, specs and campaign
+records remain recoverable from git history. Do not restart it.
+
+Research starts at [RESEARCH-SCOPE](RESEARCH-SCOPE.md), which maps the goals to the
+[RESEARCH-AGENDA](RESEARCH-AGENDA.md) and to gates that already exist and pass.
 
 Read [CONTROL_PLANE](../../CONTROL_PLANE.md) first, then [ANCHOR](../../ANCHOR.md),
 [AGENTS](../../AGENTS.md), and this page. The current development target is **Recursion v3**.
@@ -48,7 +51,6 @@ framework, spending policy, or autonomous operating mode from a research recomme
 | V3 M1A | Planning schema, validation, literal fixtures and in-memory replay | Pure/inert scope; preserve frozen contracts. See [campaign](M1A-CONSTRUCTION-CAMPAIGN.md). |
 | V3 M1B / M1C | Execution and integrity schemas, fixtures and test oracles | These specify behavior; they do not prove live adapters or physical persistence. See [M1B](M1B-CONSTRUCTION-CAMPAIGN.md), [M1C](M1C-CONSTRUCTION-CAMPAIGN.md). |
 | Later v3 experiments | Composition, reservation, wire, consultation, source/publication and bounded comparison work | Full formal comparison, physical recovery and common-writer integration remain open. |
-| Construction facility | Native WSL Devin/SWE-2 tools, bounded dispatch, proposals, dependency checks, collection and advisory coordination | A tool for building Recursion; it is not the finished v3 runtime or an unattended product-development service. |
 
 The [2026-09-10 second slice](construction/eight-hour-research-20260910-01a08a22-slice2/README.md)
 records additional bounded histories and explicit unproved cases. The
@@ -60,9 +62,8 @@ prospective review prerequisites. Those campaign deadlines have expired.
 
 PRs 124, 125 and 127 are ancestors of the inspected master. Statements that those PRs
 are open, or that a campaign is running, are dated historical observations.
-The [2026-09-12 census](construction-swarm/NIGHT-RDT-20260912.md) records later reservation
-settlement, rate limits and malformed filings. It does not establish today's quota,
-process state, available slots, or accepted scientific results.
+The 2026-09-12 census recorded later reservation settlement, rate limits and malformed
+filings; it never established current quota, process state or accepted scientific results.
 
 The chronological [ROADMAP](ROADMAP.md) preserves earlier next-step proposals. Its
 M1A-era instructions and the old [documentation gate](VALIDATION.md) are not instructions
@@ -89,14 +90,10 @@ is preserved for lineage; it neither changes a task's v3 target nor authorizes a
 The current [orientation repair task](../../state/tasks/v3-orientation-20260913.md) has a
 separate, source-only gate. A product implementation packet must identify its own gate.
 
-For Devin, read [TOOL-PIPELINE](construction-swarm/TOOL-PIPELINE.md), then its amendments
-in [CAMPAIGN-SUPERVISION](construction-swarm/CAMPAIGN-SUPERVISION.md),
-[TOOL-VALIDATION](construction-swarm/TOOL-VALIDATION.md), and the dated census above.
-The original packet-only Windows adapter is historical; the native WSL tool route is
-distinct. A `construction-swarm/v3` plan version is not completion of the v3 product.
-Qualify one pinned worker and its cleanup before a new larger campaign; inspect live
-admission instead of copying old worker counts. The command sandbox has four shared
-slots and a 60-second command limit, so long builds need separately qualified execution.
+Research and construction are driven from the goals and experiments directly, not through a
+standing swarm. Start at [RESEARCH-AGENDA](RESEARCH-AGENDA.md) for the open questions and
+[experiments/v3/](../../experiments/v3/) for the existing evidence checks. Any future worker
+fleet requires its own reviewed control-plane decision before use.
 
 Deterministic process, deadline, quota and receipt checks should provide continuous
 awareness. Model supervision is advisory and should respond to actionable events.
