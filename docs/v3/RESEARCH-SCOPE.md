@@ -37,9 +37,13 @@ Everything below is provider-free. It runs on a plain checkout with Python 3.11+
 | ID | Question | Gate | Last observed |
 |---|---|---|---|
 | T-01 | Are the v3 specs, handoff packets and fixtures intact at the pinned base? | `python -X utf8 -B docs/v3/construction/next-work-20260914/check_handoff.py` | PASS, 49 specs unchanged, 0 provider calls |
-| T-02 | Do the M1A/M1B/M1C schemas, 71 fixtures and 17 test programs still satisfy their frozen contracts? | `python -X utf8 -B tools/check_v3_orientation.py --contracts` | frozen repair gate; run read-only |
+| T-02 | Do the M1A/M1B/M1C schemas, 71 fixtures and 17 test programs still satisfy their frozen contracts? | `schemas/control-plane/v3/<area>/materialize.py --check`, `scripts/tests/v3/<area>/materialize_fixtures.py --check`, then every `*.test.py` under `scripts/tests/v3/<area>/` | PASS: 6 materialization checks, 17 test programs |
 | T-03 | Does the OR-032 recovery reservation ledger satisfy its guards and mutations? | `python -X utf8 -B experiments/v3/recovery-ledger-20260914/test_ledger.py` | PASS, 16 tests |
 | T-04 | Does the DQ-16 delegated-Q bundle pass its static preflight and fake controls? | `python -X utf8 -B experiments/v3/delegated-q-coupling-20260914/test_contract.py` then `check.py --mode preflight` | preflight only; `--mode execute` is admission-gated |
+
+`tools/check_v3_orientation.py` is the frozen 2026-09-13 orientation-repair gate: it binds to that
+repair's allowed-path scope and fails on any later change by design. Do not use it as a general
+check for new branches; use the per-task gate instead.
 
 ### Next, bounded (needs a new gate inside the packet's allowed paths)
 
