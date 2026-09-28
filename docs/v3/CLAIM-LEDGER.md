@@ -59,6 +59,12 @@ Confidence is `high`, `medium`, or `low` and never widens the classification.
 
 ## Campaign claims
 
+> **Retired-lineage note (2026-09-28).** The `V2-00x` and `MIG-00x` rows below describe the v2
+> baseline and a v2-to-v3 migration that was **withdrawn**. Recursion v3 is greenfield and
+> inherits no v2 state or schema, so these rows are provenance only and authorize no current
+> work. The `V2-00x` rows remain factual statements about the removed v2 tree; the `MIG-00x`
+> rows are moot.
+
 Every row contains the evidence boundary, proposer/reviewer, contradiction and lead
 adjudication. Current `Luna`/`Terra` evidence means the explicit reconstructed packets listed in
 [R1-R17-EVIDENCE.md](R1-R17-EVIDENCE.md). Older reviewer labels are historical consolidated
