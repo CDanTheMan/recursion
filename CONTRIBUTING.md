@@ -12,6 +12,7 @@ Read, in order:
 2. [`ANCHOR.md`](ANCHOR.md) — what is in scope.
 3. [`docs/v3/START-HERE.md`](docs/v3/START-HERE.md) — how the v3 work is organized.
 4. [`docs/v3/RESEARCH-AGENDA.md`](docs/v3/RESEARCH-AGENDA.md) — the open research questions.
+5. [`docs/v3/RESEARCH-SCOPE.md`](docs/v3/RESEARCH-SCOPE.md) — the research lane and its gates.
 
 The product specifications live in `docs/v3/*.md`. Decisions live in
 `docs/v3/DECISION-REGISTER.md`. Research evidence and runnable checks live in
@@ -42,14 +43,19 @@ For a research or evidence task:
   `state/DECISIONS.md`, `scripts/`, `schemas/` and `.env` are protected paths — a change
   there needs an explicitly approved control-plane authoring session, not a product PR.
 
-## Run the source checks
+## Run a gate
 
-From the repository root, with Python 3.11+ and Git:
+From the repository root, with Python 3.11+ and Git, run the gate named by your task. The
+provider-free gates that currently pass are listed in
+[`docs/v3/RESEARCH-SCOPE.md`](docs/v3/RESEARCH-SCOPE.md), for example:
 
 ```text
-python -X utf8 -B tools/check_v3_orientation.py
-python -X utf8 -B tools/check_v3_orientation.py --contracts
+python -X utf8 -B docs/v3/construction/next-work-20260914/check_handoff.py
+python -X utf8 -B experiments/v3/recovery-ledger-20260914/test_ledger.py
 ```
+
+The `tools/check_v3_orientation.py` gate is the frozen 2026-09-13 orientation-repair gate; it
+binds to that repair's scope and is not a general check for new branches.
 
 On Windows, paths can exceed 260 characters; pass `-c core.longpaths=true` per Git command.
 

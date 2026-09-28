@@ -9,6 +9,9 @@ and its specs under `docs/v3/construction-swarm/`) was **retired on 2026-09-28**
 part of the v3 product and not part of the current workflow. Its code, specs and campaign
 records remain recoverable from git history. Do not restart it.
 
+Research starts at [RESEARCH-SCOPE](RESEARCH-SCOPE.md), which maps the goals to the
+[RESEARCH-AGENDA](RESEARCH-AGENDA.md) and to gates that already exist and pass.
+
 Read [CONTROL_PLANE](../../CONTROL_PLANE.md) first, then [ANCHOR](../../ANCHOR.md),
 [AGENTS](../../AGENTS.md), and this page. The current development target is **Recursion v3**.
 V1/v2 remain historical implementation and regression references. Do not infer a v2
