@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "aliases": {
-    "cursor-primary": { "env": "RECURSION_MODEL_ALIAS_CURSOR_PRIMARY", "roles": ["implementer", "verifier"] },
-    "gemini-review": { "env": "RECURSION_MODEL_ALIAS_GEMINI_REVIEW", "roles": ["verifier"] },
-    "opencode-flex": { "env": "RECURSION_MODEL_ALIAS_OPENCODE_FLEX", "roles": ["implementer", "verifier"] },
-    "sentry-local": { "env": "RECURSION_MODEL_ALIAS_SENTRY_LOCAL", "roles": ["implementer"] }
-  }
-}

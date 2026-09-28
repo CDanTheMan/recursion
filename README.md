@@ -1,87 +1,42 @@
 # Recursion
 
-**Development target: Recursion v3.** After reading the control plane, start at
-[the current v3 development guide](docs/v3/START-HERE.md). It maps the intact product
-specifications, completed bounded work, remaining blockers and task-specific gates.
-V1/v2 remain implementation and regression references, not the default development target.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get involved.
+**Recursion v3** is a provider-neutral agent platform: a harness with its own client,
+execution kernel, context/compaction engine and multi-node fabric, plus adapters for
+supported upstream harnesses. The current development target and single source of truth is
+[docs/v3/START-HERE.md](docs/v3/START-HERE.md).
 
-**Who decides:** `CONTROL_PLANE.md` — the authority constitution (adopted 2026-08-06,
-D-010). Hermes is the executive control plane; Claude Code is a bounded executor; Lucas is
-final authority and merges every review branch himself. Read it before changing how the
-loop is driven.
+V1/v2 — the previous Hermes-based supervisor and control plane — are **retired**. They were
+removed from the trunk on 2026-09-28 and remain recoverable from the
+`pre-v3-clean-cut-20260928` tag.
 
-This repository contains the existing supervisory system and the specifications and
-experiments for Recursion v3, a provider-neutral agent platform.
+Start here:
 
-**Not** part of Golden Stallion or CSL Labs — it supervises them without being one of them.
+- [docs/v3/START-HERE.md](docs/v3/START-HERE.md) — orientation and specification map
+- [docs/v3/RESEARCH-SCOPE.md](docs/v3/RESEARCH-SCOPE.md) — research goals and the gates that pass
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
+- [ANCHOR.md](ANCHOR.md) — why the work exists; [CONTROL_PLANE.md](CONTROL_PLANE.md) — who decides
 
-<!-- superseded-by: CONTROL_PLANE.md (2026-08-06, D-011) -->
-> **Changed 2026-08-06 (D-011).** This used to read "those push status *into* here; this
-> repo never reaches into them." Recursion now keeps a **live git clone** of every
-> registered project and derives status from git, because hand-pushed copies went stale
-> silently and read exactly like working state. The original intent — a small blast radius
-> — is preserved by **per-repo deploy keys** rather than by refusing to read: each key
-> reaches exactly one repo, and no account-level credential lives on the box.
+> Governance note: `CONTROL_PLANE.md` and `ANCHOR.md` are the operative authority and scope
+> records. They still describe the pre-v3 control plane and will be rewritten in an
+> Owner-authoring session, not edited as part of a cleanup.
 
 ## Layout
 
-| Path | Churn | What it is |
-|---|---|---|
-| `ANCHOR.md` | Yearly | Success criteria, what's explicitly not happening, kill criteria |
-| `CONTROL_PLANE.md` | Rare | Authority constitution: Lucas → Hermes → bounded workers and independent verifiers |
-| `AGENTS.md` / `CLAUDE.md` | Rare | Operating rules for agent sessions in this repository |
-| `docs/v3/START-HERE.md` | Reviewed | Current v3 orientation, specification map, source status and gates |
-| `schemas/control-plane/v3/` / `scripts/v3/` | Reviewed | Bounded v3 contracts and planning replay |
-| `experiments/v3/` | Reviewed | Scoped experiments and evidence checks |
-| `config/v2/` | Reviewed | Versioned engines, providers, pools, hosts, sandboxes, projects, and routing policies |
-| `schemas/control-plane/v2/` | Reviewed | Strict wire contracts for control-plane records |
-| `scripts/mvp_*.py` | Reviewed | MVP contracts, packet kernel, adapters, orchestration, and control surface |
-| `scripts/execution_fabric.py` | Reviewed | Placement, leases, recovery, verification receipts, and review integration |
-| `research/` | Stable | Deep research reports + "what this changes" notes. Git history here is valuable |
-| `state/` | Runtime | Canonical goals, tasks, decisions, events, inbox, and generated views; project status comes from live git clones |
-| `curriculum/` | Weekly | Syllabus map, generated problem sets |
-| `loop/` | Rare | Supervisor scripts, prompts, routing config |
-| `docs/` | Reviewed | Architecture, operator guides, plans, and exact-source audits |
+| Path | What it is |
+|---|---|
+| `docs/v3/` | v3 product specifications, research and evidence |
+| `experiments/v3/` | v3 research experiments and provider-free evidence checks |
+| `schemas/control-plane/v3/` | v3 contract schemas (planning, execution, integrity) |
+| `scripts/v3/` | v3 planning replay and validation |
+| `scripts/tests/v3/` | v3 M1 test programs and fixtures |
+| `tools/check_v3_orientation.py` | the frozen 2026-09-13 orientation-repair gate |
+| `state/` | decision log and v3 goal/task records |
 
-## Historical baseline: Recursion v2 source-only MVP
+## Retired
 
-The custom harness is implemented and independently accepted on
-`loop/work/recursion-v2-mvp`. It provides:
-
-- deterministic, content-addressed task/budget/capability/evidence contracts;
-- immutable depth-2 task packets with bounded context and exact parent authority;
-- capability negotiation for Codex CLI, Cursor CLI, Hermes API, OpenCode/OpenRouter,
-  and local Qwen;
-- host/pool-aware placement, durable leases, replay-safe results, restart recovery,
-  authenticated verification receipts, and serialized same-project integration;
-- Telegram command semantics for `/today`, `/status`, `/why`, `/next`, `/chiron`,
-  `/budget`, `/pause`, `/resume`, and `/approve`;
-- a source-only second-box controller-death watchdog;
-- review-only publication through `scripts/publish.sh`.
-
-For v3 source checks, use the commands in [START-HERE](docs/v3/START-HERE.md).
-The v2 gate below does not certify v3 completion.
-
-See `docs/recursion-v2-mvp-harness.md` for the complete capability and trust-boundary
-reference. This is source-ready, not production-deployed.
-
-## V2 baseline acceptance and publication
-
-```bash
-# Complete source-only acceptance gate
-python3 -u scripts/tests/recursion-v2-mvp.test.py
-
-# Review-branch publisher; requires human-owned enablement, registry, and key
-bash scripts/publish.sh --branch loop/work/recursion-v2-mvp --repo /opt/recursion
-```
-
-The publisher cannot target the default branch and refuses under PAUSE. Lucas reviews and
-merges the resulting PR, then separately authorizes credentials, deployment, restart, and
-broader autonomy.
-
-## V2 baseline status
-
-Source-only MVP gate passed on 2026-08-31. Review-branch publication and all production
-seams remain human-controlled. Exact evidence is in
-`docs/audits/recursion-v2-mvp-completion-2026-08-31.md`.
+The v1/v2 custom harness — the Hermes executive, supervisor loop, decision queue, project
+pilot and reconciler, `work.sh`/`publish.sh`, the MVP contract kernel, execution fabric,
+remote adapters, the Chiron app, the physics curriculum, and their configs and deployment
+units — was removed from the trunk on 2026-09-28 because it contributed no dependency to v3.
+Nothing is lost: the complete prior tree is at tag `pre-v3-clean-cut-20260928` and in git
+history.

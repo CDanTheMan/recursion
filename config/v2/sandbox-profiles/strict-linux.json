@@ -1,1 +1,0 @@
-{"schema_version":2,"kind":"sandbox_profile","id":"strict-linux","isolation":"systemd","operating_system":"linux","write_scope":"worktree-only","network_profiles":["anthropic-provider-only"],"network_endpoints":["api.anthropic.com"],"capabilities":["linux","workspace-edit","terminal","structured-result"],"trust_class":"untrusted-worker","controller_visibility":"none"}
