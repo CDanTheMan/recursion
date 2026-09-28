@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "id": "openrouter-via-opencode",
-  "provider": "openrouter-via-opencode",
-  "enabled": false,
-  "namespace": "recursion-provider-only",
-  "proxy": { "type": "connect-proxy", "host": "127.0.0.1", "port": 18080, "env": ["HTTP_PROXY", "HTTPS_PROXY"] },
-  "authorities": ["openrouter.ai:443", "api.deepseek.com:443"]
-}
