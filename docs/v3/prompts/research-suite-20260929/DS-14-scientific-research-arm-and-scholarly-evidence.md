@@ -8,7 +8,51 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-14 — Scientific research ARM and scholarly evidence
 
-Run this as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- A scientific research ARM is a goal-scoped executive that uses the same goal, delegation, route, context, evidence, privacy and verification contracts as a development ARM. It is a profile/capability, not a separate executive tier, and it delegates bounded workers and verifiers.
+- `SourceRecord` is a provenance record: canonical URI plus persistent identifiers, title/creators/publisher, explicit version and dates, retrieval time, adapter/API revision, request and content digests, editorial and access states, license, related sources, locators, privacy classification and an expiry/revalidation trigger. `ResearchClaim` is one exact falsifiable proposition with claim type, goal/decision scope, population/workload/time tuple, assumptions, typed source edges, locators or data hashes, support/contradiction/applicability status, experiment ids, reviewer, confidence, history and expiry.
+- Typed source edges are `supports`, `contradicts`, `qualifies`, `replicates`, `updates`, `mentions`, `metadata-only` and `inapplicable`. Contradictory evidence stays typed; differing populations, methods, interventions, endpoints or workloads produce heterogeneity or `unknown`, never a winner by citation count.
+- Source lifecycle: discovered, identified, retrieved and verified, with inaccessible, quarantined, expired and corrected/superseded/retracted/withdrawn states preserved separately. Discovery snippets, titles, abstracts, citation counts and graph edges do not by themselves support a claim.
+- Architecture-research standard has three evidence classes: external mechanism evidence (papers, standards, public systems), local structural evidence (exact source, tests, contracts) and empirical fit evidence (preregistered experiments). A paper cannot prove local fit without the latter two, and a local benchmark cannot establish a general scientific claim.
+- Named candidate adapters (Crossref, OpenAlex, Semantic Scholar, arXiv, DataCite, Europe PMC/PubMed and standards bodies) are candidates only; each must be revalidated for version, license, quota, coverage, provenance and privacy before admission. Naming a candidate is not an adoption decision.
+- Lean boundary: the kernel needs only generic `ResearchClaim`, `SourceRecord`, artifact, task, evidence and provenance schemas. Search providers, PDF parsers, citation-graph tools and notebook runtimes remain lazy capability plugins whose disabled path performs no network call, imports no heavy parser and starts no background indexer.
+- `H-036` hard-floor corpus: fabricated and near-match identifiers, mismatched metadata, non-entailing sources, preprint/version/journal changes, corrections/retractions/withdrawals, paywalls, contradictory studies, inapplicable populations/workloads, citation rings, prompt-injected metadata, hostile table layouts, mutable/paginated APIs, duplicate preprint/journal records, license conflicts and negative/null results. Any accepted fabricated, retracted-as-current, stale, inaccessible, inapplicable or unverifiable evidence is an automatic failure.
+- Evidence discipline: privacy, copyright and access policy apply before every search, upload or retrieval; private source is never sent to a public or contributor route; no identifier, benchmark or citation may be invented.
 
 ## Purpose
 
@@ -16,16 +60,11 @@ Decide whether Recursion can find papers and standards, reconcile conflicting ev
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This prompt must not change provider, model or authentication configuration. Private source is never sent to a public or contributor route, and no identifier, benchmark or citation may be invented.
+The authority, scope, privacy and evidence-discipline constraints for this lane are restated in `## Baked context` above and govern this work. This prompt authorizes a report only: no runtime, provider, model, authentication, configuration, spending, deployment, publication or merge action. Private source is never sent to a public or contributor route, and no identifier, benchmark or citation may be invented. Keep public/synthetic briefs free of private project content, transcripts, local paths, credentials or account/infrastructure identifiers.
 
 ## Inputs to read
 
-- `docs/v3/RESEARCH-AGENDA.md` (lane R16)
-- `docs/v3/SCIENTIFIC-RESEARCH.md`
-- `docs/v3/PLUGINS-AND-EDITIONS.md`
-- `docs/v3/TELEMETRY.md`
-- `docs/v3/R1-R17-EVIDENCE.md`
-- `docs/v3/foundation-research/synthesis.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

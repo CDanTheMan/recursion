@@ -8,7 +8,51 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-23 — IPC process broker and terminal protocol
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 is a headless harness; the interactive CLI is its canonical local operator surface and Telegram is an optional transport. Several terminal clients may attach to Head, ARMs, workers, events or system state, and closing a client does not own or end the underlying process.
+- The accepted product ruling is that terminals detach rather than end work; terminal bytes never carry canonical authority, and attach/detach must not create a model turn, process, actor or effect.
+- `E-FHAR2-104` is the terminal/process broker contract: the Recursion broker — not the PTY, renderer or view — owns process identity, startup epoch, containment, event cursors, input/resize leases, recovery and fanout. Its wire message set is `HELLO`/`WELCOME`/`SNAPSHOT`/`EVENT`/`ACK`/`CREDIT`/`INPUT`/`RESIZE`/`RESET`.
+- `E-FHAR2-103` is the log/projection/artifact/IPC profile: length- or RS-delimited frames with maximum size, version/capability handshake, request ID, actor/lease/epoch binding, ACK cursor and byte/event credit; a full reader is disconnected or reset and cannot block the canonical writer.
+- Cursor units are UTF-8 bytes for raw data or a distinct event sequence, never host-language string length. Zero clients does not stop draining; each view has a bounded credit queue; exactly one fenced input lease exists; and a gap requires `RESET` before any further `EVENT`.
+- The privileged kernel is four pure functions (`decode`/`admit`/`reduce`/`derive_work_packet`) with no filesystem, network, process or provider access; adapters and views call the boundary and must not move into it.
+- `R11` is the interactive-terminal and communication-views research base (also DS-09). Milestone 6 delivers detachable multi-window terminal views and persistent daemon/process-broker attachment.
+- `E-FHAR2-102` defines the neutral kernel API and the CPython/Rust/Go experiment `EXP-FHAR-10`; `PERF-010` is the experiment that several detachable views stay responsive without multiplying worker/model cost.
+- **UNRESOLVED, Owner-owned:** the renderer, terminal multiplexer, GUI toolkit, IPC library, serialization library and physical cursor/snapshot/retention store are unselected.
 
 ## Purpose
 
@@ -16,22 +60,11 @@ Decide and freeze the versioned wire protocol between thin terminal views, the `
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane may not select a product renderer, terminal multiplexer, GUI toolkit or IPC library; Zellij, tmux, Ratatui, crossterm and xterm.js are replaceable presentation or transport dependencies, not selections. The accepted product ruling that terminals detach rather than end work is fixed and may not be reopened. Terminal bytes never carry canonical authority; attaching a view must not create a model turn, process, actor or effect. This lane performs no session establishment, port binding, socket connection or process launch.
+The authority, scope and privacy constraints that govern this lane are restated in `## Baked context`; treat them as the operative limits. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane may not select a product renderer, terminal multiplexer, GUI toolkit or IPC library; Zellij, tmux, Ratatui, crossterm and xterm.js are replaceable presentation or transport dependencies, not selections. The accepted product ruling that terminals detach rather than end work is fixed and may not be reopened. Terminal bytes never carry canonical authority; attaching a view must not create a model turn, process, actor or effect. This lane performs no session establishment, port binding, socket connection or process launch.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/TERMINAL-RUNTIME.md`
-- `docs/v3/CLI.md`
-- `docs/v3/INTERACTION-SURFACES.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/PERFORMANCE-PLAN.md`
-- `docs/v3/M1B-WIRE-PROFILE.md`
-- `docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md`
-- `docs/v3/DECISION-REGISTER.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

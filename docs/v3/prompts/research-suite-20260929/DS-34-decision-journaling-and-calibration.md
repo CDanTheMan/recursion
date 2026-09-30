@@ -8,28 +8,63 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-34 — Decision journaling and calibration
 
-This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run it as a public/synthetic research lane and include no private decision content.
+This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. It is a public/synthetic research lane and includes no private decision content.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 is a provider-neutral agent platform whose operation is tracked through durable, reviewable decisions. The owner is final authority; the operative constitution defines decision precedence and requires that superseded and amended decisions preserve their original reasoning.
+- Existing decision log: the repository keeps a D-entry decision log with, by rule, every decision carrying a falsifier, and a monthly first-of-month review cadence. D-017 is one recorded D-entry (the git-as-transport/`state/` decision). Existing D-entries are history and must not be rewritten, renumbered or edited. A candidate schema must reconcile with the D-entry convention rather than propose a parallel log, and must state what it does not duplicate.
+- The problem: individual project decisions should be scored against their predicted outcomes rather than reconstructed by hindsight, so forecasts must be falsifiable and actually reviewed. The morning-brief and kill-criteria disciplines depend on criteria written before outcomes are observed. A machine-checkable condition should flag a record that is missing a falsifier or is past its review date, without a model call.
+- Decision scope and authority: the decision log records operating decisions; the decision register records accepted Owner directions (OR-xxx). A research session may propose reconciliation text but never edits the constitution or the logs, and never promotes a proposal into an Owner decision.
+- Calibration evidence to apply: the forecasting and calibration literature (Tetlock and successors) establishes measurable skill, the difference between domain expertise and general forecasting skill, the effect of continuous versus one-shot feedback, and the limits of small samples. For a low-volume individual log, appropriate accuracy, resolution and calibration measures must be chosen and the misleading-at-small-sample ones named.
+- Journal and reference-class content: a decision-journal entry is reviewable when it records decision, options, choice, rationale, expected outcome, falsifier and review trigger. Reference-class forecasting and base rates supply an outside view but are hard to construct at small scale; base rates must be recorded, updated and reconciled with inside-view detail as local history accumulates without overfitting to a handful of cases.
+- Failure modes to mitigate: hindsight bias, outcome bias, motivated reconstruction, vague success criteria, journals written once and never reviewed, and survivorship/selection/small-sample effects that make a lucky call look like skill. Each needs an entry-time or review-time rule.
+- Cadence and state transitions: candidate review triggers are time-based, event-based (a falsifier fired, a project closed, a threshold crossed) or a combination. A decision record may carry states such as open, held, failed, unclear or superseded, and a fired falsifier and a superseded/amended decision must preserve the original reasoning without rewriting history.
+- Research constraints: this is a public/synthetic lane and includes no private decision content, transcripts, local paths or credentials. It performs no runtime, tool, journaling-application or automation implementation and selects no language, store, format or tool as a product decision. It must not rewrite existing D-entries, reopen accepted Owner decisions or the anchor scope, make provider/model calls or a model-graded review, present an invented base rate as a measured local value, or claim that a low-volume log yields statistically strong calibration.
 
 ## Purpose
 
-Decide a decision-log schema and a review cadence that make forecasts falsifiable and actually reviewed, so that individual project decisions can be scored against their predicted outcomes instead of reconstructed by hindsight. This is blocking because the repo already keeps a D-entry log with falsifiers and a monthly review cadence in `state/DECISIONS.md`, and because the morning-brief and kill-criteria discipline depends on criteria written before outcomes. The research must reconcile with the existing D-entry convention rather than propose a parallel log, and must connect to `docs/v3/RESEARCH-SCOPE.md`.
+Decide a decision-log schema and a review cadence that make forecasts falsifiable and actually reviewed, so that individual project decisions can be scored against their predicted outcomes instead of reconstructed by hindsight. This is blocking because the repository already keeps a D-entry decision log with falsifiers and a monthly review cadence, and because the morning-brief and kill-criteria discipline depends on criteria written before outcomes. The research must reconcile with the existing D-entry convention rather than propose a parallel log, and must connect to the accepted research scope.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed reconciliation, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions or ANCHOR scope, and do not select a tool, store or format as a product decision. Existing D-entries are history and are not to be rewritten.
+The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed reconciliation, never edit it. Public or synthetic briefs only — never private decision content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions or anchor scope, and do not select a tool, store or format as a product decision. Existing D-entries are history and are not to be rewritten.
 
 ## Inputs to read
 
-- `docs/v3/RESEARCH-SCOPE.md`
-- `state/DECISIONS.md` (existing D-entry convention, falsifiers, review cadence)
-- `ANCHOR.md` (kill criteria, review throughput)
-- `CONTROL_PLANE.md` (decision precedence, decision log)
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/PLANNING.md`
-- `docs/v3/EXECUTIVES.md`
-- `docs/v3/PRODUCT.md`
-- `state/INBOX.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
@@ -64,17 +99,17 @@ Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` co
 15. What decision-log schema should be used, with required versus optional fields, and how does it map onto the existing D-entry template?
 16. What review cadence and trigger conditions are evidence-backed: time-based, event-based (falsifier fired, project closed, threshold crossed), or a combination?
 17. What state transitions should a decision record carry (open, held, failed, unclear, superseded) and how is a fired falsifier treated?
-18. How are superseded and amended decisions preserved with the original reasoning, as `CONTROL_PLANE.md` requires, without rewriting history?
+18. How are superseded and amended decisions preserved with the original reasoning, as the operative constitution requires, without rewriting history?
 
 ### Reconciliation with Recursion's conventions
 
-19. How does a candidate schema reconcile with `state/DECISIONS.md`, the monthly first-of-month review and the "every decision gets a falsifier" rule, and what does it add without duplicating?
+19. How does a candidate schema reconcile with the existing D-entry log, the monthly first-of-month review and the "every decision gets a falsifier" rule, and what does it add without duplicating?
 20. How should the morning brief and kill-criteria discipline feed the decision log so predicted outcomes are recorded before the outcome is observed, and what machine-checkable condition flags a record missing a falsifier or past its review date without a model call?
 
 ## Deliverable
 
 - A source-pinned claim table (claim, source, version/date, classification as fact/inference/hypothesis/proposal, confidence, expiry or falsifier trigger).
-- A decision-log schema with required and optional fields, shown as a reconciliation with the existing `state/DECISIONS.md` D-entry template.
+- A decision-log schema with required and optional fields, shown as a reconciliation with the existing D-entry template.
 - A review cadence with specific trigger conditions, distinguishing time-based from event-based triggers and stating the evidence for each.
 - A base-rate and reference-class recording approach with the small-sample caveat stated.
 - One recommendation tied to a named competing option and a decisive falsifier, plus open Owner questions.
@@ -83,8 +118,8 @@ Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` co
 
 - No runtime, tool, journaling application or automation implementation.
 - No language, store, format or tool selection as a product decision.
-- No rewriting, renumbering or editing of existing `state/DECISIONS.md` entries.
-- No reopening accepted Owner decisions or ANCHOR scope.
+- No rewriting, renumbering or editing of existing D-entry decisions.
+- No reopening accepted Owner decisions or anchor scope.
 - No private decision content, transcripts, local paths or credentials in any public packet.
 - No provider or model calls, and no model-graded review performed.
 - No invented base rate presented as a measured local value.

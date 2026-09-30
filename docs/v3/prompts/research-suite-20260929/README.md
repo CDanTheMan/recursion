@@ -13,18 +13,25 @@ of Recursion. Every `DS-*` file is **inert**: creating, reading, or listing it l
 nothing and authorizes no provider call, write, effect, spend, or configuration change. Run
 one prompt per sitting, not all at once.
 
+Each handoff is **self-contained** for a Deep Research-only session (the Deep Research plugin;
+no repository or GitHub connector). Everything the session needs is baked into the file under
+`## Baked context`; the session is not told to read repository files. `DS-27`, `DS-28` and
+`DS-29` are construction handoffs and require repository execution instead.
+
 This suite is a **candidate proposal**. It does not create a Hermes task, bind a goal, change
 operational policy, or amend the constitution. Before any prompt is used, Hermes/Lucas must
 bind it to a task with a parent goal, allowed paths, budget, route and an independent review.
 
 ## Authority
 
-Read [CONTROL_PLANE](../../../../CONTROL_PLANE.md), `ANCHOR.md`, `AGENTS.md`, `docs/v3/START-HERE.md`,
-[RESEARCH-AGENDA](../../RESEARCH-AGENDA.md) and the accepted OR-021 through OR-039 rows in
-`DECISION-REGISTER.md` before using any prompt. The current Hermes constitution remains
-operative; these prompts propose reconciliation text and never edit it. Public Deep Research
-lanes receive only public or synthetic briefs — never unpublished v3 drafts, private project
-content, transcripts, local paths, credentials, or account/infrastructure identifiers.
+Each handoff is self-contained: a Deep Research session needs no repository access, because the
+shared authority, scope, evidence and privacy context is baked into every file under
+`## Baked context`. The operator should read [CONTROL_PLANE](../../../../CONTROL_PLANE.md),
+`ANCHOR.md`, `AGENTS.md` and [RESEARCH-AGENDA](../../RESEARCH-AGENDA.md) before invoking a
+session. The Hermes constitution remains operative; these prompts propose reconciliation text
+and never edit it. Public Deep Research sessions receive only public or synthetic briefs —
+never secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
 
 Existing research artifacts that remain authoritative and are not duplicated here:
 
@@ -33,7 +40,7 @@ Existing research artifacts that remain authoritative and are not duplicated her
 - `docs/v3/prompts/m1a-autonomous-planning-contract.md` — M1A construction, gated and inert.
 - `docs/v3/prompts/overnight-architecture-research.md`, `docs/v3/prompts/overnight-adversarial-swarm-research.md` — superseded provenance only.
 - `docs/v3/construction/next-work-20260914/` — 01 Sol service access, 02 Astra product frontier, 03 Sol recovery ledger.
-- `docs/v3/RESEARCH-SCOPE.md` — earlier learning-loop suite (R1–R9).
+- `docs/v3/RESEARCH-SCOPE.md` — the current research entry point and its lane gates.
 
 ## Coverage map
 

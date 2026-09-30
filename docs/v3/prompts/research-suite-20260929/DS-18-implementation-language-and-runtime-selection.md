@@ -8,31 +8,63 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-18 — Implementation language and runtime selection
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3's privileged kernel is a small deterministic core with typed adapters around replaceable execution loops. Its public API is four pure functions: `decode(bytes, schema_epoch) -> typed command | typed refusal`; `admit(immutable_state, expected_state_digest, command, authority/policy fixtures) -> accepted event batch | typed refusal`; `reduce(state, ordered_event) -> state`; and `derive_work_packet(state, admitted_task_id) -> immutable packet | typed refusal`. They perform no filesystem, network, process, provider, terminal, plugin, credential or wall-clock access; logical time and random values enter only as admitted inputs.
+- `admit` first canonicalizes and verifies `immutable_state` against `expected_state_digest`, then uses that state for command/receipt/idempotence, GoalSpec, lease, PAUSE, budget and cross-record checks; the digest is not a substitute for the state.
+- `E-FHAR2-102` is the privileged-kernel-API and language experiment: define one implementation-neutral API plus a matched comparison and defer any language selection. `EXP-FHAR-10` is the corresponding experiment: the same deterministic reducer/replay/fault workload implemented in CPython, Rust and Go on frozen Windows/Linux hosts.
+- `E-FHAR2-108` is the release/boot/dependency/migration minimum: a `ReleaseId` of product SemVer, protocol major/minor, schema epoch, constitution-policy digest, core artifact digest, core dependency-lock digest, build-provenance digest, SBOM digest and edition-manifest digest, plus `BootReceipt`, core-only boot/replay and a proposed SPDX 3.0.1 SBOM.
+- `E-FHAR2-105` is the plugin/frontend isolation contract: trust tiers `T0`-`T4`, lifecycle `discovered -> verified -> admitted -> staged -> active`, capability intersection, preserved denials and a zero-cost-disabled rule where disabled plugins load no implementation.
+- Required invariants that are independent of language include one canonical writer per aggregate with a monotonically increasing sequence; `CommandIdempotence`; `AuthorityScope` (no descendant widens owner, paths, capabilities, privacy, routes or budgets); `LeaseFence`; `PauseSafety`; `ReplayDeterminism`/`ReplayFailClosed`; `ProjectionParity`; and `NoBlindEffectReplay`.
+- The canonical optimization rule is hard floors first (authority, safety, privacy, correctness, reproducibility), then responsiveness, subscription efficiency and task completion. Every matrix cell is measured, explicitly modelled, or `unknown`, and no composite score may hide a floor failure.
+- The coordinator-small profile is a 2-vCPU/4-GiB class coordinator. The `E-FHAR2-102` workload is one GoalSpec, 10 plan revisions, 1,000 tasks, 3,000 edges and 10,000 events, with a 100,000-event scale check.
+- **UNRESOLVED, Owner-owned:** the implementation language, event store, terminal renderer and plugin runtime are all unselected. `OR-018` ratifies only Option 2 (a native deterministic kernel with typed adapters); this lane compares runtimes that satisfy it and must not select one.
 
 ## Purpose
 
-Produce the evidence needed for the Owner to select the implementation language(s) and runtime for the privileged Recursion v3 kernel — the `decode` / `admit` / `reduce` / `derive_work_packet` boundary, the canonical event writer, and the base of the daemon, process broker and adapters named in `docs/v3/ARCHITECTURE.md` and `docs/v3/CONSTRUCTION-RUNBOOK.md`. This is blocking because every later milestone (Milestone 2 canonical state, 3 plugin/route fabric, 7 node fabric, 8 adaptive optimization, 9 soak) bakes in a runtime's concurrency, memory, packaging and fault semantics, and a wrong base is expensive to unwind. Nothing here selects a language; the comparison stays open and technology-specific so the Owner can decide.
+Produce the evidence needed for the Owner to select the implementation language(s) and runtime for the privileged Recursion v3 kernel — the `decode` / `admit` / `reduce` / `derive_work_packet` boundary, the canonical event writer, and the base of the daemon, process broker and adapters in the ratified architecture target and the construction plan. This is blocking because every later milestone (Milestone 2 canonical state, 3 plugin/route fabric, 7 node fabric, 8 adaptive optimization, 9 soak) bakes in a runtime's concurrency, memory, packaging and fault semantics, and a wrong base is expensive to unwind. Nothing here selects a language; the comparison stays open and technology-specific so the Owner can decide.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. **DO NOT select a language, store, framework, renderer or plugin runtime.** The Owner decides. No claim that any current upstream language/toolchain version is certified, supported, or free of a specific CVE follows from this file. Option 2 (native deterministic kernel with typed adapters) is Owner-ratified in `OR-018` and is not reopened; this lane compares the runtime that satisfies it.
+The authority, scope and privacy constraints that govern this lane are restated in `## Baked context`; treat them as the operative limits. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. **DO NOT select a language, store, framework, renderer or plugin runtime.** The Owner decides. No claim that any current upstream language/toolchain version is certified, supported, or free of a specific CVE follows from this file. Option 2 (native deterministic kernel with typed adapters) is Owner-ratified in `OR-018` and is not reopened; this lane compares the runtime that satisfies it.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/ARCHITECTURE.md`
-- `docs/v3/ARCHITECTURE-OPTIONS.md`
-- `docs/v3/PERFORMANCE-PLAN.md`
-- `docs/v3/RESEARCH-HYPOTHESES.md`
-- `docs/v3/RESEARCH-AGENDA.md`
-- `docs/v3/CONSTRUCTION-RUNBOOK.md`
-- `docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md`
-- `docs/v3/STATE.md`
-- `docs/v3/SECURITY.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
@@ -97,7 +129,7 @@ A source-pinned report containing: a claim table (claim, source, version/date, c
 - No numeric performance budget invented before measurement.
 - No reopening of Option 2 or the required small native loop.
 - No private hardware inventory treated as design data.
-- No modification of `docs/v3/PERFORMANCE-PLAN.md` or any protected path.
+- No modification of the performance plan or any protected path.
 
 ## Completion gate
 

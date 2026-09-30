@@ -8,31 +8,63 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-19 — Operating-system platform behavior
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 must operate natively on Windows and Linux; the interactive terminal detaches from views rather than ending work, and the product is a headless harness with an optional Telegram transport and no required graphical frontend.
+- The privileged kernel is four pure functions (`decode`/`admit`/`reduce`/`derive_work_packet`) with no filesystem, network, process, provider, terminal, plugin, credential or wall-clock access; the daemon, broker, adapters and views call the boundary and must not move into it.
+- `E-FHAR2-102` defines that kernel API and the neutral language experiment; `EXP-FHAR-10` is the matched CPython/Rust/Go reducer/replay/fault comparison on frozen Windows/Linux hosts.
+- `E-FHAR2-104` is the terminal/process broker contract: the Recursion broker — not the PTY, renderer or view — owns process identity, containment, event cursors, input/resize leases, recovery and fanout, with the message set `HELLO`/`WELCOME`/`SNAPSHOT`/`EVENT`/`ACK`/`CREDIT`/`INPUT`/`RESIZE`/`RESET`.
+- The OS seams that matter are Windows Job Objects and ConPTY versus Linux process groups/PTY, `cgroup v2`, `pidfd` and `clone3`; descendant-tree termination must be proved rather than assumed, and a terminal close is not proof of descendant or external-effect completion.
+- Milestone 2 delivers the canonical state writer; Milestone 6 delivers the planning and interactive operator CLI, including detachable terminal views and persistent daemon/process-broker attachment; Milestone 7 delivers the authenticated node fabric.
+- Required invariants include one canonical writer per aggregate, `AuthorityScope` non-widening, `LeaseFence` and `PauseSafety`; transport and terminal bytes never carry canonical authority.
+- `PERF-010` is the experiment that several detachable terminal views stay responsive without multiplying worker/model cost, and `H-030` is the hypothesis that a daemon-owned actor/process runtime lets views attach and detach without orphaning work.
+- **UNRESOLVED, Owner-owned:** the implementation language, terminal renderer, terminal multiplexer/IPC library and process library are unselected; the accepted detachable-terminal ruling is fixed and is not reopened.
 
 ## Purpose
 
-Produce the cross-platform conformance evidence that lets the Owner decide how Recursion v3 must behave on Windows and Linux — the exact OS seams an implementation must cross — before any language, store or process library is chosen. This is blocking because the process broker, canonical state writer, terminal attach/detach, crash recovery and containment contracts in `docs/v3/ARCHITECTURE.md`, `E-FHAR2-104` and Milestones 2, 6 and 7 are all defined in terms of OS primitives (Job Objects, ConPTY, cgroups, PTYs, fsync/rename), and assuming POSIX semantics on Windows (or vice versa) is a correctness and containment defect. Nothing here selects a runtime, store, renderer or process library.
+Produce the cross-platform conformance evidence that lets the Owner decide how Recursion v3 must behave on Windows and Linux — the exact OS seams an implementation must cross — before any language, store or process library is chosen. This is blocking because the process broker, canonical state writer, terminal attach/detach, crash recovery and containment contracts in the ratified architecture target, `E-FHAR2-104` and Milestones 2, 6 and 7 are all defined in terms of OS primitives (Job Objects, ConPTY, cgroups, PTYs, fsync/rename), and assuming POSIX semantics on Windows (or vice versa) is a correctness and containment defect. Nothing here selects a runtime, store, renderer or process library.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. **DO NOT select a language, store, framework, renderer or plugin runtime.** The Owner decides. No claim that a current OS build, kernel or terminal is certified follows from this file. The detachable-terminal product ruling is fixed; this lane compares mechanisms and may not reopen it.
+The authority, scope and privacy constraints that govern this lane are restated in `## Baked context`; treat them as the operative limits. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. **DO NOT select a language, store, framework, renderer or plugin runtime.** The Owner decides. No claim that a current OS build, kernel or terminal is certified follows from this file. The detachable-terminal product ruling is fixed; this lane compares mechanisms and may not reopen it.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/ARCHITECTURE.md`
-- `docs/v3/TERMINAL-RUNTIME.md`
-- `docs/v3/PERFORMANCE-PLAN.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/STATE.md`
-- `docs/v3/TELEMETRY.md`
-- `docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md`
-- `docs/v3/CONSTRUCTION-RUNBOOK.md`
-- `docs/v3/prompts/research-suite-20260929/DS-09-interactive-terminal-and-communication-views.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
@@ -86,7 +118,7 @@ A source-pinned report containing: a claim table (claim, source, version/date, c
 - No claim of full descendant-tree termination or durability before it is measured across the matrix.
 - No graphical frontend or Windows installer work.
 - No provider, model or route calls.
-- No modification of `docs/v3/TERMINAL-RUNTIME.md`, `docs/v3/STATE.md` or any protected path.
+- No modification of the terminal-runtime contract, the canonical-state contract or any protected path.
 
 ## Completion gate
 

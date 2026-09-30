@@ -8,7 +8,49 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-13 — Configuration architecture and operator control
 
-Run this as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Configuration is hierarchical and schema-driven: one versioned schema drives file, interactive CLI and transport editors. The resolution order is built-in defaults, edition preset, installation/authority-domain config, project config, parent-goal config, task override, then an explicit ephemeral operator override. The most specific valid value wins; child scopes may narrow, but widening authority, privacy exposure, credentials, network, spending or publication requires an explicit acknowledged operation at that scope.
+- Merge operators: preferences merge by keyed override; hard authority, egress and budget ceilings intersect; plugin sets merge by stable identifier with conflict rejection; credentials require explicit authority and cannot be selected by a generic most-specific-wins rule. Effective value plus provenance (requested value, effective value, source scope/preset, merge operator, reason, application boundary, blocked status) is computed with zero model tokens.
+- Field lifecycle classes are `goal-frozen` (snapshotted into GoalSpec, changed only by amendment), `checkpoint-applied`, `live` and `restart-required`. An edit carries schema version, scope/id, expected current version/digest, canonical before/after representations, principal, authority receipt, lifecycle and an idempotent command id; stale-version edits fail rather than using last-write-wins.
+- Editions are `core`, `standard`, `remote`, `full` and `custom`. Installing `full` never enables maximum `sovereign` authority; `sovereign` is a separately enabled capability preset whose self-grant must be an attributable, schema-checked action. `Full Access` is a capability vector, not an ambient boolean.
+- PAUSE direction: `checkpoint` is the selected future product default, with `interrupt`, `drain` and emergency stop as explicit alternatives; current immediate halt remains operative until a constitutional amendment is applied.
+- Candidate schema techniques (none selected as final): JSON Schema 2020-12 for structural validation, RFC 8785 canonical JSON for a digest/signature representation, and TOML 1.0 or YAML as the human syntax only when round-trip, duplicate-key, type and normalization fixtures prove a deterministic compiled canonical form.
+- Evidence discipline: configuration is never permission to weaken silent integrity, authority, privacy or verification invariants; unknown fields and invalid combinations fail before any side effect.
 
 ## Purpose
 
@@ -16,16 +58,11 @@ Decide whether one typed schema can make deep customization predictable and safe
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This prompt must not change provider, model or authentication configuration. Configuration is never permission to weaken silent integrity, authority, privacy or verification invariants.
+The authority, scope, privacy and evidence-discipline constraints for this lane are restated in `## Baked context` above and govern this work. This prompt authorizes a report only: no runtime, provider, model, authentication, configuration, spending, deployment, publication or merge action. Configuration is never permission to weaken silent integrity, authority, privacy or verification invariants. Keep public/synthetic briefs free of private project content, transcripts, local paths, credentials or account/infrastructure identifiers.
 
 ## Inputs to read
 
-- `docs/v3/RESEARCH-AGENDA.md` (lane R15)
-- `docs/v3/CLI.md`
-- `docs/v3/PLUGINS-AND-EDITIONS.md`
-- `docs/v3/EXECUTION-FABRIC.md`
-- `docs/v3/TELEMETRY.md`
-- `docs/v3/foundation-research/mark2-research/mark3-comparison/architectures.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

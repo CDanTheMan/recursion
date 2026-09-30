@@ -8,7 +8,51 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-22 — Formal model and conformance vectors
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3's privileged kernel exposes four pure functions: `decode(bytes, schema_epoch) -> typed command | typed refusal`; `admit(immutable_state, expected_state_digest, command, authority/policy fixtures) -> accepted event batch | typed refusal`; `reduce(state, ordered_event) -> state`; and `derive_work_packet(state, admitted_task_id) -> immutable packet | typed refusal`, with no filesystem, network, process, provider, terminal, plugin, credential or wall-clock access.
+- `OR-018` ratifies Option 2: a native deterministic contract/event kernel with typed adapters around replaceable execution loops. Option 2 selects the kernel boundary, not an implementation or a language.
+- `E-FHAR2-101` is the formal-kernel-model experiment: the smallest finite transition system that can falsify the command/event/lease/PAUSE/effect/replay contract before code, with one canonical aggregate, explicit bounds, guard-removal mutants and a counterexample receipt.
+- `E-FHAR2-102` is the implementation-neutral kernel-API and language experiment; `WP-FHAR2-101` is the formal transition-system packet and `WP-FHAR2-102` is the neutral kernel-API packet. All remain unrun pre-code prerequisites.
+- The required invariants include `TypeOK`, `ChainIntegrity`, `AtomicAppend`, `CommandIdempotence`, `AuthorityScope`, `LeaseFence`, `AmendmentFence`, `PauseSafety`, `RetrySafety`, `CancelNoResurrection`, `EffectSafety`, `VerifierSafety`, `ReplayDeterminism`, `ReplayFailClosed`, `ProjectionParity`, `FlowBound` and `NoBlindEffectReplay`.
+- `FMC-002`/`FMC-003` are prior finite calibration results: separate concrete models each reached 444,834 states and 2,644,215 transitions with empty frontiers and rejected 22 guard mutants. `FRI-003` reports logical Stop remaining enabled across finite queues and recovery phases under named weak fairness, with 32,500-component families.
+- A passing finite model does not prove the unbounded model, refinement to code, OS containment or external-effect truth, and state-space explosion can hide an omitted dimension. `OR-019`/`OR-020`/`OR-036` are accepted Owner directions that this lane must not reopen; the constitutional amendment proposal is not operative.
+- A model is a design artifact: it neither proves the unbounded system nor refines to code, and no result here authorizes construction.
+- **UNRESOLVED, Owner-owned:** the construction language, storage engine, broker transport and renderer are unselected, and the kernel API must not be frozen beyond the four closed functions without naming a forcing invariant.
 
 ## Purpose
 
@@ -16,27 +60,11 @@ Decide the exact finite transition system, invariant set, guard-removal mutant c
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane must not select a language, storage engine, broker transport or renderer; `OR-018` selects the kernel boundary, not an implementation. Do not reopen `OR-018`/`OR-019`/`OR-020` or `OR-036`, and do not treat the amendment proposal as operative. A finite model is a design artifact: it neither proves the unbounded system nor refines to code, and no result here authorizes construction.
+The authority, scope and privacy constraints that govern this lane are restated in `## Baked context`; treat them as the operative limits. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane must not select a language, storage engine, broker transport or renderer; `OR-018` selects the kernel boundary, not an implementation. Do not reopen `OR-018`/`OR-019`/`OR-020` or `OR-036`, and do not treat the amendment proposal as operative. A finite model is a design artifact: it neither proves the unbounded system nor refines to code, and no result here authorizes construction.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/CONSTRUCTION-RUNBOOK.md`
-- `docs/v3/ROADMAP.md`
-- `docs/v3/STATE.md`
-- `docs/v3/ARCHITECTURE.md`
-- `docs/v3/AUTONOMOUS-PLANNING.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/ACCEPTANCE.md`
-- `docs/v3/DECISION-REGISTER.md`
-- `docs/v3/CONSTITUTIONAL-AMENDMENT-PROPOSAL.md`
-- `docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md`
-- `docs/v3/CLAIM-LEDGER.md`
-- `docs/v3/construction/formal-comparison-20260907/handoff.md`
-- `docs/v3/foundation-research/platform-round/architecture-roadmap.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

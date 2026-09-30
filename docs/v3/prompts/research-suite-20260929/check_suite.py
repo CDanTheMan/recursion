@@ -19,6 +19,7 @@ SUITE = Path(__file__).resolve().parent
 
 REQUIRED_HEADINGS = [
     "## Purpose",
+    "## Baked context",
     "## Authority and boundaries",
     "## Inputs to read",
     "## Research questions",

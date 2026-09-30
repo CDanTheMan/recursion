@@ -8,30 +8,63 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-32 — Human-in-the-loop approvals, forwarding, and consultation
 
-This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run it as a public/synthetic research lane and include no private conversation content.
+This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. It is a public/synthetic research lane and includes no private conversation content.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 is a provider-neutral agent platform whose owner-facing surfaces are an interactive detachable CLI (canonical local configuration/control surface), optional Telegram (an interactive transport for conversation, commands and monitoring), and a read-only Observer Interface. No graphical client is required for v3. Terminals attach/detach, closing a terminal does not end work, and the daemon/process broker owns actors and process trees.
+- The accepted interaction contract requires ten terminal controls, three Stop modes and preserved forks. The three Stop modes are Aggressive (forcefully interrupts the selected agent without waiting for its current operation), Full (includes subagents, shells and monitors), and Lazy (waits for an observable current-operation boundary). A preserved fork keeps the original unfinished work untouched, the derived version separate, and the parent allowance not duplicated.
+- Direct Owner-to-ARM conversation is accepted: each active ARM may expose a dedicated addressable topic and the owner may talk to it without relaying every message through the Head. An accepted direct instruction becomes an attributable event under the ARM's existing GoalSpec and cannot silently create an unrelated goal or widen privacy, spending, credentials, publication or deployment authority. Head remains aware through canonical events.
+- Consultation envelope (accepted direction): a consultation binds request/causation/correlation, requester and recipient logical identities and leases, goal/task version, permitted context/evidence revisions, response schema, expiry, depth/cycle limit, route/session/node and parent reservation. Durable states distinguish requested, accepted/rejected, delivered, answered/declined/blocked, and adopted/expired; effect settlement is a separate state.
+- Advice versus adoption: only the current authorized lease holder may propose or accept an authoritative transition, and a changed lease can make a delayed answer ineligible for adoption while preserving it as attributable evidence. Owner answers remain distinct from advice and editorial synthesis. OR-037 is the recorded Owner decision that retains Owner-only actual GoalSpec amendments with substantial authorized routine delegation; a communication or a peer recommendation is not Owner approval.
+- OR-038 is the recorded Owner decision requiring a questionnaire assistant to consult the Head and bring clarifications back while the Owner observes who requested, replied and adopted, and can participate, redirect or stop the exchange. OR-039 is the recorded Owner decision making configuration, compatibility and whole-system optimization central while preserving required communication, delegation and interaction; neither is reopened here.
+- Notification, forwarding and truthful views: owner-facing notifications are projections over the same actor/event model. Presentation may coalesce only after durable append and must not delay a canonical control or PAUSE event; a revoked, replaced or unavailable transport affects one capability, not actor identity or canonical state. Owner views must distinguish engine activity from canonical acceptance, show provider reasoning only where returned, label opaque state and counters honestly, and never reconstruct hidden reasoning. A host-generated permission reply records its actual principal and must not imply human observation.
+- Durability and ordering: deferred questions and waiters must survive crash/reconnect and must not target a replacement question or resurrect a stale one. A status question does not cancel an assignment; a queued follow-up is never confused with a steer into the current turn. Stale turn/lease answers and inputs receive typed conflicts, and a slow or absent view cannot block Stop, canonical append or recovery.
+- Research constraints: this is a public/synthetic lane and includes no private conversation content, transcripts, local paths or credentials. It performs no runtime/transport/terminal/daemon/protocol implementation and selects no topology, transport or protocol as a product decision. It must not reopen OR-037, OR-038, OR-039 or the accepted interaction boundary; must not make provider/model/Telegram/paid-broadcast calls or run a live trial; and must not treat an acknowledgment, a protocol method name or a host-generated reply as human approval.
 
 ## Purpose
 
-Decide the mechanisms by which a human stays meaningfully in the loop for approvals, steering and consultation, and how those mechanisms behave when work is unattended, remote or resumed. This is blocking because the accepted v3 interaction contract requires the ten terminal controls, three Stop modes, preserved forks, direct Owner-to-ARM conversation and a durable consultation envelope, and because an approval mechanism that merely appears to mediate an effect is a safety failure. The research must map concrete mechanisms onto the boundaries in `docs/v3/INTERACTION-SURFACES.md`, `docs/v3/EXECUTIVES.md` and `docs/v3/TERMINAL-RUNTIME.md` without changing them.
+Decide the mechanisms by which a human stays meaningfully in the loop for approvals, steering and consultation, and how those mechanisms behave when work is unattended, remote or resumed. This is blocking because the accepted v3 interaction contract requires the ten terminal controls, three Stop modes, preserved forks, direct Owner-to-ARM conversation and a durable consultation envelope, and because an approval mechanism that merely appears to mediate an effect is a safety failure. The research must map concrete mechanisms onto the accepted interaction, executive and terminal-runtime boundaries without changing them.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed reconciliation, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions (for example OR-037, OR-038, OR-039) or the accepted interaction boundary, and do not select a topology, transport or protocol as a product decision.
+The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed reconciliation, never edit it. Public or synthetic briefs only — never private conversation content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions (for example OR-037, OR-038, OR-039) or the accepted interaction boundary, and do not select a topology, transport or protocol as a product decision.
 
 ## Inputs to read
 
-- `docs/v3/INTERACTION-SURFACES.md` (accepted boundary)
-- `docs/v3/EXECUTIVES.md`
-- `docs/v3/TERMINAL-RUNTIME.md`
-- `docs/v3/CLI.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/CONTEXT.md`
-- `docs/v3/PLANNING.md`
-- `docs/v3/PRODUCT.md`
-- `docs/v3/START-HERE.md`
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
@@ -85,7 +118,7 @@ Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` co
 
 - No runtime, transport, terminal, daemon or protocol implementation.
 - No language, store, framework, topology or transport selection as a product decision.
-- No reopening of OR-037, OR-038, OR-039 or the accepted `INTERACTION-SURFACES.md` boundary.
+- No reopening of OR-037, OR-038, OR-039 or the accepted interaction boundary.
 - No private conversation content, transcripts, local paths or credentials in any public packet.
 - No provider, model, Telegram or paid-broadcast calls, and no live trial executed.
 - No treating an acknowledgment, a protocol method name or a host-generated reply as human approval.

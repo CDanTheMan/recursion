@@ -8,31 +8,63 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-28 — Post-M1 construction plugin and route fabric
 
-This is a bounded construction handoff, not a public Deep Research brief. It is inert until Lucas explicitly invokes it in a new session; creating, reading or listing it launches nothing and authorizes no provider call, write, effect, spend or configuration change. It prepares the exact packet that would build `docs/v3/ROADMAP.md` Milestone 3.
+This is a bounded construction handoff, not a public Deep Research brief. It is inert until Lucas explicitly invokes it in a new session; creating, reading or listing it launches nothing and authorizes no provider call, write, effect, spend or configuration change. This handoff is self-contained context for a repository-execution task; it is not a Deep Research session. It prepares the exact packet that would build the accepted Milestone 3 — plugin kernel and route fabric.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 is a provider-neutral agent platform with one small privileged kernel and lazy capability plugins. The kernel owns identity and authority verification, GoalSpec/Owner-intent integrity, event ordering and canonical state writes, parent/child budget inheritance, executive and worker leases, PAUSE and revocation, evidence/provenance admission, the publication boundary and plugin capability enforcement.
+- Capability plugins may provide native/external agent engines, providers and model catalogs, capacity telemetry, routing heuristics, context sources and repository indexes, compaction strategies, gates and verifiers, node transports, sandboxes and permission mappings, notifications/observers/UIs/editors, scholarly discovery, artifact stores and optional telemetry exporters. One codebase produces versioned release manifests (`core`, `standard`, `remote`, `full`, `custom`); a `full` installation does not imply maximum `sovereign` authority.
+- Manifest-first capability graph: each plugin manifest declares plugin and protocol version, full artifact digest and transitive dependency-lock digest, provided and required capabilities, exclusive resources and conflicts, a configuration schema fragment, durable and ephemeral event subscriptions, isolation mode, filesystem/network/credential/model access, a CPU/memory/disk/concurrency envelope, lifecycle hooks and health probes, and provenance/license/integrity/update-source. Resolution produces a cached graph and a complete rejection explanation; cycles, ownership conflicts, ambiguous providers and missing dependencies fail before autonomous work starts, and manifest resolution and policy checks occur before any code import or installation.
+- Plugin lifecycle receipts are discovered -> verified -> admitted -> staged -> active, with quarantined/rejected branches and drain-and-fence -> retired/replaced; reload is a fenced transition that advances an epoch, so old WorkPackets, leases and subscriptions fail stale and ambiguous external effects enter reconciliation. A disabled plugin performs no code execution, import or installation; credential access; network call; subprocess, thread, timer or watcher; background callback; context/tool enumeration; model turn; quota reservation/debit; spend; or unbounded event subscription. Trust tiers are T0-kernel, T1-signed-built-in, T2-signed-isolated-third-party, T3-untrusted-view and T4-external-engine/provider; a tier is an isolation and review requirement, never an authority grant.
+- Event bus: plugins coordinate through typed kernel events, not direct plugin-to-plugin calls. Durable lineage events are ordered, authenticated, replayable and schema-migrated; ephemeral operational events (progress ticks, streaming deltas, health samples, UI presence) are bounded, backpressured, sampled and disposable. Plugins receive only the event types and fields permitted by their manifest and project classification, and field values, identifiers, payload sizes, timing and subscription patterns are part of the disclosure analysis. One faulty plugin cannot block the durable writer indefinitely: circuit breakers, bounded queues, timeouts, restart budgets, quarantine and degraded modes keep the kernel, state writer, PAUSE and owner CLI usable.
+- v2 adapter compatibility preserves the four inspectable incompatibility responses — state_incompatibility, recommend_combinations, no_action, and notify_and_recommend — each carrying a marker with requested capability, adapter/version, missing requirement, translation loss and effective config. A request reaching an incompatible route records `status=incompatible, attempted=false, effect=none` (no execution attempted, no import/process/auth/network/quota/spend). A semantic loss map covers tools, resources, prompts/skills, hooks, authentication, UI, memory, dependencies and lifecycle. A failure after an admitted effect instead reports failed/cancelled/uncertain and cannot reuse the no-effect status.
+- Route resolution: a route is an eligible combination of engine, provider, model, capacity pool, credential reference and execution mode. Independent declarations (task requirements, executive policy, model capability, engine/harness capability, provider and transport, capacity pool and billing basis, credential reference, host/node capability, sandbox and network profile, project privacy and publication policy) resolve into one immutable route. Routing plugins may only score or reorder routes the kernel has already found eligible; the kernel revalidates every proposed route immediately before launch and rejects any authority, privacy, billing or capability expansion.
+- Capacity pools and billing boundary: a model-aware, account-aware capacity pool tracks billing basis (subscription, metered, local, unknown), the models and reasoning modes actually exposed, concurrent-session and rate-limit observations, reset windows and uncertainty bounds, recent health/throttle/refusal/outage signals, observable cache evidence, reservations and aggregate parent-goal consumption, privacy/training constraints, and credential-reference status without storing credentials. Opaque flat subscriptions use confidence-aware shadow prices and must never be converted to fictional dollar prices; metered pools use real configured prices with hard budget authority. Switching from a subscription/OAuth route to a metered API route is a billing-authority transition, not ordinary failover, and requires existing parent-goal authorization.
+- Frozen prior slices and construction nature: M1B froze the inert route, plugin, process and broker contracts; M1A and M1C are likewise merged inert and must not be restarted, rebuilt or edited. This is a construction handoff requiring repository execution (isolated worktree, branch, commits, machine-checkable gates) and independent exact-candidate verification, not a research lane. Prohibited: provider launch, plugin installation/import/activation, credential storage/logging/retrieval, a billing-authority transition or metered fallback, product language/store/framework/sandbox selection, push/publication/merge, protected-path edits, and reopening recorded Owner decisions OR-021 through OR-039.
 
 ## Purpose
 
-Specify the first bounded construction packet for the plugin kernel and route fabric: manifest-first capability graph, trusted built-in registry, bounded third-party plugin lifecycle, typed event bus, v2 adapter compatibility, route resolver, model-aware capacity pools, billing boundary and credential references. This is blocking because Milestone 3's gate cannot be stated or falsified until the inert contracts M1B froze are projected into a machine-checkable construction packet with a zero-cost disabled path and refuse-before-launch behavior.
+Specify the first bounded construction packet for the plugin kernel and route fabric: manifest-first capability graph, trusted built-in registry, bounded third-party plugin lifecycle, typed event bus, v2 adapter compatibility, route resolver, model-aware capacity pools, billing boundary and credential references. This is blocking because the Milestone 3 gate cannot be stated or falsified until the inert contracts M1B froze are projected into a machine-checkable construction packet with a zero-cost disabled path and refuse-before-launch behavior.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. M1B already froze the inert route, plugin, process and broker contracts; do not restart, rebuild or edit it, and treat any required extension as a separately specified bridge. M1A and M1C are likewise merged inert and must not be reopened. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication, push or merge is authorized. Do not select a product language, store, framework or plugin-sandbox implementation. Do not reopen recorded Owner decisions (OR-021 through OR-039).
+The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed amendments, never edit it. M1B already froze the inert route, plugin, process and broker contracts; do not restart, rebuild or edit it, and treat any required extension as a separately specified bridge. M1A and M1C are likewise merged inert and must not be reopened. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication, push or merge is authorized. Do not select a product language, store, framework or plugin-sandbox implementation. Do not reopen recorded Owner decisions (OR-021 through OR-039). This is a construction task, not a public Deep Research session: it requires repository execution (isolated worktree, branch, commits) and independent exact-candidate verification. Public Deep Research receives only public or synthetic briefs; this construction packet may reference repository paths but must never export private content, transcripts, credentials or account identifiers.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/PLUGINS-AND-EDITIONS.md`
-- `docs/v3/EXECUTION-FABRIC.md`
-- `docs/v3/ROUTE-CAPABILITIES.md`
-- `docs/v3/ROADMAP.md`
-- `docs/v3/CONSTRUCTION-RUNBOOK.md`
-- `docs/v3/M1B-EXECUTION-CONTRACTS.md`
-- `docs/v3/M1B-WIRE-PROFILE.md`
-- `docs/v3/M1B-FIXTURE-ORACLES.md`
-- `docs/v3/prompts/research-suite-20260929/README.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

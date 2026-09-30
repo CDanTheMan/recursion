@@ -8,31 +8,63 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-30 — Multi-project supervision state and durable memory
 
-This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run it as a public/synthetic research lane only; it covers supervision state and durable memory, not market or alpha research.
+This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. It covers supervision state and durable memory, not market or alpha research.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 is a provider-neutral agent platform whose runtime keeps durable, goal-scoped state for one operator plus unattended agents. Persistent, goal-scoped assistants are organized as Head -> ARM executives -> bounded workers, with no separate AI "ARM manager"; workers are bounded executors and an implementer's own PASS is never acceptance.
+- The supervision problem: one operator plus unattended agents must keep durable, diffable state for 4+ concurrent projects so work resumes across context loss and blocked, stale and waiting-for-decision conditions are visible rather than inferred. A convention that becomes a second source of truth silently stales and reads exactly like working state.
+- Accepted transport: git is the transport and a `state/` tree is the current durable operating-state location. D-017 is the recorded decision that the repository uses a git-based `state/` tree for durable, diffable status. The recommendation must be additive to that layout rather than replace it, and git-derived fields (fetch result, HEAD, dirty tree, branch) are never hand-copied.
+- Existing disciplines to reconcile with: the repository keeps a D-entry decision log with, by rule, every decision carrying a falsifier and a monthly first-of-month review cadence; the state tree also carries a morning-brief discipline. The owner's kill criteria and review throughput live in the anchor/scope document. The recommendation must not replace the decision log or the morning-brief discipline.
+- Ambient architecture: the Head compiles strategic GoalSpecs and monitors outcomes; an ARM owns a goal-scoped plan/DAG and delegates bounded work; workers execute one bounded WorkPacket and do not reinterpret the parent goal. Ordinary runtime work requires no continuous model inference; deterministic process, deadline, quota and receipt checks provide continuous awareness, and model supervision is advisory and responds to actionable events.
+- Conditions to represent: blocked, stale and waiting-for-decision must be distinct and diffable. Staleness signals (age, last-fetch commit, heartbeat age, missing artifact checksum) must classify a project, and each signal's false-positive source must be named. A "waiting for a decision" state must correlate to the exact owner question and next action so the same escalation is not appended repeatedly.
+- Guardrails: unattended loops need guardrails against runaway loops, retry storms, context bloat and duplicate side effects. Scheduling options to compare are cron/batch, event-driven, and persistent daemon, judged on state persistence, handoff, crash recovery and cost for unattended overnight operation. Supervisor/worker escalation must be structured even when the supervisor itself is the degraded component.
+- Memory context: long-horizon memory architectures include retrieval-augmented, summary hierarchies, vector or graph stores, and file-based memory; each has measured failure modes (drift, contradicted facts, lost provenance, unbounded growth). Retrieval and indexing for 4+ project histories must avoid cross-project leakage and context blowup, and a wrong retrieval must be detected rather than trusted. Published memory evaluations report errors on knowledge updates, temporal recall and abstention.
+- Research constraints: this is a public/synthetic lane and receives no private project content, transcripts, local paths or credentials. It must not reopen accepted Owner decisions, the anchor scope, git-as-transport or PAUSE behavior; must not select a language, store or framework; must not perform runtime/daemon/scheduler/database implementation; must not run provider/model/route calls or a benchmark; and must not present an invented schema, threshold or numeric budget as a requirement. Market, investment and alpha research are out of scope.
 
 ## Purpose
 
-Decide the file and directory convention by which one operator plus unattended agents keep durable, diffable state for 4+ concurrent projects, so work resumes across context loss and blocked, stale and waiting-for-decision conditions are visible rather than inferred. This is blocking because Recursion already committed to git-as-transport and a `state/` tree (`CONTROL_PLANE.md`, D-017); a convention that becomes a second source of truth silently stales and reads exactly like working state. The research must reconcile with, not replace, that layout and the unattended-loop requirements already established for it.
+Decide the file and directory convention by which one operator plus unattended agents keep durable, diffable state for 4+ concurrent projects, so work resumes across context loss and blocked, stale and waiting-for-decision conditions are visible rather than inferred. This is blocking because Recursion already committed to git-as-transport and a `state/` tree (recorded decision D-017); a convention that becomes a second source of truth silently stales and reads exactly like working state. The research must reconcile with, not replace, that layout and the unattended-loop requirements already established for it.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed reconciliation, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions or ANCHOR scope, and do not select a language, store or framework. Git-as-transport and the live-clone model are fixed context to reconcile against, not options to reopen.
+The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed reconciliation, never edit it. Public or synthetic briefs only — never private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions or anchor scope, and do not select a language, store or framework. Git-as-transport and the live-clone model are fixed context to reconcile against, not options to reopen.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md` (git-as-transport, PAUSE, invariants)
-- `ANCHOR.md` (capacity and kill criteria)
-- `AGENTS.md` (operating rules)
-- `docs/v3/START-HERE.md`
-- `docs/v3/STATE.md`
-- `docs/v3/CONTEXT.md`
-- `docs/v3/TERMINAL-RUNTIME.md`
-- `docs/v3/CLI.md`
-- `docs/v3/EXECUTIVES.md`
-- `state/DECISIONS.md`
-- `state/INBOX.md`
-- `state/goals/goal-recursion-v2-execution-fabric.md`
-- `state/tasks/v3-orientation-20260913.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
@@ -90,11 +122,11 @@ Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` co
 - No market, investment or alpha research.
 - No runtime, daemon, scheduler, database or storage implementation.
 - No language, store or framework selection.
-- No reopening of git-as-transport, PAUSE behavior or ANCHOR scope.
+- No reopening of git-as-transport, PAUSE behavior or anchor scope.
 - No private project content, transcripts, local paths or credentials in any public packet.
 - No provider, model or route calls, and no benchmark executed.
 - No invented schema, threshold or numeric budget presented as a requirement.
-- No replacement of `state/DECISIONS.md` or the morning-brief discipline.
+- No replacement of the existing D-entry decision log or the morning-brief discipline.
 
 ## Completion gate
 

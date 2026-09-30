@@ -8,7 +8,50 @@ invocation: only after Lucas explicitly invokes this file in a new session
 
 # DS-15 — ARM conversations and multi-agent rooms
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- `#general` is the conceptual direct conversation with the Recursion Head (macro planning, goal scoping, ARM creation, portfolio monitoring and escalation); the name is a presentation default, not a hard-coded protocol identifier. An ARM is a goal-scoped delegated executive with an addressable dedicated conversation, and the Owner may speak to it directly without relaying every message through `#general`.
+- Head retains ownership of the overall goal, room membership, authority envelope, conflict resolution, ARM lifecycle and strategic model escalation. A named ARM may hold a bounded, expiring coordination lease for one workflow step. No separate AI "ARM manager" and no new executive tier exists; a shared-room `supervisor` role is not one.
+- The accepted coordination lease binds room, workflow step, named holder, participating actor ids, allowed verbs, budget slice, issue/expiry/revocation epochs and a fencing token. It cannot add members, alter GoalSpecs, transfer itself or settle cross-goal disputes, and transcript arrival order is never the tie-breaker.
+- Every visible message identifies the speaking logical actor, selected route and GoalSpec. Addressing routes a message but grants no authority; a direct instruction becomes an attributable event under the ARM's existing GoalSpec and cannot silently widen privacy, spending, credentials, publication or deployment authority.
+- Telegram is an optional interactive transport, not canonical state. Accepted transport facts: the primary Bot API exposes forum-topic `message_thread_id` and separate new/edited-message updates; its `update_id` changes after a week without updates; incoming updates are retained no longer than 24 hours; long polling and webhooks are mutually exclusive. Free guidance is roughly one message/second in one chat, 20/minute in a group and about 30/second for bulk broadcasts, with paid broadcasts a separate spending capability.
+- The referenced public pattern is the official Grok Bot documentation, which defines a Bot as one persistent named agent and says multiple Bots can run in parallel on one user-scoped computer, message each other, share threads or group chats and pass ownership. That is evidence for an interaction pattern, not evidence that shared-computer credentials, transcript-order authority or an unbounded handoff is safe for Recursion.
+- Head monitoring and Owner digests derive from canonical state, not transcript scraping. Mute, archive, topic deletion, transport outage or bot-token replacement do not delete the ARM; a compromised or removed transport token affects one capability, not actor identity or canonical state.
+- Evidence discipline: a route listing, model response or protocol method name is never evidence of support, and transport limits are dated observations rather than guarantees.
 
 ## Purpose
 
@@ -16,20 +59,15 @@ Decide how `#general`, dedicated ARM topics and shared multi-ARM rooms map onto 
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This is lane R2 public/synthetic research; `docs/v3/INTERACTION-SURFACES.md` is the accepted product boundary and must not be reopened.
+The authority, scope, privacy and evidence-discipline constraints for this lane are restated in `## Baked context` above and govern this work. This prompt authorizes a report only: no runtime, provider, authentication, configuration, spending, deployment, publication or merge action. The accepted interaction-surfaces boundary (interactive CLI as the canonical local surface, Telegram optional, no graphical frontend required for v3, direct owner-to-ARM conversation and bounded coordination leases) is fixed and must not be reopened. Keep public/synthetic briefs free of private project content, transcripts, local paths, credentials or account/infrastructure identifiers.
 
 ## Inputs to read
 
-- `docs/v3/INTERACTION-SURFACES.md` (accepted boundary)
-- `docs/v3/RESEARCH-AGENDA.md` (lane R2)
-- `docs/v3/EXECUTIVES.md`
-- `docs/v3/PLANNING.md`
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
-1. Identify the exact SpaceXAI Grok Bot documentation and repository with pinned retrieval dates before any pattern is cited; what does published behavior actually establish?
+1. Identify the exact official Grok Bot public documentation with pinned retrieval dates before any pattern is cited; what does published behavior actually establish?
 2. Which official Grok Bot interaction patterns remain usable after rejecting shared ambient credentials, transcript-order authority and a distinct Chief-of-Staff tier?
 3. How do durable actors (Head, ARM, worker, verifier, persistent assistant) map onto `#general`, per-ARM topics and shared rooms without adding an AI ARM Manager?
 4. Does one bot identity with logical-actor routing, one bot per ARM, or a hybrid give better isolation, credential scope, usability and operational resilience?
@@ -50,7 +88,7 @@ A source-pinned claim table with classification (fact, inference, unverified), c
 ## Non-goals
 
 - Do not introduce or recommend an AI ARM Manager or a new executive tier.
-- Do not reopen accepted Owner decisions or the `INTERACTION-SURFACES.md` boundary.
+- Do not reopen accepted Owner decisions or the accepted interaction-surfaces boundary.
 - Do not select a default topology, transport or protocol as a product decision.
 - Do not request or include private project content, transcripts, credentials or local paths.
 - Do not propose runtime implementation, provider/auth changes, spending or deployment.
