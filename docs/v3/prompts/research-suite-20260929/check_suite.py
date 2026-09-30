@@ -47,6 +47,8 @@ SECRET_PATTERNS = [
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 FILE_RE = re.compile(r"^DS-(\d{2})-([a-z0-9-]+)\.md$")
 
+SESSION_QUERY_MARK = "Session query \u2014 explicit invocation"
+
 
 def parse_front_matter(text: str):
     if not text.startswith("---"):
@@ -120,6 +122,9 @@ def main() -> int:
         for heading in REQUIRED_HEADINGS:
             if heading not in text:
                 errors.append(f"{rel}: missing heading '{heading}'")
+
+        if SESSION_QUERY_MARK not in text:
+            errors.append(f"{rel}: missing query-invocation line '{SESSION_QUERY_MARK}'")
 
         for pattern in SECRET_PATTERNS:
             for found in pattern.finditer(text):

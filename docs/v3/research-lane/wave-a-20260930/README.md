@@ -30,9 +30,8 @@ independently verified by Recursion). Each synthesis keeps the report's own evid
 ## Wave A completeness
 
 - **Completed:** DS-18, DS-20, DS-21, DS-22.
-- **Missing:** **DS-19 (operating-system platform behavior)** — not in the delivered set.
-  Its Windows/POSIX process, PTY/ConPTY, filesystem and service semantics overlap DS-23 and
-  DS-09; run DS-19 before or alongside those.
+- **DS-19 (operating-system platform behavior)** was not in this batch; it was delivered in
+  the Wave B intake (`../wave-b-20260930/`).
 - `ds-1` is a supporting briefing about the Deep Research capability, not a lane result.
 
 ## Verdict — is Wave B unblocked?

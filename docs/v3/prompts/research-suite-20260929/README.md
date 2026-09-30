@@ -22,6 +22,25 @@ This suite is a **candidate proposal**. It does not create a Hermes task, bind a
 operational policy, or amend the constitution. Before any prompt is used, Hermes/Lucas must
 bind it to a task with a parent goal, allowed paths, budget, route and an independent review.
 
+## Running a session
+
+Paste the whole `DS-*.md` file into the Deep Research **query** box. The file leads with its
+`Session query — explicit invocation` line, so the session receives the brief as its query
+instead of reporting an unspecified query.
+
+If the interface separates a query box from a document/attachment field: put the file's
+`Session query` line in the **query** box and attach the brief. Never leave the query box empty
+and never place the handoff only in the attachment field.
+
+Then confirm the structural gate from the repository root:
+
+```text
+python -X utf8 -B docs/v3/prompts/research-suite-20260929/check_suite.py
+```
+
+A `PASS` line confirms the front matter, required headings, unique ids, README references,
+relative links, secret scan and the per-file query-invocation line.
+
 ## Authority
 
 Each handoff is self-contained: a Deep Research session needs no repository access, because the
