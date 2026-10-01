@@ -21,6 +21,7 @@ decisions, not accepted specifications, and not independently verified.
 | `raw/ds-DS-30-multi-project-memory.md` | DS-30 multi-project supervision state and memory | `synthesis/DS-30-multi-project-memory.md` |
 | `raw/ds-DS-32-hitl-approvals.md` | DS-32 human-in-the-loop approvals, forwarding and consultation | `synthesis/DS-32-hitl-approvals.md` |
 | `raw/ds-DS-33-licensing-ip.md` | DS-33 licensing, distribution, provenance and IP clearance | `synthesis/DS-33-licensing-ip.md` |
+| `raw/ds-DS-34-decision-journaling.md` | DS-34 decision journaling and calibration (Codex route) | `synthesis/DS-34-decision-journaling.md` |
 
 DS-33 is legal-risk research, **not legal advice**; counsel is required before any release
 decision.
@@ -32,17 +33,12 @@ decision.
   in every handoff now also explicitly rejects scoping plans, research plans, methodologies and
   timelines, and requires findings and citations.
 
-## Deferred: DS-34 (rate limit)
+## DS-34 via an alternative route
 
-**DS-34 (decision journaling and calibration)** did not run — the Deep Research rate limit was
-hit. It is recorded as an explicit `unknown` with a named blocker (`deep-research-rate-limit`),
-not as complete. DS-34 is not covered by any other lane. Options to close it:
-
-1. Re-run the same `DS-34-decision-journaling-and-calibration.md` handoff once the limit resets.
-2. Run it on an alternative single-plugin route: a standard model session with web browsing,
-   using the same self-contained brief, then intake the output here.
-3. Narrow it: DS-34 partly overlaps DS-11 (evaluation and measurement discipline), so a smaller,
-   focused query may fit inside the rate limit.
+DS-34 (decision journaling and calibration) could not run on Deep Research within the rate
+limit. It was produced with Codex instead, from the same self-contained brief, extracted from a
+`.docx`, and intaken here. The same labeling and verification caveats apply as for every other
+report (research evidence, not an Owner decision, not independently verified).
 
 ## Prompt adjustment applied
 
@@ -53,7 +49,8 @@ report with findings and citations…". `check_suite.py` still passes.
 
 ## Lanes still needing a run
 
-`DS-15` (re-run) and `DS-34` (deferred — see above).
+`DS-15` (re-run). It returned a scoping plan twice; if a third attempt still plans, split it
+into its five clusters.
 
 ## Gate
 
