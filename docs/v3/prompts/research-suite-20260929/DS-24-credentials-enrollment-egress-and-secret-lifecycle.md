@@ -1,39 +1,73 @@
 ---
 title: DS-24 — Credentials, enrollment, egress and secret lifecycle
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-24 — Credentials, enrollment, egress and secret lifecycle
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 keeps canonical authority, identity and recovery with Recursion: `OR-019` forbids any external account, session or harness from owning or reconstructing canonical identity, and external engines may own only provider sampling/tool/session mechanics.
+- Four route classes stay separate: API-key/BYOK, SDK OAuth, native-binary login and subscription-backed. Authentication, entitlement, distribution permission and provider terms-of-service compliance are separate facts that require pinned sources and are never inferred from a technical interface.
+- The security direction permits a conditioned unmodified-binary route with user-owned native authentication while restricting third-party login/token intermediation, and requires verifying intended distribution and billing before any public support claim.
+- `E-FHAR2-104` is the terminal/process broker contract; `E-FHAR2-105` is the plugin/frontend isolation contract with trust tiers `T0`-`T4`, lifecycle `discovered -> verified -> admitted -> staged -> active`, capability intersection, preserved denials and a zero-cost-disabled rule.
+- The credential boundary hypothesizes `recursiond` as sole credential broker: secrets remain in provider-native auth homes, an OS secret store or a configured vault, never in Git, SQLite, prompts, worktrees, telemetry, context artifacts, plugin manifests or tracked files. Workers receive an opaque account/credential reference plus a minimal temporary environment/home overlay exposing only the selected route.
+- A grant binds issuer and subject, audience/installation, signing-key identity, parent digest, delegation depth, GoalSpec and policy versions, exact capability/effect verbs, project/source/path/branch/host/account/pool/endpoint/privacy scope, resource/spend/rate limits, not-before and expiry, revocation epoch, lease/fencing token, authentication/step-up receipt and opaque credential references; child scope/limits/lifetime/delegation are subsets of the parent.
+- Every admitted project declares data classification and egress policy with `private` and deny-by-default as the base. A local egress broker validates destination and resolved route, project classification and provider data-use policy, exact GoalSpec/network grant, secret-exposure scan, artifact classification and owner authorization; contributor-tier routes capture and classify the exact outbound bytes before launch.
+- Revocation prevents new admission immediately; a disconnected node may finish only its last-valid bounded operation and spool signed evidence, which is revalidated against GoalSpec version, fencing token, lease and PAUSE/revocation state after reconnect. A zero-model preflight is cached against runtime hash, configuration hash, trust-bundle/protocol versions, certificate state and permission snapshot.
+- The privileged kernel is four pure functions with no credential access; `OR-018` ratifies the small deterministic kernel. Required threat tests include stolen node credential, replayed work packet, malicious project configuration widening egress, prompt/tool-output exfiltration, plugin dependency confusion, symlink/reparse/path traversal, stale route after revocation, provider response forging evidence, split-brain leases, disconnected node publishing stale work and public event metadata revealing private membership.
+- **UNRESOLVED, Owner-owned:** the secret-store/vault product, distribution/billing/entitlement policy and the installation maximum/step-up cadence are unselected; no real secret value appears anywhere in this lane.
 
 ## Purpose
 
-Decide the exact credential broker, auth-route separation, egress/classification enforcement, node enrollment and secret-lifecycle contract so an admitted route never widens authority, leaks a secret into model-visible output or a tracked file, or reconstitutes canonical state from a provider session. It is blocking because `E-FHAR2-104`/`105` and `SECURITY.md` list these boundaries as threat-tested requirements, and because `OR-019` forbids any external account, session or harness from owning or recovering canonical identity.
+Decide the exact credential broker, auth-route separation, egress/classification enforcement, node enrollment and secret-lifecycle contract so an admitted route never widens authority, leaks a secret into model-visible output or a tracked file, or reconstitutes canonical state from a provider session. It is blocking because `E-FHAR2-104`/`105` and the security direction list these boundaries as threat-tested requirements, and because `OR-019` forbids any external account, session or harness from owning or recovering canonical identity.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane must not enroll a node, read or write a secret store, contact a provider, or change a permission profile; `recursiond` is a hypothesis, not an implementation authorization. Do not infer universal OAuth permission from a technical interface, and do not decide distribution, billing or entitlement policy — entitlement, distribution and terms-of-service are separate facts that require pinned sources and legal review, not model opinion. Handle no real secret values anywhere in the packet.
+The authority, scope and privacy constraints that govern this lane are restated in `## Baked context`; treat them as the operative limits. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane must not enroll a node, read or write a secret store, contact a provider, or change a permission profile; `recursiond` is a hypothesis, not an implementation authorization. Do not infer universal OAuth permission from a technical interface, and do not decide distribution, billing or entitlement policy — entitlement, distribution and terms-of-service are separate facts that require pinned sources and legal review, not model opinion. Handle no real secret values anywhere in the packet.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/PLUGINS-AND-EDITIONS.md`
-- `docs/v3/EXECUTION-FABRIC.md`
-- `docs/v3/ROUTE-CAPABILITIES.md`
-- `docs/v3/ACCEPTANCE.md`
-- `docs/v3/STATE.md`
-- `docs/v3/CONSTITUTIONAL-AMENDMENT-PROPOSAL.md`
-- `docs/v3/DECISION-REGISTER.md`
-- `docs/v3/foundation-research/compatibility.json`
-- `docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

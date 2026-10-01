@@ -1,14 +1,59 @@
 ---
 title: DS-12 — Context compaction and cache economics
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-12 — Context compaction and cache economics
 
-Run this as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion owns a provider-neutral semantic evidence cache: stable, content-addressed artifacts (goal, repository, decisions, plan, checkpoints, diff, evidence, blockers) that adapters compile into each provider's preferred context shape. This is separate from provider-side prompt/KV caches, which are scoped to a provider, model family, account, endpoint, prefix or session and are not portable across vendors.
+- The Execution Context Capsule is the standard handoff unit: a non-droppable control kernel (logical actor and lineage, exact GoalSpec version, current task and gate, authority/privacy/budget bounds, exact source/candidate identifiers, checkpoint and blockers, output contract) plus configurable context tiers. A compacted epoch is not authoritative unless deterministic validation confirms every active directive, gate, blocker and evidence reference is preserved or rehydratable.
+- One deterministic context governor owns the single authoritative compaction transition for a route epoch. Native and session compactors return candidate artifacts only and cannot advance the authoritative epoch, so provider-native compaction is never the sole copy of Owner intent or execution state.
+- Named compaction policies are `native`, `deterministic-only`, `hybrid`, `aggressive`, `manual` and `off`; no universal default is selected. A `RouteCapabilityDescriptor` is a versioned, maintainer-owned per-route descriptor covering context limits, native compaction, resumable-session semantics, cache observability and controllable fields, stable-prefix constraints, tool-output handling, token-accounting fidelity and discovery evidence/time.
+- Units that must stay separate: provider prompt-cache behavior, Recursion-owned evidence reuse, and subscription debit. A cache hit or saving is asserted only from dated route evidence; unsupported savings claims carry an expiry trigger, and `unknown` is distinct from zero.
+- Accepted direction: no periodic model keepalive; ordinary continuation is event-driven and deterministic health checks are separate. A preference/notification stream may coalesce, but revocation and tightening of identity, credentials, egress, privacy or resources advance a separate monotonic authority fence that cannot be coalesced away.
+- Priming, refresh and retry costs belong in the full workflow cost, and the no-future-work and zero-miss edge cases must fail closed rather than being counted as savings.
+- Evidence discipline: classify claims as source-documented, locally observed, inferred or unverified; provider cache flags or billing rules must not be copied between endpoints or routes without route evidence.
 
 ## Purpose
 
@@ -16,17 +61,11 @@ Decide which lawful, documented cache, session and context controls reduce repea
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This prompt must not change provider, model or authentication configuration. "Cache manipulation" here means only supported prompt, layout, session and provider cache controls plus local evidence reuse; it never means bypassing provider policy or fabricating usage.
+The authority, scope, privacy and evidence-discipline constraints for this lane are restated in `## Baked context` above and govern this work. This prompt authorizes a report only: no runtime, provider, model, authentication, configuration, spending, deployment, publication or merge action. "Cache manipulation" here means only supported prompt, layout, session and provider cache controls plus local evidence reuse; it never means bypassing provider policy or fabricating usage. Keep public/synthetic briefs free of private project content, transcripts, local paths, credentials or account/infrastructure identifiers.
 
 ## Inputs to read
 
-- `docs/v3/RESEARCH-AGENDA.md` (lane R14)
-- `docs/v3/CONTEXT.md`
-- `docs/v3/EXECUTION-FABRIC.md`
-- `docs/v3/ROUTE-CAPABILITIES.md`
-- `docs/v3/TELEMETRY.md`
-- `docs/v3/foundation-research/mark2-research/mark3-comparison/architectures.md`
-- `docs/v3/foundation-research/synthesis.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

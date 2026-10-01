@@ -1,37 +1,72 @@
 ---
 title: DS-26 — Telemetry accounting and honest status
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-26 — Telemetry accounting and honest status
 
-Run as a Deep Research route Lucas explicitly approves, with public-source and repository-reading tools. This file is inert until Lucas invokes it in a new session; creating, reading or listing it launches nothing and authorizes no provider call, write, effect, spend or configuration change.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Telemetry exists to improve verified development and preserve scarce capacity, not to maximize agent activity. Every execution segment carries stable correlation identifiers: `project_id`, `goal_id` plus GoalSpec version, `arm_run_id`, `task_id` and `segment_id`, `route_id` and resolved route digest, the provider-native session identifier when available, and source/checkpoint/candidate/evidence/verifier identifiers. Provider session ids are disposable; Recursion lineage is authoritative.
+- Evidence providers are read-only usage sources: provider and CLI native usage events, official provider usage APIs, harness-specific collectors, local resource monitors and explicitly labeled deterministic token estimators. `ccusage` is an Owner-accepted candidate name for a possible future adapter only; it is not yet source/license reviewed and must be researched before admission. No collector may infer zero use because a CLI omits token counters.
+- Cost classes are distinct: subscription capacity, metered/API spending, inferred quantity and `unavailable` are separate units, and null is not zero. Cached reads and writes must be normalized before summation, and human review minutes and host resource cost are reported separately from inference cost unless an explicit accepted valuation weight exists.
+- Counter semantics: a counter is cumulative or per-request. Cumulative totals must be reconciled so a crash, reset, fork or session rotation neither double-charges nor erases consumption; helper, classifier, compaction and retry calls are counted exactly once at the parent segment; missing or unavailable counters stay `unknown`.
+- The adaptive route scorer may reorder already-approved eligible routes by task class, but it may not add or authenticate a provider, enable metered billing or training, widen permissions or egress, lower required verification, rewrite GoalSpec or modify its own hard policy. Its state is versioned, explainable, resettable and exportable, and shadow/offline evaluation precedes automatic use.
+- Privacy default is local and metadata-minimal: full prompts, raw tool output, source snippets and private artifact content are excluded from metrics tables and external exporters, and aggregation must resist revealing private repository membership.
+- Profiles: `coordinator-small` is the small authority/scheduler/observer class and `interactive workstation` is the heavier development class; both are defined by measured CPU, memory, disk and latency, never by a vendor model.
+- Milestone 8 (adaptive optimization) delivers explainable local routing calibration, quota shadow prices, reservations, adaptive concurrency, cache-domain affinity, resource shedding, telemetry evidence providers and an optional usage reconciler. Its gate is shadow-mode and controlled improvement for at least one declared profile without lowering quality floors or widening authority.
+- Honest status: visible activity is an observation, never percent-complete; absence is never converted into a healthy or complete status; no optimization default is promoted without a baseline, an uncertainty statement and a falsifier. `M1A`/`M1B`/`M1C` are merged contract milestones (planning/replay; route, plugin and process requirements; source, effect and persistence requirements) that make no provider call and launch no process. `OR-021`-`OR-039` are recorded Owner decisions: OR-021-OR-025 establish the standalone v3 architecture, native+upstream execution, the ten CLI controls, the optimization ranking and Windows/Linux placement; OR-026-OR-035 add critical integrations, persistent assistants, Stop/fork and compatibility semantics, continuity and truthful verification reporting, recovery budgets, six update modes, anti-superficial optimization and representative resource limits; OR-036-OR-039 accept the smallest aggregate plus broker refinement, Owner-only GoalSpec amendments with routine delegation, visible assistant-to-Head consultation, and deep whole-system optimization.
 
 ## Purpose
 
-Decide how v3 qualifies telemetry evidence providers, normalizes provider counters, separates cost classes, and renders status without fabrication. This blocks the dashboards, budget reservations, route learning and optimization claims in `docs/v3/ROADMAP.md` Milestone 8 and `docs/v3/TELEMETRY.md`: without a falsifiable accounting contract, a visible activity stream becomes a fabricated percent-complete, and a missing counter becomes a false zero.
+Decide how v3 qualifies telemetry evidence providers, normalizes provider counters, separates cost classes, and renders status without fabrication. This blocks the dashboards, budget reservations, route learning and optimization claims in the adaptive-optimization milestone and the canonical telemetry contract: without a falsifiable accounting contract, a visible activity stream becomes a fabricated percent-complete, and a missing counter becomes a false zero.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs, never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen completed M1A/M1B/M1C contract work or recorded Owner decisions (OR-021 through OR-039), and do not select a product language, store or framework.
+The authority, scope, privacy and evidence-discipline constraints for this lane are restated in `## Baked context` above and govern this work. This prompt authorizes a report only: no runtime, provider, authentication, configuration, spending, deployment, publication or merge action. Do not reopen the completed M1A/M1B/M1C contract work or the recorded Owner decisions OR-021 through OR-039, and do not select a product language, store or framework. Keep public/synthetic briefs free of private project content, transcripts, local paths, credentials or account/infrastructure identifiers.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/TELEMETRY.md`
-- `docs/v3/PERFORMANCE-PLAN.md`
-- `docs/v3/STATE.md`
-- `docs/v3/ROADMAP.md`
-- `docs/v3/EXECUTION-FABRIC.md`
-- `docs/v3/EXECUTIVES.md`
-- `docs/v3/CONTEXT.md`
-- `docs/v3/prompts/research-suite-20260929/README.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
@@ -82,7 +117,7 @@ A source-pinned report containing: a claim table (claim, source, version/date, c
 - No language, store, framework or dashboard-stack selection.
 - No fabricated counter, percent-complete, confidence percentage or quota conversion.
 - No reopening of M1A/M1B/M1C contracts or Owner decisions.
-- No modification of protected paths or `docs/v3/TELEMETRY.md`.
+- No modification of protected paths or the canonical telemetry contract.
 - No private repository content, paths, transcripts or account identifiers in any brief.
 - No optimization default promoted without baseline, uncertainty and falsifier.
 

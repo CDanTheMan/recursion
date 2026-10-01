@@ -1,14 +1,60 @@
 ---
 title: DS-01 — Pause, cancellation, and effect fencing
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-01 — Pause, cancellation, and effect fencing
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- **Focus.** This lane defines the future per-effect-class pause, cancellation and effect-fencing semantics for the pause family plus an independent emergency stop, so the pause schema can be frozen. It is research lane R3 of the Recursion v3 agenda.
+- **Pause modes.** `checkpoint` (selected future ordinary default: admit no new work and let the current bounded operation reach its next mechanically safe checkpoint, then pause), `interrupt` (cancel interruptible work, preserve atomic state, quarantine ambiguous effects), `drain` (admit no new work but let explicitly enumerated in-flight work classes finish), and emergency stop (separate break-glass behavior that blocks new effects immediately and may sacrifice in-flight work).
+- **Effect classes.** The seven classes the questions enumerate are: model turn, local transaction, subprocess, remote/disconnected action, read-only gate, publication, and ambiguous external effect (an effect whose external acceptance cannot be proven).
+- **Accepted direction and non-operative status.** `OR-004` is the Owner ruling that selects `checkpoint` as the future product PAUSE default but keeps it non-operative; the operative PAUSE is immediate halt. `OR-020` authorizes the future policy family and the exact docs-only constitutional amendment, which remains non-operative until applied.
+- **Fencing and precedence.** The future pause uses a monotonically advancing admission epoch. Every action binds command, principal, GoalSpec/grant/policy digests, admission epoch, fencing token, effect class, idempotency key and deadline. Precedence is emergency, revocation, interrupt, then checkpoint. An action admitted before an epoch change but not yet executed is stale and fails closed.
+- **Ambiguity and labels.** An already accepted external effect becomes ambiguous and is reconciled by provider identity/status; it is never blindly retried or described as rolled back. The terminal labels `ambiguous`, `quarantined` and `stale` distinguish unknown, quarantined and superseded work from completed work in owner-facing status.
+- **Adapters versus kernel.** A typed adapter may declare a narrower disposition than the kernel, never a wider one.
+- **Disconnect and reconnect.** A disconnected node may finish only the local bounded operation explicitly permitted by its last valid grant and spool signed evidence. After reconnection, the controller revalidates the GoalSpec version, fencing token, lease and PAUSE/revocation state before admitting that evidence or any derived action; it cannot widen scope or publish while disconnected.
+- **Boundary.** This lane is analysis only: it never decides the PAUSE default, applies the amendment, or treats the future modes as operative, and it does not select a process-containment technology, language or runtime implementation.
 
 ## Purpose
 
@@ -16,21 +62,11 @@ This research informs the exact per-effect-class semantics of the future `checkp
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. In this lane the operative `CONTROL_PLANE.md` PAUSE is immediate halt; `checkpoint` is a selected future default that stays non-operative under `OR-020` in `docs/v3/DECISION-REGISTER.md` until the exact `docs/v3/CONSTITUTIONAL-AMENDMENT-PROPOSAL.md` is applied.
+The authority, scope and privacy constraints are restated in `## Baked context`; read nothing else in preparation. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. In this lane the operative PAUSE is immediate halt; `checkpoint` is a selected future default that stays non-operative under `OR-020` until the exact amendment is applied.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/RESEARCH-AGENDA.md` (lane R3)
-- `docs/v3/EXECUTIVES.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/STATE.md`
-- `docs/v3/ACCEPTANCE.md`
-- `docs/v3/DECISION-REGISTER.md`
-- `docs/v3/CONSTITUTIONAL-AMENDMENT-PROPOSAL.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

@@ -1,36 +1,72 @@
 ---
 title: DS-33 — Licensing, distribution, provenance, and IP clearance
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-33 — Licensing, distribution, provenance, and IP clearance
 
-This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run it as a public/synthetic research lane. The report is research input, not legal advice, and must say so.
+This is a self-contained Deep Research handoff. Supplying this document is the invocation; it makes no repository or provider call on its own. Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. It is a public/synthetic research lane. The report is research input, not legal advice, and must say so.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- Recursion v3 is a provider-neutral agent platform that explicitly reuses and adapts external harnesses and pinned libraries, and supports upstream engine adapters and plugin composition. Provider adapters, engine adapters and Recursion plugins have different ownership and billing boundaries.
+- Distribution model: one codebase produces versioned release manifests (`core`, `standard`, `remote`, `full`, `custom`). A built-in registry plus filesystem/Git/package sources are each pinned to an immutable digest before activation, with a dependency lockfile, reproducible offline installation and a tested rollback. Installation should not download or start disabled heavy plugins. There is no mandatory central marketplace or remote vendor kill switch.
+- Trust tiers are T0-kernel, T1-signed-built-in, T2-signed-isolated-third-party, T3-untrusted-view and T4-external-engine/provider; a tier is an isolation and review requirement, never an authority grant. Signed first-party releases and maintainer-approved plugins are rooted in the installation trust root, while unsigned local plugins remain installable after an explicit warning, exact digest pin and display of all requested authority. Signatures, SBOMs, transparency logs and provenance establish publisher/key role, artifact identity, traceability and freshness only within their threat models; they do not prove benign runtime behavior, fit for a project, quota entitlement or spending authority.
+- The release contract this lane must clear is E-FHAR2-108: it requires file-level provenance and license notices, and it explicitly does not treat public visibility as clearance. A clean scan, a valid signature or public reachability is not legal clearance.
+- License-obligation surface: upstream harnesses, pinned libraries, assets, binaries, container images, bundled runtimes, generated code, model weights and data can each carry separate terms from code. Attribution, NOTICE, source offer, modification disclosure and license-retention obligations differ by license. Mere interoperability (protocol invocation, a user-installed binary) differs from bundling or forking, and the upstream project's own documentation is the source for that distinction.
+- Release-provenance identity: code signing, transparency logs and provenance attestations establish publisher identity, artifact integrity and freshness, but not a legal right to distribute; a valid signature must never be confused with distribution rights. SBOM formats (for example SPDX and CycloneDX) and license-scanning tools have detected and undetected gaps for transitive, vendored, dual-licensed, generated and model/data artifacts.
+- Copyright and access constraints: private source is never sent to a public or contributor route without explicit eligible authority, credentials and institutional access remain opaque brokered references, and full papers are stored only when access and license permit (otherwise metadata, allowable excerpts and derived claims). Contributor or discounted model/data routes impose their own terms on outputs, redistribution or commercial use.
+- Legal boundary: this lane evaluates legal risk; it does not give legal advice and must say so in its own text. Every legal conclusion is research input and must be labelled as such. Jurisdiction-dependent and terms-of-service questions (export, data residency, reverse-engineering exceptions, provider acceptable use) require qualified counsel rather than a settled answer, and the report must mark where a non-lawyer may no longer conclude.
+- Research constraints: this is a public/synthetic lane and receives no private project content, transcripts, credentials or local paths. It performs no bundling, copying or distribution of any artifact and no provider, repository or package-registry calls or license trial run. It selects no license, distribution channel, store or hosted-service model; changes no auth, config, credentials, spending, deployment, publication or merge; and does not reopen accepted Owner decisions or the anchor scope.
 
 ## Purpose
 
-Decide what must be cleared, documented and checked before any Recursion component is publicly released, so that reuse of upstream harnesses, libraries, assets and contributor routes does not create an unexamined distribution or attribution obligation. This is blocking because v3 explicitly reuses and adapts external harnesses and pinned libraries (`docs/v3/PLUGINS-AND-EDITIONS.md`), and the release contract in E-FHAR2-108 requires file-level provenance and license notices without claiming public visibility is clearance. The lane must state clearly where qualified legal counsel is required and must never present its own conclusions as legal advice.
+Decide what must be cleared, documented and checked before any Recursion component is publicly released, so that reuse of upstream harnesses, libraries, assets and contributor routes does not create an unexamined distribution or attribution obligation. This is blocking because v3 explicitly reuses and adapts external harnesses and pinned libraries, and the accepted release contract (E-FHAR2-108) requires file-level provenance and license notices without claiming public visibility is clearance. The lane must state clearly where qualified legal counsel is required and must never present its own conclusions as legal advice.
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed reconciliation, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions or ANCHOR scope, and do not select a license, distribution channel or store as a product decision. This lane evaluates legal risk; it does not give legal advice and must flag every point where counsel is required.
+The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed reconciliation, never edit it. Public or synthetic briefs only — never private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. Do not reopen accepted Owner decisions or anchor scope, and do not select a license, distribution channel or store as a product decision. This lane evaluates legal risk; it does not give legal advice and must flag every point where counsel is required.
 
 ## Inputs to read
 
-- `docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md` (E-FHAR2-108, WP-108)
-- `docs/v3/PLUGINS-AND-EDITIONS.md` (distribution, trust tiers, provenance)
-- `docs/v3/PRODUCT.md` (public usability, provider neutrality)
-- `docs/v3/SECURITY.md` (credentials, egress, contributor routes)
-- `docs/v3/CLI.md` (provider-native auth, upstream binary routes)
-- `docs/v3/SCIENTIFIC-RESEARCH.md` (copyright and access constraints)
-- `docs/v3/DECISION-REGISTER.md`
-- `docs/v3/START-HERE.md`
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
@@ -90,7 +126,7 @@ Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` co
 - No change to auth, config, credentials, spending, deployment, publication or merge.
 - No bundling, copying or distributing any artifact as part of this research.
 - No importing private project content, transcripts, credentials or local paths.
-- No reopening accepted Owner decisions or ANCHOR scope.
+- No reopening accepted Owner decisions or anchor scope.
 - No treating a clean scan, a valid signature or public visibility as legal clearance.
 - No provider, model, repository or package-registry calls, and no license trial run.
 

@@ -19,6 +19,7 @@ SUITE = Path(__file__).resolve().parent
 
 REQUIRED_HEADINGS = [
     "## Purpose",
+    "## Baked context",
     "## Authority and boundaries",
     "## Inputs to read",
     "## Research questions",
@@ -27,10 +28,10 @@ REQUIRED_HEADINGS = [
     "## Completion gate",
 ]
 
+# Handoffs are supplied as the session document and are active on supply; the old inert
+# status is no longer allowed.
 ALLOWED_STATUS = {
-    "proposed-inert",
     "ready-for-explicit-invocation",
-    "ready-for-owner-invocation",
 }
 
 SECRET_PATTERNS = [
@@ -45,6 +46,14 @@ SECRET_PATTERNS = [
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 FILE_RE = re.compile(r"^DS-(\d{2})-([a-z0-9-]+)\.md$")
+
+DIRECTIVE_MARK = "**Research directive.** You are the lead researcher."
+INERT_MARKERS = (
+    "proposed-inert",
+    "inert until",
+    "This file is inert",
+    "reading or creating it launches nothing",
+)
 
 
 def parse_front_matter(text: str):
@@ -114,11 +123,17 @@ def main() -> int:
                 if not fm.get(key):
                     errors.append(f"{rel}: front matter missing '{key}'")
             if fm.get("status") not in ALLOWED_STATUS:
-                errors.append(f"{rel}: status '{fm.get('status')}' is not an allowed inert status")
+                errors.append(f"{rel}: status '{fm.get('status')}' is not 'ready-for-explicit-invocation'")
 
         for heading in REQUIRED_HEADINGS:
             if heading not in text:
                 errors.append(f"{rel}: missing heading '{heading}'")
+
+        if DIRECTIVE_MARK not in text:
+            errors.append(f"{rel}: missing research directive line '{DIRECTIVE_MARK}'")
+        for marker in INERT_MARKERS:
+            if marker in text:
+                errors.append(f"{rel}: inert framing is not allowed: '{marker}'")
 
         for pattern in SECRET_PATTERNS:
             for found in pattern.finditer(text):

@@ -1,14 +1,59 @@
 ---
 title: DS-02 — Full Access and calibrated authority
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-02 — Full Access and calibrated authority
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- **Focus.** This lane defines the capability-vector contract behind Full Access, grant administration, break-glass elevation and auditability, so the grant schema can be frozen. It is research lane R4 of the Recursion v3 agenda.
+- **Full Access.** A genuinely expansive, owner-configurable authority; the product must not advertise Full Access while silently withholding a documented capability. The implementation direction is a capability vector rather than a single ambient boolean, and each high-impact capability names its project/host/account scope, limit, acknowledgement, authentication strength, start/expiry and revocation behavior.
+- **`sovereign`.** An explicit maximum preset that may include control-plane authoring, selected credential administration, provider enrollment, metered spending, publication, merge, deployment and service control when the owner grants those capabilities explicitly. `OR-005` ratifies that a maximum `sovereign` preset may explicitly include `grant-admin` and modify its own grants attributably; every mutation is a schema-checked kernel action with before/after scope, reason, authentication, expiry and durable receipt, and model text alone cannot change authority.
+- **`grant-admin`.** An explicit capability, never implied by an edition or inherited ambiently, that lets a `sovereign` actor create, widen, narrow or revoke its own grants within the installation's maximum authority. `OR-014` ratifies that installing the `full` edition never implies `sovereign`.
+- **Grant contract.** A grant binds issuer and subject, audience/installation, signing-key identity, parent digest, delegation depth, GoalSpec and policy versions, exact capability/effect verbs, scope, resource/spend/rate limits, not-before and expiry, revocation epoch, lease/fencing token, authentication/step-up receipt and opaque credential references. Child scope, limits, lifetime and delegation are subsets of the parent.
+- **Break-glass elevation.** Attributable, bounded and recoverable privileged elevation requiring authentication strength, captured reason and automatic expiry, rather than ambient authority.
+- **Audit separation.** Grant administration does not automatically include audit-retention or audit-erasure authority, and historical receipts cannot be silently rewritten or concealed. Audit-retention/erasure remains a separate unresolved Owner question.
+- **Boundary.** This lane is analysis only; it grants no authority, never simulates any real authority or credential, and a model recommendation is never an Owner decision.
 
 ## Purpose
 
@@ -16,21 +61,11 @@ This research informs the capability-vector contract behind Full Access, grant a
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane is analysis only and grants no authority; a model recommendation is never an Owner decision. Audit-retention/erasure stays a separate unresolved Owner question in `docs/v3/DECISION-REGISTER.md`, and the `full` edition must never be treated as implying `sovereign`.
+The authority, scope and privacy constraints are restated in `## Baked context`; read nothing else in preparation. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane is analysis only and grants no authority; a model recommendation is never an Owner decision. Audit-retention/erasure stays a separate unresolved Owner question, and the `full` edition must never be treated as implying `sovereign`.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/RESEARCH-AGENDA.md` (lane R4)
-- `docs/v3/SECURITY.md`
-- `docs/v3/EXECUTIVES.md`
-- `docs/v3/ACCEPTANCE.md`
-- `docs/v3/PLUGINS-AND-EDITIONS.md`
-- `docs/v3/DECISION-REGISTER.md`
-- `docs/v3/CONSTITUTIONAL-AMENDMENT-PROPOSAL.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

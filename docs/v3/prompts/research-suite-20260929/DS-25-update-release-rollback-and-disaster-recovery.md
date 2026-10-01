@@ -1,14 +1,61 @@
 ---
 title: DS-25 — Update, release, rollback and disaster recovery
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-25 — Update, release, rollback and disaster recovery
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- `OR-033` preserves six update modes — (1) interrupt, save, update, resume; (2) interrupt, update, stop tasks; (3) wait until current tasks finish; (4) auto-update off; (5) notify and escalate to the Owner; (6) stop everything and wait until the update lands — and four separate restoration outcomes: working executable, readable history, preserved newest work and resumable tasks.
+- `E-FHAR2-108` is the release/boot/dependency/migration minimum: `ReleaseId` fields (product SemVer, protocol major/minor, schema epoch, constitution-policy digest, core artifact digest, core dependency-lock digest, build-provenance digest, SBOM digest, edition-manifest digest) and a `BootReceipt` binding release identity to state/checkpoint digest, event high-water, recovery disposition and each optional capability as `absent`/`disabled`/`incompatible`/`unverified`/`quarantined`/`active`, with core boot/replay with every provider, engine, plugin and frontend absent.
+- `MKR-015` is the update/recovery candidate that retains compatible rollback while separating the four outcomes; `OR-032` defines configurable recovery arithmetic relative to pre-shutdown consumption; `OR-019` requires the versioned release to recover canonical state with optional adapters absent.
+- `OR-018` ratifies Option 2 (a native deterministic kernel with typed adapters); the privileged kernel is four pure functions (`decode`/`admit`/`reduce`/`derive_work_packet`) with no filesystem, network, process, provider or wall-clock access.
+- Restoring an old executable is only one strategy: a rollback is never a universal state or task recovery and must never be reported as undoing an already-accepted external effect. After a real or ambiguous external effect, the system reconciles forward rather than claiming a rollback.
+- Canonical state requires one fenced writer per aggregate. Migration uses expand/contract (additive expand, dual-read, backfill, cutover, contract) with a frozen legacy import, shadow comparison and exactly one writer established before cutover.
+- The backup/recovery contract requires a consistent selected-event-store plus artifact snapshot, an encrypted offsite option, restore onto a fresh host, key and credential references excluded or separately provisioned, forward migration and rollback where schema permits, simulated torn write/disk full/process death/duplicate delivery/stale lease, and reconciliation of remote-node spools after controller recovery.
+- A missing optional capability blocks only dependent mutation; it never auto-installs, substitutes a route, spends or becomes a pass. Revoked or expired release metadata, signatures and SBOM entries are refused fail-closed at boot.
+- `E-FHAR2-104` (terminal/process broker) and `E-FHAR2-105` (plugin/frontend isolation) bound the process and plugin surfaces; `PERF-001`/`H-012` cover the store's durability and soak profile.
+- **UNRESOLVED, Owner-owned:** the storage engine, packaging format, signing stack, update channel and SBOM tool are unselected; no deployment, publication, install, restore or self-update is authorized.
 
 ## Purpose
 
@@ -16,26 +63,11 @@ Decide the exact update-mode, activation-receipt, release-identity, schema-migra
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane performs no deployment, no publication, no self-update, no version installation and no restore; it selects no storage engine, packaging format, signing stack or update channel. `OR-033` preserves all six modes and does not authorize this agent to update itself or change its configuration. Restoring an old executable is one strategy, not universal state or task recovery, and no rollback may be reported as undoing an external effect.
+The authority, scope and privacy constraints that govern this lane are restated in `## Baked context`; treat them as the operative limits. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane performs no deployment, no publication, no self-update, no version installation and no restore; it selects no storage engine, packaging format, signing stack or update channel. `OR-033` preserves all six modes and does not authorize this agent to update itself or change its configuration. Restoring an old executable is one strategy, not universal state or task recovery, and no rollback may be reported as undoing an external effect.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/CONSTRUCTION-RUNBOOK.md`
-- `docs/v3/CURRENT-AND-MIGRATION.md`
-- `docs/v3/ACCEPTANCE.md`
-- `docs/v3/ROADMAP.md`
-- `docs/v3/STATE.md`
-- `docs/v3/ARCHITECTURE.md`
-- `docs/v3/PLUGINS-AND-EDITIONS.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/FRONTIER-HARNESS-RESEARCH-TRANCHE-2-EVIDENCE.md`
-- `docs/v3/foundation-research/mark2/handoff.md`
-- `docs/v3/DECISION-REGISTER.md`
-- `docs/v3/construction/replay-store-evidence-20260907/dossier.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

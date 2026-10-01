@@ -1,14 +1,60 @@
 ---
 title: DS-04 — Plugin trust and supply chain
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-04 — Plugin trust and supply chain
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- **Focus.** This lane defines what a maintainer signature actually proves and how unsigned local plugins can keep full expressiveness without silent supply-chain failure, so the plugin trust and grant contract can be frozen. It is research lane R6 of the Recursion v3 agenda.
+- **Trust root.** The installation trust root signs first-party/maintainer-approved releases and plugins. `OR-007` ratifies maintainer-signed trust and a digest-aware acknowledgement. A valid signature proves publisher/review-policy identity, not that every requested capability is safe for every project; signatures, SBOMs and transparency records do not prove benign runtime behavior or spending entitlement.
+- **Unsigned local plugins.** They remain installable and may implement the complete plugin API. The CLI warns that they are not maintainer approved, pins the exact digest and displays all requested authority. `OR-007` requires a digest-specific warning/acknowledgement, and installing code must not silently imply unlimited quota or metered authority.
+- **Separate grant dimensions.** Functional API verbs, OS/workspace scope, network egress, credential access, model launch, route/account, subscription quota, metered spending, update, downgrade and revocation each remain separately visible and configurable. `OR-014` makes digest-aware plugin grants a common default.
+- **Trust tiers.** `T0-kernel`, `T1-signed-built-in`, `T2-signed-isolated-third-party`, `T3-untrusted-view`, and `T4-external-engine/provider`. A tier is an isolation and review requirement, never an authority grant.
+- **Lifecycle.** discovered -> verified -> admitted -> staged -> active, with quarantined/rejected branches and drain-and-fence on retire, replace or revoke. Reload is a fenced transition; stale packets, leases and subscriptions fail closed; ambiguous external effects enter reconciliation and never become success.
+- **Revocation semantics.** Revocation blocks new admission immediately; existing work follows its effect-specific PAUSE policy and may enter reconciliation. "revoked" does not assert that a remote effect stopped.
+- **Owner sovereignty.** There is no mandatory centralized marketplace, remote kill switch or maintainer veto; a design must never let a remote maintainer disable or update a local owner's installation against the owner's configured intent.
+- **Disabled-plugin invariant.** A disabled plugin performs no import, install, subprocess, network, credential, model or quota effect.
 
 ## Purpose
 
@@ -16,21 +62,11 @@ This research informs what a maintainer signature actually proves and how unsign
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane may not install, sign, publish or update any plugin, and it must not treat a signature, SBOM or transparency record as proof of benign runtime behavior or of spending entitlement.
+The authority, scope and privacy constraints are restated in `## Baked context`; read nothing else in preparation. Preserve the current Hermes constitution; write proposed amendments, never edit it. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This lane may not install, sign, publish or update any plugin, and it must not treat a signature, SBOM or transparency record as proof of benign runtime behavior or of spending entitlement.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/RESEARCH-AGENDA.md` (lane R6)
-- `docs/v3/PLUGINS-AND-EDITIONS.md`
-- `docs/v3/SECURITY.md`
-- `docs/v3/ACCEPTANCE.md`
-- `docs/v3/EXECUTIVES.md`
-- `docs/v3/DECISION-REGISTER.md`
-- `docs/v3/CONSTITUTIONAL-AMENDMENT-PROPOSAL.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 

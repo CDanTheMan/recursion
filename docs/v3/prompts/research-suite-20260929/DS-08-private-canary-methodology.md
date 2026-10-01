@@ -1,14 +1,60 @@
 ---
 title: DS-08 — Private canary methodology
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
+
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research, do not request further approval, and do not return a scoping plan, research plan, methodology, timeline, outline, or clarification request — those are not acceptable outputs. Execute the research now and return the final report with findings and citations; if you catch yourself planning, convert the plan into the research immediately.
 
 # DS-08 — Private canary methodology
 
-Run as GPT-6 Astra with Deep Research and repository-capable tools, or another route Lucas explicitly approves. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
+
+## Baked context
+
+### Shared Recursion context
+
+Recursion is a provider-neutral agent platform. The development target is Recursion v3: a
+small deterministic kernel with typed adapters; native and upstream execution; persistent,
+goal-scoped assistants organized as Head -> ARM executives -> bounded workers (no separate
+AI "ARM manager"); configurable context and compaction; plugins and editions; an
+interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
+recovery. A graphical frontend is not required for v3.
+
+Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+bounded executors. An implementer's own PASS is never acceptance; independent review is
+required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
+constitution; a research session may propose amendments but must never edit it. No research
+session performs implementation, provider/model/authentication/configuration changes,
+spending, deployment, publication or merge.
+
+Scope: this repository is the Recursion product only. Unrelated repositories, curricula,
+captures and datasets are out of scope. Do not reopen accepted Owner decisions.
+
+Evidence discipline: prefer primary public sources (standards, official product/API docs,
+pinned source, licenses, peer-reviewed work). Classify every consequential claim as
+source-documented, locally observed, inferred or unverified; keep `unknown` distinct from
+zero. Model consensus and vendor marketing are not evidence. Every recommendation needs a
+competing option and a decisive falsifier, and must name what it does not prove. Do not
+request or display hidden chain-of-thought.
+
+Privacy: a public Deep Research session receives only public or synthetic briefs — never
+secrets, credentials, personal data, private repository content, local paths, or
+account/infrastructure identifiers.
+
+### Lane context
+
+- **Focus.** This lane defines what the first private canary can prove without leaking its identity or letting one successful run substitute for fault coverage. It is research lane R10 of the Recursion v3 agenda.
+- **`CANARY-01`.** The first private canary, referenced by alias only. Its real project identity, path, content, hash and transcript must never appear in tracked or public artifacts.
+- **Ratified first task.** `OR-010` fixes the first task as test-only characterization of one stable, deterministic, non-safety-critical business rule, with writes limited to tests and fixtures, private-approved processing, an independent clean rerun, and one local candidate commit. The canary is not authorized to run by that ruling, and it must not run during this research campaign.
+- **Write boundary.** Test/fixture-only and machine-checkable. No production writes; no publication, push, merge or deployment; no provider call, so route eligibility is reasoned rather than exercised.
+- **Independent clean rerun.** Clean checkout, fresh state, frozen input and deterministic expected output.
+- **Baseline and substitution.** A baseline comparison must distinguish real verification from a tautological or overfit test, and one successful canary must not substitute for fault coverage or broader conformance evidence.
+- **Failure-injection fixtures.** Malformed input, mismatch, crash, missing dependency and stale state.
+- **Disclosure and stop conditions.** Stop on privacy or secret exposure, protected-path contact, ambiguity or an unverified claim. Disclosure rules set what may be shared, with whom, and at what classification.
+- **Routes and boundary.** Private-approved routes are eligible and approval binds without recording private identifiers. No new route, model or auth selection is made here.
 
 ## Purpose
 
@@ -16,18 +62,11 @@ Define what `CANARY-01` can prove without leaking its identity or letting one su
 
 ## Authority and boundaries
 
-Read `CONTROL_PLANE.md`, `ANCHOR.md`, `AGENTS.md` and `docs/v3/START-HERE.md` completely before planning, then only the inputs below. Preserve the current Hermes constitution; write proposed amendments, never edit it. The canary is referenced by alias only; never record its real identity, path, content or digest in tracked or public artifacts. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This campaign authorizes no canary execution, no private route call and no candidate commit.
+The authority, scope and privacy constraints are restated in `## Baked context`; read nothing else in preparation. Preserve the current Hermes constitution; write proposed amendments, never edit it. The canary is referenced by alias only; never record its real identity, path, content or digest in tracked or public artifacts. Public Deep Research receives only public or synthetic briefs — never unpublished v3 drafts verbatim, private project content, transcripts, local paths, credentials, or account/infrastructure identifiers. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication or merge is authorized. This campaign authorizes no canary execution, no private route call and no candidate commit.
 
 ## Inputs to read
 
-- `CONTROL_PLANE.md`
-- `ANCHOR.md`
-- `AGENTS.md`
-- `docs/v3/START-HERE.md`
-- `docs/v3/RESEARCH-AGENDA.md`
-- `docs/v3/CURRENT-AND-MIGRATION.md`
-- `docs/v3/STATE.md`
-- `docs/v3/SECURITY.md`
+None. This handoff is self-contained; the context is baked in above and below.
 
 ## Research questions
 
