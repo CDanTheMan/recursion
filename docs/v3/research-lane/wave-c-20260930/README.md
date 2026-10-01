@@ -22,16 +22,17 @@ decisions, not accepted specifications, and not independently verified.
 | `raw/ds-DS-32-hitl-approvals.md` | DS-32 human-in-the-loop approvals, forwarding and consultation | `synthesis/DS-32-hitl-approvals.md` |
 | `raw/ds-DS-33-licensing-ip.md` | DS-33 licensing, distribution, provenance and IP clearance | `synthesis/DS-33-licensing-ip.md` |
 | `raw/ds-DS-34-decision-journaling.md` | DS-34 decision journaling and calibration (Codex route) | `synthesis/DS-34-decision-journaling.md` |
+| `raw/ds-DS-15-arm-conversations.md` | DS-15 ARM conversations and multi-agent rooms (Codex route) | `synthesis/DS-15-arm-conversations.md` |
 
 DS-33 is legal-risk research, **not legal advice**; counsel is required before any release
 decision.
 
-## Failed this batch
+## DS-15 via an alternative route
 
-- **DS-15** returned a "Deep Research Scoping Plan" (a plan, not the research) for the second
-  time. Preserved at `failed/ds-DS-15-partial-plan.md`; not accepted as a report. The directive
-  in every handoff now also explicitly rejects scoping plans, research plans, methodologies and
-  timelines, and requires findings and citations.
+DS-15 returned a Deep Research scoping plan twice (preserved at
+`failed/ds-DS-15-partial-plan.md`), so it was produced with Codex from the same self-contained
+brief, extracted from a `.docx`, and intaken here. The directive in every handoff now also
+explicitly rejects scoping plans, research plans, methodologies and timelines.
 
 ## DS-34 via an alternative route
 
@@ -49,8 +50,7 @@ report with findings and citations…". `check_suite.py` still passes.
 
 ## Lanes still needing a run
 
-`DS-15` (re-run). It returned a scoping plan twice; if a third attempt still plans, split it
-into its five clusters.
+None. All 28 Deep Research lanes now have a report.
 
 ## Gate
 

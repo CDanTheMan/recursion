@@ -36,6 +36,7 @@ RAW = [
     "ds-DS-32-hitl-approvals.md",
     "ds-DS-33-licensing-ip.md",
     "ds-DS-34-decision-journaling.md",
+    "ds-DS-15-arm-conversations.md",
 ]
 SYNTHESIS = [
     "DS-05-migration-rollback.md",
@@ -48,6 +49,7 @@ SYNTHESIS = [
     "DS-32-hitl-approvals.md",
     "DS-33-licensing-ip.md",
     "DS-34-decision-journaling.md",
+    "DS-15-arm-conversations.md",
 ]
 
 
