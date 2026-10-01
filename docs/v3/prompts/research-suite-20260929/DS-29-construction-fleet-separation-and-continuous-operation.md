@@ -1,16 +1,16 @@
 ---
 title: DS-29 — Construction fleet separation and continuous operation
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
 
-**Session query — explicit invocation.** Execute research handoff `DS-29` now. This query is the explicit invocation by the Owner; the `proposed-inert` label on the brief below describes the file at rest, not this run. Do not ask which topic to research, do not request further authorization, and do not treat the attached brief as an inert document. What is the first bounded construction packet for separating the construction fleet from the product runtime and for continuous-operation requirements CW-01 through CW-18, covering implementation phases P1 and P3 through P8? Produce the deliverable and check every item of the completion gate.
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research and do not request further approval.
 
 # DS-29 — Construction fleet separation and continuous operation
 
-This is a bounded construction handoff, not a public Deep Research brief. It is inert and proposed until Lucas explicitly invokes it in a new session; creating, reading or listing it launches nothing and authorizes no provider call, write, effect, spend, service, schedule or configuration change. This handoff is self-contained context for a repository-execution task; it is not a Deep Research session. It prepares the exact packet that would build the continuous WSL-based construction service.
+This is a bounded construction handoff, not a public Deep Research brief. Supplying this document is the invocation; it makes no repository or provider call on its own. This handoff is self-contained context for a repository-execution task; it is not a Deep Research session. It prepares the exact packet that would build the continuous WSL-based construction service.
 
 ## Baked context
 
@@ -62,7 +62,7 @@ Specify the first bounded construction packet for separating the construction fl
 
 ## Authority and boundaries
 
-The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed amendments, never edit it. This packet is proposed and inert: it does not enable a service, route, spend, cron entry or standing autonomy. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication, push or merge is authorized. Do not select a product language, store or framework. Do not reopen completed M1 work or recorded Owner decisions (OR-021 through OR-039). P2 (service access) remains assigned to its own packet, and this packet must not duplicate the product-frontier packet or the recovery-ledger packet. This is a construction task, not a public Deep Research session: it requires repository execution (isolated worktree, branch, commits) and independent exact-candidate verification. Public Deep Research receives only public or synthetic briefs; this construction packet may reference repository paths but must never export private content, transcripts, credentials or account identifiers.
+The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed amendments, never edit it. This packet is proposed: it does not enable a service, route, spend, cron entry or standing autonomy. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication, push or merge is authorized. Do not select a product language, store or framework. Do not reopen completed M1 work or recorded Owner decisions (OR-021 through OR-039). P2 (service access) remains assigned to its own packet, and this packet must not duplicate the product-frontier packet or the recovery-ledger packet. This is a construction task, not a public Deep Research session: it requires repository execution (isolated worktree, branch, commits) and independent exact-candidate verification. Public Deep Research receives only public or synthetic briefs; this construction packet may reference repository paths but must never export private content, transcripts, credentials or account identifiers.
 
 ## Inputs to read
 

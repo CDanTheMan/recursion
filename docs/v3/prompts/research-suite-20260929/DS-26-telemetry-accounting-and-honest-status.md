@@ -1,16 +1,16 @@
 ---
 title: DS-26 — Telemetry accounting and honest status
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
 
-**Session query — explicit invocation.** Execute research handoff `DS-26` now. This query is the explicit invocation by the Owner; the `proposed-inert` label on the brief below describes the file at rest, not this run. Do not ask which topic to research, do not request further authorization, and do not treat the attached brief as an inert document. How should v3 qualify telemetry evidence providers, normalize provider counters, separate cost classes and render status without fabrication? Produce the deliverable and check every item of the completion gate.
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research and do not request further approval.
 
 # DS-26 — Telemetry accounting and honest status
 
-Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it in a new session; creating, reading or listing it launches nothing and authorizes no provider call, write, effect, spend or configuration change.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
 
 ## Baked context
 
@@ -54,7 +54,7 @@ account/infrastructure identifiers.
 - Privacy default is local and metadata-minimal: full prompts, raw tool output, source snippets and private artifact content are excluded from metrics tables and external exporters, and aggregation must resist revealing private repository membership.
 - Profiles: `coordinator-small` is the small authority/scheduler/observer class and `interactive workstation` is the heavier development class; both are defined by measured CPU, memory, disk and latency, never by a vendor model.
 - Milestone 8 (adaptive optimization) delivers explainable local routing calibration, quota shadow prices, reservations, adaptive concurrency, cache-domain affinity, resource shedding, telemetry evidence providers and an optional usage reconciler. Its gate is shadow-mode and controlled improvement for at least one declared profile without lowering quality floors or widening authority.
-- Honest status: visible activity is an observation, never percent-complete; absence is never converted into a healthy or complete status; no optimization default is promoted without a baseline, an uncertainty statement and a falsifier. `M1A`/`M1B`/`M1C` are merged, inert contract milestones (planning/replay; route, plugin and process requirements; source, effect and persistence requirements) that make no provider call and launch no process. `OR-021`-`OR-039` are recorded Owner decisions: OR-021-OR-025 establish the standalone v3 architecture, native+upstream execution, the ten CLI controls, the optimization ranking and Windows/Linux placement; OR-026-OR-035 add critical integrations, persistent assistants, Stop/fork and compatibility semantics, continuity and truthful verification reporting, recovery budgets, six update modes, anti-superficial optimization and representative resource limits; OR-036-OR-039 accept the smallest aggregate plus broker refinement, Owner-only GoalSpec amendments with routine delegation, visible assistant-to-Head consultation, and deep whole-system optimization.
+- Honest status: visible activity is an observation, never percent-complete; absence is never converted into a healthy or complete status; no optimization default is promoted without a baseline, an uncertainty statement and a falsifier. `M1A`/`M1B`/`M1C` are merged contract milestones (planning/replay; route, plugin and process requirements; source, effect and persistence requirements) that make no provider call and launch no process. `OR-021`-`OR-039` are recorded Owner decisions: OR-021-OR-025 establish the standalone v3 architecture, native+upstream execution, the ten CLI controls, the optimization ranking and Windows/Linux placement; OR-026-OR-035 add critical integrations, persistent assistants, Stop/fork and compatibility semantics, continuity and truthful verification reporting, recovery budgets, six update modes, anti-superficial optimization and representative resource limits; OR-036-OR-039 accept the smallest aggregate plus broker refinement, Owner-only GoalSpec amendments with routine delegation, visible assistant-to-Head consultation, and deep whole-system optimization.
 
 ## Purpose
 

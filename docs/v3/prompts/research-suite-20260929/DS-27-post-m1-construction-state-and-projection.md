@@ -1,16 +1,16 @@
 ---
 title: DS-27 — Post-M1 construction state and projection
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
 
-**Session query — explicit invocation.** Execute research handoff `DS-27` now. This query is the explicit invocation by the Owner; the `proposed-inert` label on the brief below describes the file at rest, not this run. Do not ask which topic to research, do not request further authorization, and do not treat the attached brief as an inert document. What is the first bounded construction packet for canonical state and compatibility projection, covering one fenced single-writer store, rebuildable projections, versioned migrations, an action/outbox path, backup/restore and read-only legacy imports? Produce the deliverable and check every item of the completion gate.
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research and do not request further approval.
 
 # DS-27 — Post-M1 construction state and projection
 
-This is a bounded construction handoff, not a public Deep Research brief. It is inert until Lucas explicitly invokes it in a new session; creating, reading or listing it launches nothing and authorizes no provider call, write, effect, spend or configuration change. This handoff is self-contained context for a repository-execution task; it is not a Deep Research session. It prepares the exact packet that would build the accepted Milestone 2 — canonical state and compatibility projection.
+This is a bounded construction handoff, not a public Deep Research brief. Supplying this document is the invocation; it makes no repository or provider call on its own. This handoff is self-contained context for a repository-execution task; it is not a Deep Research session. It prepares the exact packet that would build the accepted Milestone 2 — canonical state and compatibility projection.
 
 ## Baked context
 
@@ -53,7 +53,7 @@ account/infrastructure identifiers.
 - Durable lineage events are ordered, authenticated, replayable and schema-migrated. Projections (queues, status, budgets, lineage, routing history, artifact reachability, branch inventory, observer interfaces) must each be rebuildable from durable events plus immutable artifacts. Projection parity is not replay parity: equal rendered state does not prove equal event order, crash behavior or writer exclusion.
 - Distributed effects are never assumed exactly once. The required posture is idempotency keys, prepare/execute/reconcile states, leases with expiry and fencing tokens, authenticated result receipts, exact repository/source bindings and a crash matrix for failure before prepare, after prepare, during the external call, after the effect but before receipt, and after receipt but before projection. The lease projection carries task/assignment/lease/attempt identities, status, recovery state, expiry, reservation, result digest, source digest and last event sequence/digest.
 - Migration and import: versioned adapters record source digest and commit, deterministic identity mapping, duplicate/conflict reports, dry-run projection comparison, reversible backup, replay and crash injection, and refuse to fabricate missing or malformed state. The import/replay progression is UNIMPORTED -> SNAPSHOTTED -> VALIDATED -> LEGACY_WRITERS_QUIESCED -> FENCE_ESTABLISHED -> IMPORTED -> REPLAYED -> SHADOW_READ_VERIFIED -> V3_OWNER_ACTIVE -> CHECKPOINTED. Malformed, conflicting, torn, unauthenticated or stale input becomes `REFUSED` or `RECOVERY_REQUIRED`. Backup requires a consistent selected-store plus artifact snapshot, restore onto a fresh host, key/credential exclusion and forward/rollback migration proof. Dual writable sources of truth are forbidden.
-- Frozen prior slices: M1A (planning schemas, validation, fixtures, in-memory replay), M1B (route, plugin and process requirement contracts) and M1C (source/effect/publication/persistence contracts) are merged inert contracts; they must not be rebuilt, reopened or edited, and any mapping extension is a separately specified bridge, not a retrospective contract edit.
+- Frozen prior slices: M1A (planning schemas, validation, fixtures, in-memory replay), M1B (route, plugin and process requirement contracts) and M1C (source/effect/publication/persistence contracts) are merged frozen contracts; they must not be rebuilt, reopened or edited, and any mapping extension is a separately specified bridge, not a retrospective contract edit.
 - This is a construction handoff, not a research lane: it requires repository execution (isolated worktree, branch, commits, machine-checkable gates) and independent exact-candidate verification, and it produces a proposed packet specification, not an executed result. The packet freezes a `TASK_BASE` (the exact reviewed predecessor commit), an isolated worktree and a branch before any edit. Prohibited: push, publication, merge, product language/store/framework selection, live provider or paid calls, real external effects or migration cutover, edits to protected paths, and reopening recorded Owner decisions OR-021 through OR-039.
 
 ## Purpose
@@ -62,7 +62,7 @@ Specify the first bounded construction packet for canonical state and compatibil
 
 ## Authority and boundaries
 
-The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed amendments, never edit it. M1A, M1B and M1C are already merged inert at the recorded baseline and must not be rebuilt, reopened or edited; this packet extends them through a separately specified bridge if a mapping is needed. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication, push or merge is authorized. Do not select a product language, store or framework. Do not reopen recorded Owner decisions (OR-021 through OR-039). This is a construction task, not a public Deep Research session: it requires repository execution (isolated worktree, branch, commits) and independent exact-candidate verification. Public Deep Research receives only public or synthetic briefs; this construction packet may reference repository paths but must never export private content, transcripts, credentials or account identifiers.
+The shared authority constraints are in `## Baked context`. Preserve the current constitution; write proposed amendments, never edit it. M1A, M1B and M1C are already merged frozen at the recorded baseline and must not be rebuilt, reopened or edited; this packet extends them through a separately specified bridge if a mapping is needed. No runtime, provider, auth, config, cron, PAUSE, spending, deployment, publication, push or merge is authorized. Do not select a product language, store or framework. Do not reopen recorded Owner decisions (OR-021 through OR-039). This is a construction task, not a public Deep Research session: it requires repository execution (isolated worktree, branch, commits) and independent exact-candidate verification. Public Deep Research receives only public or synthetic briefs; this construction packet may reference repository paths but must never export private content, transcripts, credentials or account identifiers.
 
 ## Inputs to read
 

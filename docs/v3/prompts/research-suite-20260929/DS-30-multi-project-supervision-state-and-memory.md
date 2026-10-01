@@ -1,16 +1,16 @@
 ---
 title: DS-30 — Multi-project supervision state and durable memory
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
 
-**Session query — explicit invocation.** Execute research handoff `DS-30` now. This query is the explicit invocation by the Owner; the `proposed-inert` label on the brief below describes the file at rest, not this run. Do not ask which topic to research, do not request further authorization, and do not treat the attached brief as an inert document. What file and directory convention lets one operator plus unattended agents keep durable, diffable state for 4+ concurrent projects, so work resumes across context loss and blocked, stale and waiting-for-decision conditions are visible rather than inferred? Produce the deliverable and check every item of the completion gate.
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research and do not request further approval.
 
 # DS-30 — Multi-project supervision state and durable memory
 
-This is an inert Deep Research handoff. It launches nothing, authorizes no provider call, write, spend or configuration change, and is inert until Lucas explicitly invokes this file in a new session. Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. It covers supervision state and durable memory, not market or alpha research.
+This is a self-contained Deep Research handoff. Supplying this document is the invocation; it makes no repository or provider call on its own. Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. It covers supervision state and durable memory, not market or alpha research.
 
 ## Baked context
 

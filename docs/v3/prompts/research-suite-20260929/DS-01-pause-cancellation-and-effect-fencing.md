@@ -1,16 +1,16 @@
 ---
 title: DS-01 — Pause, cancellation, and effect fencing
-status: proposed-inert
-last-updated: 2026-09-29
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: only after Lucas explicitly invokes this file in a new session
+invocation: self-contained; supplying this document launches the research
 ---
 
-**Session query — explicit invocation.** Execute research handoff `DS-01` now. This query is the explicit invocation by the Owner; the `proposed-inert` label on the brief below describes the file at rest, not this run. Do not ask which topic to research, do not request further authorization, and do not treat the attached brief as an inert document. What are the exact per-effect-class dispositions for the future `checkpoint`, `interrupt` and `drain` pause modes and an independent emergency stop, so the pause schema can be frozen? Produce the deliverable and check every item of the completion gate.
+**Research directive.** You are the lead researcher. This document is your complete brief and your explicit authorization to research; it is not inert. Conduct the investigation described below and produce the deliverable, then check every item of the completion gate. Do not ask which topic to research and do not request further approval.
 
 # DS-01 — Pause, cancellation, and effect fencing
 
-Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. This file is inert until Lucas invokes it; reading or creating it launches nothing and authorizes no provider call, write, or effect.
+Run as a single Deep Research session (the Deep Research plugin only; no repository or GitHub connector). This handoff is fully self-contained. Supplying this document is the invocation; it makes no repository or provider call on its own.
 
 ## Baked context
 
@@ -49,7 +49,7 @@ account/infrastructure identifiers.
 - **Focus.** This lane defines the future per-effect-class pause, cancellation and effect-fencing semantics for the pause family plus an independent emergency stop, so the pause schema can be frozen. It is research lane R3 of the Recursion v3 agenda.
 - **Pause modes.** `checkpoint` (selected future ordinary default: admit no new work and let the current bounded operation reach its next mechanically safe checkpoint, then pause), `interrupt` (cancel interruptible work, preserve atomic state, quarantine ambiguous effects), `drain` (admit no new work but let explicitly enumerated in-flight work classes finish), and emergency stop (separate break-glass behavior that blocks new effects immediately and may sacrifice in-flight work).
 - **Effect classes.** The seven classes the questions enumerate are: model turn, local transaction, subprocess, remote/disconnected action, read-only gate, publication, and ambiguous external effect (an effect whose external acceptance cannot be proven).
-- **Accepted direction and non-operative status.** `OR-004` is the Owner ruling that selects `checkpoint` as the future product PAUSE default but keeps it non-operative; the operative PAUSE is immediate halt. `OR-020` authorizes the future policy family and the exact docs-only constitutional amendment, which remains inert until applied.
+- **Accepted direction and non-operative status.** `OR-004` is the Owner ruling that selects `checkpoint` as the future product PAUSE default but keeps it non-operative; the operative PAUSE is immediate halt. `OR-020` authorizes the future policy family and the exact docs-only constitutional amendment, which remains non-operative until applied.
 - **Fencing and precedence.** The future pause uses a monotonically advancing admission epoch. Every action binds command, principal, GoalSpec/grant/policy digests, admission epoch, fencing token, effect class, idempotency key and deadline. Precedence is emergency, revocation, interrupt, then checkpoint. An action admitted before an epoch change but not yet executed is stale and fails closed.
 - **Ambiguity and labels.** An already accepted external effect becomes ambiguous and is reconciled by provider identity/status; it is never blindly retried or described as rolled back. The terminal labels `ambiguous`, `quarantined` and `stale` distinguish unknown, quarantined and superseded work from completed work in owner-facing status.
 - **Adapters versus kernel.** A typed adapter may declare a narrower disposition than the kernel, never a wider one.

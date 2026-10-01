@@ -1,17 +1,17 @@
 ---
-title: Deep Research prompt suite — proposed-inert, 2026-09-29
-status: proposed-inert
-last-updated: 2026-09-29
+title: Deep Research prompt suite — 2026-09-30
+status: ready-for-explicit-invocation
+last-updated: 2026-09-30
 parent-goal: goal-recursion-v2-execution-fabric
-invocation: each prompt is inert until Lucas explicitly invokes that file in a new session
+invocation: each handoff is self-contained; supplying the document launches its session
 ---
 
 # Deep Research prompt suite
 
 This directory collects bounded Deep Research handoffs that together cover the research bases
-of Recursion. Every `DS-*` file is **inert**: creating, reading, or listing it launches
-nothing and authorizes no provider call, write, effect, spend, or configuration change. Run
-one prompt per sitting, not all at once.
+of Recursion. Each `DS-*` file is a **self-sufficient session document**: supplying it is the
+invocation, and it begins with a research directive that authorizes the investigation. Run one
+handoff per sitting, not all at once.
 
 Each handoff is **self-contained** for a Deep Research-only session (the Deep Research plugin;
 no repository or GitHub connector). Everything the session needs is baked into the file under
@@ -24,13 +24,10 @@ bind it to a task with a parent goal, allowed paths, budget, route and an indepe
 
 ## Running a session
 
-Paste the whole `DS-*.md` file into the Deep Research **query** box. The file leads with its
-`Session query — explicit invocation` line, so the session receives the brief as its query
-instead of reporting an unspecified query.
-
-If the interface separates a query box from a document/attachment field: put the file's
-`Session query` line in the **query** box and attach the brief. Never leave the query box empty
-and never place the handoff only in the attachment field.
+Supply the `DS-*.md` document to the session. The document is the only input it needs: it opens
+with a `Research directive` that names the task, authorizes the investigation, and forbids
+asking which topic to research. Nothing else has to be typed, and the document does not depend
+on a repository connector — all context is baked in under `## Baked context`.
 
 Then confirm the structural gate from the repository root:
 
@@ -39,7 +36,7 @@ python -X utf8 -B docs/v3/prompts/research-suite-20260929/check_suite.py
 ```
 
 A `PASS` line confirms the front matter, required headings, unique ids, README references,
-relative links, secret scan and the per-file query-invocation line.
+relative links, secret scan, the per-file research directive, and the absence of inert framing.
 
 ## Authority
 
