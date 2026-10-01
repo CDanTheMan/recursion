@@ -34,15 +34,15 @@ decision.
 
 ## Deferred: DS-34 (rate limit)
 
-**DS-34 (licensing, distribution, provenance and IP clearance)** did not run — the Deep
-Research rate limit was hit. It is recorded as an explicit `unknown` with a named blocker
-(`deep-research-rate-limit`), not as complete. Options to close it:
+**DS-34 (decision journaling and calibration)** did not run — the Deep Research rate limit was
+hit. It is recorded as an explicit `unknown` with a named blocker (`deep-research-rate-limit`),
+not as complete. DS-34 is not covered by any other lane. Options to close it:
 
 1. Re-run the same `DS-34-decision-journaling-and-calibration.md` handoff once the limit resets.
 2. Run it on an alternative single-plugin route: a standard model session with web browsing,
    using the same self-contained brief, then intake the output here.
-3. Note that `DS-33` already covers licensing/distribution/provenance broadly; DS-34's
-   decision-journaling and calibration content is not covered elsewhere.
+3. Narrow it: DS-34 partly overlaps DS-11 (evaluation and measurement discipline), so a smaller,
+   focused query may fit inside the rate limit.
 
 ## Prompt adjustment applied
 
