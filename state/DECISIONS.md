@@ -234,3 +234,35 @@ sensitive the moment the repository is public.
 **Falsifier:** n/a (a process decision).
 
 **Review:** 2026-12-01
+
+---
+
+## D-028 — Platform floors (closes G-11)
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Chose:**
+
+- **Windows:** minimum **Windows 11 25H2 (build 26200)** for Home/Pro; additionally qualify
+  **24H2 (build 26100) Enterprise**. **x64 primary**; Arm64 a separate later case.
+- **Linux:** kernel **6.12 LTS** primary, **6.6 LTS** compatibility minimum; **cgroup v2
+  required**; ext4.
+- **WSL2:** development/test only, never production; WSL2-ext4 and WSL2 `/mnt/c` are distinct
+  mandatory cases.
+- **Storage:** canonical state on **local NTFS / local ext4 only**; **SMB/NFS out of scope** for
+  the first release.
+- **"Survives power loss":** application-consistent after an abrupt **VM reset** at the commit
+  boundary, verified by replay reproducing identical canonical state. Physical platter
+  interruption is out of scope.
+- **Filesystems:** NTFS + ext4; ReFS/xfs/btrfs deferred.
+
+**Because:** these are bounded, testable floors; 24H2 Home/Pro reaches end of updates on
+2026-10-13; 6.12 LTS is the RHEL 10 / Debian 13 kernel and 6.6 LTS covers Ubuntu 24.04 and WSL.
+
+**Consequence:** closes G-11. FU-04 pins these floors, maps every manifest case to an in-scope /
+dev-test / out-of-scope / later disposition, and keeps every profile **Unqualified** until its
+traces pass. Destructive traces still require a disposable, Owner-approved target.
+
+**Falsifier:** a required mechanism fails at the stated floor, or replay diverges after an abrupt
+VM reset.
+
+**Review:** 2026-12-01

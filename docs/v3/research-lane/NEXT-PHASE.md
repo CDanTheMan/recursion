@@ -32,7 +32,8 @@ Settled and recorded in `state/DECISIONS.md` D-018…D-027:
 
 Still required:
 
-- **G-11** platform floors (draft commissioned; needed before FU-04).
+- **G-11** closed by `D-028` (Windows 11 25H2/26200 min; Linux 6.12 LTS/6.6 min with cgroup v2;
+  WSL2 dev/test only; local NTFS/ext4 only; power loss = abrupt VM reset, replay-identical).
 - **G-32** licensing/counsel (packet R-C commissioned; no spend).
 - **Selections** (after the experiments): language, store, renderer, plugin runtime.
 - Always human-gated: spending/quota, credentials, live provider/host actions, deployment,

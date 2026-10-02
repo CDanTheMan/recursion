@@ -150,9 +150,10 @@ Owner decisions recorded in `state/DECISIONS.md` D-018…D-027 change the regist
   store/availability seam; replicated failover is a first-party plugin.
 - **G-07 closed** by `D-022`: one prompt/stop vocabulary (Aggressive/Full/Lazy + `checkpoint`/
   `interrupt`/`drain`) across configuration, formal model and broker.
-- **G-11 remains open**; a concrete platform-floor draft (Windows build floor, Linux profiles,
-  WSL2 status, SMB/NFS scope, "survives power loss") is commissioned for Owner approval before
-  FU-04.
+- **G-11 closed** by `D-028`: Windows 11 25H2 (build 26200) minimum (24H2 build 26100 Enterprise
+  also qualified), x64 primary; Linux 6.12 LTS primary / 6.6 LTS minimum with cgroup v2; WSL2
+  dev/test only; canonical state on local NTFS/ext4 only (SMB/NFS out of scope); "survives power
+  loss" = application-consistent after an abrupt VM reset at the commit boundary.
 - **G-32 remains open** and is counsel-gated; research packet R-C prepares a counsel-ready
   question packet (no spend).
 - **Release-cut recommendation rejected** (`D-019`): the 2026-10-02 research recommended a smaller
