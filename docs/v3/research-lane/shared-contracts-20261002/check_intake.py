@@ -15,8 +15,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SUMS = HERE / "SHA256SUMS.txt"
-SECRET = re.compile(r"sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|BEGIN [A-Z ]*PRIVATE KEY|"
-                    r"(?i)bearer\s+[A-Za-z0-9._\-]{20,}")
+SECRET = re.compile(
+    r"(?i)(?<![A-Za-z0-9])(?:sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|"
+    r"bearer\s+[A-Za-z0-9._\-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)"
+)
 
 
 def fail(message: str) -> None:
