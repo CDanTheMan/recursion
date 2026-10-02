@@ -40,6 +40,8 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 - **D-031** no vendor-sabotage claim.
 - **D-032** parent goal is v3; sweep retired Hermes wording from prompts.
 - **D-033** plugin import/port is a hypothesis to validate.
+- **D-034** product thesis: "the harness that scales with your workflow."
+- **D-035** plugins live outside the core (principle); no repo split during R&D (`state/PROPOSALS.md` P-001).
 
 ## Research waves and intakes
 
