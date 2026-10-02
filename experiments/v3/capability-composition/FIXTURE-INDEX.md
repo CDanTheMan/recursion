@@ -16,7 +16,7 @@ acceptance). Corpus: the synthetic benchmark corpus (immutable input).
 
 | ID | Fixture | Status |
 |---|---|---|
-| F01 | Frozen reproduction — 23-byte literal specimen; reversed source enumeration reproduces the same bytes | specified |
+| F01 | Frozen reproduction — 23-byte literal specimen; reversed source enumeration reproduces the same bytes | implemented |
 | F02 | Generated-summary identity — outputs A and B are distinct; replaying A executes no regeneration | specified |
 | F03 | Mandatory closure under pressure — required members survive overflow handling | specified |
 | F04 | Disabled capability zero contribution — zero bytes/registrations/selector queries | specified |
@@ -26,8 +26,8 @@ acceptance). Corpus: the synthetic benchmark corpus (immutable input).
 | F08 | Evidence conflict — both sources preserved; no synthesized decision | specified |
 | F09 | Coherent read cut incl. ABA — cut unavailable rather than guessed | specified |
 | F10 | One governor + stale parent — compare-and-install rejects stale parent | specified |
-| F11 | Prefix continuity + required forfeiture — correctness beats reuse | specified |
-| F12 | Span/role coverage incl. Unicode byte mutation and omitted wrapper | specified |
+| F11 | Prefix continuity + required forfeiture — correctness beats reuse | implemented |
+| F12 | Span/role coverage incl. Unicode byte mutation and omitted wrapper | implemented |
 | F13 | Route/schema drift — re-admit disclosure; no cache-continuity shortcut | specified |
 | F14 | Checkpoint resume — historical grants never reactivate | specified |
 | F15 | Graph errors before load — cycle/ambiguity fails before body loading | specified |
