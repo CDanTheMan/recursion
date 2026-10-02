@@ -123,3 +123,20 @@ One self-contained prompt per P1 gap, at `docs/v3/prompts/followups-20261001/`:
   experiment has run.
 - Owner `decision` gaps (G-06, G-07, G-11, G-32) must be resolved in `state/DECISIONS.md`; a
   follow-up research session may inform them but must never decide them.
+
+## Status update — 2026-10-02 follow-up batch
+
+The five P1 follow-up prompts were run through the Codex Dot. Their outputs are intaken at
+`docs/v3/research-lane/followups-20261002/`. Outcome:
+
+- **The G-01–G-05 specifications are now complete; the gaps are NOT closed.** The reports propose
+  the experiments, contracts, fixtures, candidate definitions and acceptance oracles but did not
+  run them — no benchmark, model-checker run, chaos case or platform qualification. They stay
+  `experiment`/`research` gaps until the local experiments run and are independently accepted.
+- Prerequisite ordering is confirmed: FU-03 (G-03) gates FU-01 (G-01); FU-04 (G-04) supplies the
+  platform facts FU-02 (G-02) and FU-05 (G-05) assume.
+- A read-only repository architecture audit (`followups-20261002/synthesis/architecture-audit.md`)
+  adds a construction-stage finding: the tree is a contract-and-experiment foundation, not yet a
+  usable v3 harness, and it flags authority/scope drift to repair before construction.
+- Owner `decision` gaps (G-06, G-07, G-11, G-32) remain decisions; no follow-up research closes
+  them.
