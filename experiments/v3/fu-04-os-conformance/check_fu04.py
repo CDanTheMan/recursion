@@ -21,6 +21,12 @@ MANIFEST = ROOT / "docs/v3/research-lane/followups-20261002/machine/platform-man
 TRACES = ROOT / "docs/v3/research-lane/followups-20261002/machine/negative-traces.json"
 PROBES = HERE / "results" / "probes.json"
 FLOORS = HERE / "platform-floors.json"
+EXTRA = [
+    "traces/traces.json", "traces/run_traces.py", "traces/check_traces.py",
+    "traces/traces_results.json",
+    "target/capture-identity.py", "target/identity.json",
+    "target/target-reset.ps1", "target/enable-windows-sandbox.ps1", "target/README.md",
+]
 
 
 def fail(message: str) -> None:
@@ -32,6 +38,9 @@ def main() -> int:
     for path in (MANIFEST, TRACES, PROBES, FLOORS):
         if not path.exists():
             fail(f"missing file: {path}")
+    for rel in EXTRA:
+        if not (HERE / rel).exists():
+            fail(f"missing harness file: {rel}")
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     if manifest.get("contract_status") != "proposed_unexecuted":

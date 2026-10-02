@@ -43,6 +43,26 @@ scope); "survives power loss" = application-consistent after an abrupt **VM rese
 boundary. Every manifest case is mapped to `in_scope_unqualified`, `dev_test_only`, `out_of_scope`
 or `later`; **no profile is qualified** and the manifest stays `proposed_unexecuted`.
 
+## Runnable traces and disposable target
+
+- `traces/traces.json` normalizes all 20 fixtures (PF01…PF20) with injected fault, observation
+  oracle, recovery oracle, stop condition, negative control and a `runs_now` flag.
+- `traces/run_traces.py` executes them against `host` (Windows, non-destructive) or the disposable
+  `wsl:Debian` target; destructive runs require `--allow-destructive` and are bounded with hard
+  timeouts. `traces/check_traces.py` is the gate.
+- `target/capture-identity.py` records run identity (host + WSL target); `target/target-reset.ps1`
+  resets the disposable distro; `target/enable-windows-sandbox.ps1` is the **elevated** Windows
+  step (not executed by any agent).
+
+**Disposable Linux target:** WSL2 distro `Debian` (Debian GNU/Linux 13 trixie, kernel
+6.6.114.1-microsoft-standard-WSL2, cgroup2fs). Reset = `wsl --unregister Debian` then
+`wsl --install -d Debian --no-launch`.
+
+**Windows destructive target:** needs Windows Sandbox enabled (elevation + reboot). Until then,
+Windows destructive traces stay `not_run`. `PF11` is recorded `unknown` (cgroup v2 is mounted
+read-only in this WSL target, so true memory-throttle counters are unavailable — the bounded
+`ulimit` substitute is not a native throttle classification).
+
 ## Next increments
 
 1. Owner fixes G-11 platform floors, then `pin_state` and `profile_key` are populated with exact
