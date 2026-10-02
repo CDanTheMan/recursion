@@ -23,7 +23,7 @@ Read this first on a new context, then `docs/v3/START-HERE.md`, `docs/v3/researc
 
 ## Owner decisions (updated 2026-10-02)
 
-Settled and recorded in `state/DECISIONS.md` D-018…D-035:
+Settled and recorded in `state/DECISIONS.md` D-018…D-039:
 
 - Thesis, release model, availability/failover, delegation-over-intermediation, pause/stop,
   first qualified profile, frontier claim, research plugin, license, counsel packet.
@@ -63,6 +63,9 @@ candidate contract (see the synthesis's local handoff).
   `docs/v3/research-lane/capability-composition-20261002d/` (R-PC composition compiler, R-UI
   `recursion.ui-contract@candidate-2`, R-MOB mobile/remote control; +`check_intake.py`). Research
   evidence only; all fixtures unexecuted; no technology selected.
+- **iOS/Android design + language expansion (O-04):** `docs/v3/research-lane/ios-android-20261002/`
+  (advisory iOS Swift/SwiftUI and Android Kotlin/Compose stacks; shared `MP01…MP11` fixtures;
+  +`check_intake.py`). Research evidence only; prototypes/tests unexecuted; no stack selected.
 
 ## Next steps in order
 

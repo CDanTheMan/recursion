@@ -19,3 +19,4 @@ scripts/engines/*.json text eol=lf
 
 # Research-lane intakes are hash-pinned: delivered bytes must survive cross-platform checkouts.
 docs/v3/research-lane/capability-composition-20261002d/** text eol=lf
+docs/v3/research-lane/ios-android-20261002/** text eol=lf

@@ -19,7 +19,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Anchor (mission/scope) | `ANCHOR.md` | current (active parent goal) |
 | Active parent goal | `state/goals/goal-recursion-v3-harness-orchestrator.md` | active |
 | Superseded parent goal | `state/goals/goal-recursion-v2-execution-fabric.md` | superseded (v2/Hermes retired, D-017) |
-| Decision log | `state/DECISIONS.md` | current (D-001…D-035) |
+| Decision log | `state/DECISIONS.md` | current (D-001…D-039) |
 
 ## Decisions (state/DECISIONS.md)
 
@@ -42,6 +42,10 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 - **D-033** plugin import/port is a hypothesis to validate.
 - **D-034** product thesis: "the harness that scales with your workflow."
 - **D-035** plugins live outside the core (principle); no repo split during R&D (`state/PROPOSALS.md` P-001).
+- **D-036** mobile: no private offline redisplay (online-only private view).
+- **D-037** conformance fixtures authorized; Python disposable test harness only; product language open.
+- **D-038** D-034/D-019 supersede older first-release GUI/mobile exclusions.
+- **D-039** iOS/Android advisory accepted; plan a language-agnostic architecture.
 
 ## Research waves and intakes
 
@@ -65,6 +69,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Product thesis (D-034) | `state/DECISIONS.md`; `docs/v3/PRODUCT.md` thesis | accepted |
 | Capability-driven composition prompts | `prompts/dot-research-20261002d/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002d.zip`) |
 | Capability-composition return (R-PC/R-UI/R-MOB, rev 2) | `research-lane/capability-composition-20261002d/` (+`check_intake.py`) | intaken; 5 files sha256-verified; R-UI `@candidate-2`; all target tests unexecuted |
+| iOS/Android design + language expansion (O-04) | `research-lane/ios-android-20261002/` (+`check_intake.py`) | intaken; 3 files sha256-verified; advisory Swift/SwiftUI + Kotlin/Compose; all prototypes/tests unexecuted |
 | Competitive note — T3 Code v0.0.45 (control surface) | `research-lane/competitive-notes/20261002-t3code-v0.0.45.md` | source-documented (public release notes); not installed/executed; no adoption |
 | Architecture edge map | `research-lane/ARCHITECTURE-COVERAGE.md` | maintained |
 | Per-harness coverage matrix | `research-lane/HARNESS-COVERAGE.md` | maintained |

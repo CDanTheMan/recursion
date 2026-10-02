@@ -30,13 +30,15 @@ sources and a one-line note. Coverage of documentation is **not** qualification.
      `research-lane/overnight-20261002/`. The capability-composition packet d return adds **PC**
    capability-driven prompt/context composition, **UI** capability-driven UI projection
    (`recursion.ui-contract@candidate-2`) and **MOB** mobile/remote control, intaken at
-   `research-lane/capability-composition-20261002d/`.
+   `research-lane/capability-composition-20261002d/`. The separately requested iOS/Android design +
+   language expansion (separately optimized native clients; advisory Swift/SwiftUI and
+   Kotlin/Compose) is intaken at `research-lane/ios-android-20261002/`.
 - **Design docs** (`docs/v3/`): PRODUCT, ARCHITECTURE(+PROOF/OPTIONS), CURRENT-AND-MIGRATION,
   EXECUTIVES, PLANNING, AUTONOMOUS-PLANNING, M1A/B/C contracts/wire profiles, EXECUTION-FABRIC,
   CONTEXT, STATE, SECURITY, PLUGINS-AND-EDITIONS, CLI, TERMINAL-RUNTIME, INTERACTION-SURFACES,
   TELEMETRY, ACCEPTANCE, INTERFACE-STRATEGY, ROUTE-CAPABILITIES, PERFORMANCE-PLAN,
   SCIENTIFIC-RESEARCH; plus `research-lane/` maps (SYNTHESIS, GAPS, HARNESS-COVERAGE,
-  RESEARCH-INDEX, NEXT-PHASE) and `state/DECISIONS.md` D-017…D-033.
+  RESEARCH-INDEX, NEXT-PHASE) and `state/DECISIONS.md` D-017…D-035.
 
 Statuses: **covered-by-spec**, **researched-not-run**, **proposed-packet**, **gap**.
 

@@ -404,3 +404,96 @@ amending `CONTROL_PLANE.md`/`ANCHOR.md`, recorded here. No repository is renamed
 cannot stay lean with external plugins, or a split is needed to make forward progress.
 
 **Review:** 2026-12-01.
+
+---
+
+## D-036 — Mobile offline retention: online-only private view (O-01)
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Options:** A) no private offline redisplay (online-only private view) / B) explicit bounded
+offline snapshot policy / C) no mobile offline capability at all.
+
+**Chose:** A. Private views require a live, authenticated backend connection. Only minimal authorized
+status metadata may persist; reconnect re-authorizes before any private hydration; there is no
+automatic replay of queued actions.
+
+**Because:** remote control already requires a live authenticated connection (R-MOB); the literal
+"a cached view never serves after an unseen revocation" is unsatisfiable for a disconnected device;
+and Recursion must not claim remote erasure or clone-proofness it cannot deliver. Keeping connection
+quality in the transport/tunneling layer lets the content boundary stay simple.
+
+**Consequence:** global **no offline protected redisplay** until a bounded offline policy (option B)
+is separately adopted. R-UI/R-MOB fixtures use the online-only rows. Enterprise workflows that
+require *private offline content* are explicitly out of scope under this decision and would need a
+future bounded-snapshot decision fixing scope, encryption, expiry, audience, storage/backup and
+accepting that an offline device cannot learn an unseen revocation.
+
+**Falsifier:** a required enterprise workflow needs private offline content and cannot be served
+securely online.
+
+**Review:** 2026-12-01.
+
+---
+
+## D-037 — Conformance fixtures authorized; Python as disposable test harness only (O-02)
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Chose:** authorize the provider-free conformance-fixture work (R-PC F01–F18, R-UI UI-01…UI-20 plus
+the C×V soak, R-MOB MOB-F01–F24 plus the two-path simulation) to be implemented in an already
+installed runtime (**Python**) functioning **only** as a disposable test harness. The product
+implementation language remains unselected (FU-01).
+
+**Because:** the fixtures require executing code, but selecting the product language from a research
+recommendation is disallowed; Python is installed and adequate for deterministic, provider-free
+harnesses.
+
+**Consequence:** the standards in the conformance intakes apply (a valid positive control, an adverse
+mutation, and an independent oracle that does not trust candidate flags). The Owner intends to move
+to a more optimized language later; that intent is **not** a selection and does not bind FU-01.
+
+**Falsifier:** the Python harness cannot express a required check, or a fixture can pass without an
+independent oracle.
+
+**Review:** 2026-12-01.
+
+---
+
+## D-038 — D-034/D-019 supersede older first-release GUI/mobile exclusions (O-03)
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Chose:** confirm that D-034 and D-019 supersede any older "GUI/mobile later" first-release
+exclusions. GUI and mobile are **built but opt-in**; nothing accepted is removed, and compatibility
+across the whole product scope is a goal.
+
+**Because:** R-UI flagged a release-timing conflict between older first-release prose and D-019's
+comprehensive opt-in packaging; leaving it ambiguous re-opens at every UI/mobile task.
+
+**Consequence:** future UI/mobile tasks treat GUI and mobile as in-scope optional clients over the
+backend; no capability is deferred by the old exclusion wording.
+
+**Falsifier:** n/a (governance clarity).
+
+**Review:** 2026-12-01.
+
+---
+
+## D-039 — Accept the OS/language expansion as advisory; plan a language-agnostic architecture (O-04)
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Chose:** accept the delivered iOS/Android advisory packet (intake
+`docs/v3/research-lane/ios-android-20261002/`) as research evidence, and commission a **planned,
+language-agnostic architecture** for the core and clients so that a later language change can
+reconstruct the architecture with bounded cost (supports D-033/D-035).
+
+**Because:** the Owner wants the architecture planned for the future and reconstructable across
+languages; report completeness is not adoption of the recommended stacks.
+
+**Consequence:** no language, toolkit, renderer, store, transport, auth or push provider is selected;
+the Swift/SwiftUI and Kotlin/Compose recommendations stay advisory; the R-MOB `MOB-F01…F24` and the
+shared `MP01…MP11` fixture namespaces reconcile into one suite. A language-agnostic architecture
+planning deliverable is commissioned.
+
+**Falsifier:** a future language change cannot be reconstructed from the plan without re-deriving
+the architecture.
+
+**Review:** 2026-12-01.

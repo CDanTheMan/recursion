@@ -229,3 +229,21 @@ Outcome:
   **G-32 (licensing/counsel, distribution) remains open and counsel-gated**; no language, store,
   framework, transport, authentication mechanism, push provider or renderer selected.
 - **Reinforces** D-019/D-021/D-022/D-024/D-029/D-031/D-033/D-034; no conflict found.
+
+## Status update — 2026-10-02 iOS/Android design + language expansion (O-04)
+
+The separately requested OS/language expansion is intaken at
+`docs/v3/research-lane/ios-android-20261002/` (3 files sha256-verified; pin `b696f6e…`, consuming
+`recursion.ui-contract@candidate-2`). Research coverage only; **all prototypes/tests/benchmarks
+unexecuted**.
+
+- Advisory stacks: iOS **Swift + SwiftUI** (small UIKit boundary); Android **Kotlin + Compose**
+  (Views and RN New Architecture are genuine rivals). No stack, toolkit, renderer, store, auth,
+  transport or push provider selected.
+- **Reconciliation flags:** R-MOB `MOB-F01…F24` vs the shared **`MP01…MP11`** matrix must become one
+  suite; Android does not yet register a concrete `ClientCapabilityProfile@candidate-2` /
+  `UiMaterializationManifest@candidate-2`.
+- **D-028 does not set an Android floor** — Android min/target API and supported profiles remain open.
+- Offline retention: iOS reports it undecided (vs R-MOB's conservative hold); Owner decision O-01
+  governs. **G-32 (counsel/distribution) remains open.**
+- **Reinforces** D-018/D-019/D-022/D-024/D-034/D-035; no conflict found.
