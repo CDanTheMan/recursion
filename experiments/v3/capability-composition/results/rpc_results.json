@@ -1,0 +1,53 @@
+{
+  "lane": "R-PC",
+  "fixtures": [
+    "F01",
+    "F11",
+    "F12"
+  ],
+  "results": {
+    "F01": {
+      "output_hex": "434f4e54524f4c0a50524f4345445552450a444154410a",
+      "ranges": {
+        "core": [
+          0,
+          8
+        ],
+        "skill": [
+          8,
+          18
+        ],
+        "evidence": [
+          18,
+          23
+        ]
+      }
+    },
+    "F11": {
+      "tail_preserves_prefix": true,
+      "core_len": 24,
+      "core_ranges": {
+        "core": [
+          0,
+          9
+        ],
+        "skill": [
+          9,
+          19
+        ],
+        "evidence": [
+          19,
+          24
+        ]
+      }
+    },
+    "F12": {
+      "total": 25,
+      "note_range": [
+        23,
+        25
+      ]
+    }
+  },
+  "scope": "bounded synthetic; provider-free; not Owner acceptance"
+}
