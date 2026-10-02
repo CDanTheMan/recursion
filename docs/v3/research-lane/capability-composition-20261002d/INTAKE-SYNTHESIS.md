@@ -30,6 +30,16 @@ tree-wide node-key uniqueness, and strengthens the UI-05 collision fixture. Sema
 `@1` names/meanings are unchanged. Candidate-1 is historical; its schema identity is not reused.
 Source: delivered `CORRECTIONS.md`.
 
+## Pin reconciliation (`b696f6e` → `a7b3db6`)
+
+Since the reports were pinned, master advanced by three merges: PR #150 (FU-03 Stage B execution),
+PR #151 (Stage B verification handoff + index) and PR #152 (D-035 repo-topology principle +
+P-001). None touches the R-PC/R-UI/R-MOB assumptions: Stage B is kernel/experiment evidence,
+orthogonal to the composition/UI/mobile contracts; D-035 (plugins live outside the core, referenced
+by digest) is consistent with R-UI's detached contribution set referencing R-A manifests and R-MOB's
+mobile as an optional external client — the reports cite D-018…D-034 only and conflict with none. No
+lane assumption is invalidated; a re-pin remains advisory until implementation begins.
+
 ## What landed
 
 | Lane | Candidate artifact | One line |
