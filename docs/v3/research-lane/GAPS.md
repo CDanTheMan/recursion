@@ -123,3 +123,64 @@ One self-contained prompt per P1 gap, at `docs/v3/prompts/followups-20261001/`:
   experiment has run.
 - Owner `decision` gaps (G-06, G-07, G-11, G-32) must be resolved in `state/DECISIONS.md`; a
   follow-up research session may inform them but must never decide them.
+
+## Status update — 2026-10-02 follow-up batch
+
+The five P1 follow-up prompts were run through the Codex Dot. Their outputs are intaken at
+`docs/v3/research-lane/followups-20261002/`. Outcome:
+
+- **The G-01–G-05 specifications are now complete; the gaps are NOT closed.** The reports propose
+  the experiments, contracts, fixtures, candidate definitions and acceptance oracles but did not
+  run them — no benchmark, model-checker run, chaos case or platform qualification. They stay
+  `experiment`/`research` gaps until the local experiments run and are independently accepted.
+- Prerequisite ordering is confirmed: FU-03 (G-03) gates FU-01 (G-01); FU-04 (G-04) supplies the
+  platform facts FU-02 (G-02) and FU-05 (G-05) assume.
+- A read-only repository architecture audit (`followups-20261002/synthesis/architecture-audit.md`)
+  adds a construction-stage finding: the tree is a contract-and-experiment foundation, not yet a
+  usable v3 harness, and it flags authority/scope drift to repair before construction.
+- Owner `decision` gaps (G-06, G-07, G-11, G-32) remain decisions; no follow-up research closes
+  them.
+
+## Status update — 2026-10-02 rescope and scope-reframe intake
+
+Owner decisions recorded in `state/DECISIONS.md` D-018…D-027 change the register:
+
+- **G-06 closed** by `D-020`: automatic node takeover is required for long-running autonomous
+  work and is user-toggleable; the shipping core is single-node with a fenced writer and a
+  store/availability seam; replicated failover is a first-party plugin.
+- **G-07 closed** by `D-022`: one prompt/stop vocabulary (Aggressive/Full/Lazy + `checkpoint`/
+  `interrupt`/`drain`) across configuration, formal model and broker.
+- **G-11 closed** by `D-028`: Windows 11 25H2 (build 26200) minimum (24H2 build 26100 Enterprise
+  also qualified), x64 primary; Linux 6.12 LTS primary / 6.6 LTS minimum with cgroup v2; WSL2
+  dev/test only; canonical state on local NTFS/ext4 only (SMB/NFS out of scope); "survives power
+  loss" = application-consistent after an abrupt VM reset at the commit boundary.
+- **G-32 remains open** and is counsel-gated; research packet R-C prepares a counsel-ready
+  question packet (no spend).
+- **Release-cut recommendation rejected** (`D-019`): the 2026-10-02 research recommended a smaller
+  initial release with named deferrals; the Owner chose the comprehensive build with opt-in
+  install instead. The proposed deferrals become built-but-opt-in plugins, not gate reductions.
+- New research gaps commissioned as packets R-A (plugin portability), R-B (cross-harness
+  delegation / productive continuity), R-C (route legality and licensing), R-D (quota-efficiency
+  measurement) under `docs/v3/prompts/dot-research-20261002/`.
+- The 2026-10-02 scope-reframe handoff is intaken at
+  `docs/v3/research-lane/scope-reframe-20261002/` (source-documented, nothing executed).
+
+## Status update — 2026-10-02 R-A…R-D research return
+
+The R-A…R-D research return (46 questions) is intaken at
+`docs/v3/research-lane/dot-ra-rd-20261002/` with a synthesis at
+`.../synthesis/SYNTHESIS.md`. Outcome:
+
+- **Proposals, not closures.** R-A (plugin portability contract + manifest schema), R-B
+  (delegation record + HonestAccounting + the H1 productive-continuity experiment), R-C
+  (counsel-ready packet, Q01–Q12), R-D (quota/lock-in measurement spec + preregistration
+  templates). Nothing was executed; no legal clearance; porting savings and continuity remain
+  unmeasured.
+- **G-32 remains open**; R-C prepares the counsel packet only. No route is cleared.
+- **Reinforces** D-019/D-021/D-023/D-024/D-026; no conflict found.
+- New reviewable work items (no IDs assigned yet): adopt/reconcile the R-A plugin contract;
+  reconcile R-A/R-B shared semantics (capability/grant/attenuation/evidence/refusal/accounting);
+  draft the Codex App Server qualification spec; draft the R-D measurement preregistration; hand
+  R-C to counsel with Lucas's deployment/tier/entity facts.
+- Three-phase local handoff: (1) reconcile evidence + Owner acceptance of any normative contract;
+  (2) first qualification spec under separate authorization; (3) freeze measurement + counsel.

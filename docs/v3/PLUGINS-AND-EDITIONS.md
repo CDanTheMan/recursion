@@ -366,3 +366,37 @@ Before a feature or plugin enters the roadmap, record:
 - falsifier and removal criteria.
 
 This is the primary defense against an ambitious v3 becoming slow, opaque bloat.
+
+## 2026-10 rescope — availability backends, opt-in install, and portability
+
+Accepted direction 2026-10-02 (`state/DECISIONS.md` D-019, D-020, D-025, D-026). The following
+refines the boundary above; it selects no language, store or framework.
+
+**Availability is a capability plugin, not core.** The privileged kernel owns canonical-state
+writes and a monotonic fence/epoch, plus a defined **store/availability seam**. The shipping
+**core is single-node**: one fenced writer with replay recovery and adapter-free boot. Replicated
+storage, coordinator election and automatic node takeover are a first-party **plugin** shipped in
+the `remote`/`full` editions and are opt-in; a plugin implements takeover against the core fence
+and cannot bypass it. Default install compiles in no consensus. This closes G-06 (`D-020`).
+
+**Nodes.** Distinguish, per `EXECUTION-FABRIC.md`, the user client, the authority coordinator, the
+execution host, the engine and the inference provider. Multi-node *execution* is a first-release
+capability (`OR-025`); multi-node *canonical-writer failover* is the availability plugin above.
+Node transports and artifact stores are capability plugins.
+
+**Opt-in install is first-class.** Editions remain (`core`, `standard`, `remote`, `full`,
+`custom`). The installer offers a lean default, a bundle with all first-party plugins, or a
+custom selection. "Installed but not selected" is genuinely inert: no code import, subprocess,
+watcher, network, credential or model access until admitted. Deferral must never be hidden inside
+a lean preset.
+
+**Portability is a first-class design goal.** The plugin/capability-graph contract should be
+designed so existing plugin ecosystems (for example Cordis/DeepSeek, OpenCode, Goose, MCP, VS Code
+extensions) can be ported and optimized at low cost. A manifest names identity/version/digest,
+publisher/provenance, schema/runtime/platform ranges, dependencies, capability requirements, side
+effects, and required credentials/egress; discovery validates bounded metadata without importing
+implementation. Research packet R-A specifies the portability contract.
+
+**Community and automatic research.** Recursion is a community, open-source project (`D-026`);
+the plugin contract is published early to attract porters. Continuing autonomous research is an
+optional, off-by-default, budgeted plugin — never a standing executive (`D-025`).

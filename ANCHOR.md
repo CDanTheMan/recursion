@@ -3,17 +3,22 @@
 Reread this when deciding what to work on. If a task doesn't serve something below, it's not
 in scope.
 
-Last reviewed: 2026-09-28 · Next review: 2026-12-28
+Last reviewed: 2026-10-02 · Next review: 2027-01-02
 
 ---
 
 ## Mission
 
-Build and ship **Recursion v3**: a provider-neutral agent harness a person can actually drive
-— a client (terminal first, GUI later), a local execution kernel, a context/compaction engine,
-and a multi-node fabric — with typed adapters for supported upstream harnesses. The comparison
-standard is tools like T3 Code. "First usable release" is defined by the accepted platform
-release in `docs/v3/PRODUCT.md`.
+Build and ship **Recursion v3**: a community, open-source agent harness that is both a
+first-class native harness *and* a first-class unifying wrapper over the wider harness ecosystem.
+A person can drive it — a client (terminal first, GUI later), a local execution kernel, a
+context/compaction engine, and a multi-node fabric — with typed adapters for supported upstream
+harnesses. Its purpose is to remove ecosystem lock-in and give users optimized performance on
+the models and subscriptions they already prefer, including by reducing unnecessary quota/usage
+burn. It does not hold or relay provider credentials it was not explicitly granted; where
+possible it delegates to a user-authenticated tool. The comparison standard is tools like T3
+Code. "First usable release" is defined by the accepted platform release in `docs/v3/PRODUCT.md`
+(see `state/DECISIONS.md` D-018…D-027).
 
 ## Success criteria (near term)
 
@@ -26,6 +31,9 @@ release in `docs/v3/PRODUCT.md`.
    correctness, authorization, resource limits and recoverability.
 4. **Research depth preserved.** Every open question resolves to a pinned source, a
    deterministic gate, or an explicit `unknown` with a named blocker.
+5. **No lock-in, measurably.** A goal can be driven through more than one harness/route without
+   holding credentials Recursion was not granted, and measured quota/usage burden falls versus
+   driving each harness directly — or the public claim is withdrawn.
 
 ## Not this year / explicitly out of scope
 

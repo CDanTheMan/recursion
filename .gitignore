@@ -14,6 +14,9 @@ loop/logs/
 .claude/
 .tmp/
 
+# Local tool binaries (downloaded, not committed): TLA+ tools for FU-03
+tools/tlaplus/
+
 # internal runtime dotfiles (BOARD.md itself IS tracked; its sidecars are not)
 state/.board.tsv
 state/.board-tick

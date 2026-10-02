@@ -1,7 +1,7 @@
 ---
 title: Recursion v3 research and construction roadmap
 status: evidence-reconciled-roadmap-proposal
-last-updated: 2026-09-07
+last-updated: 2026-10-02
 ---
 
 # Recursion v3 research and construction roadmap hypothesis
@@ -10,6 +10,33 @@ last-updated: 2026-09-07
 > The dated material below preserves its original campaign scope and evidence.
 > Earlier next-step instructions, branch-specific gates and expired campaign windows
 > do not define a new task or establish current runtime status.
+
+## 2026-10-02 rescope — comprehensive build, opt-in install, community harness
+
+Owner decisions D-018…D-027 change the direction. Recursion is repositioned as a community,
+open-source harness that is both a first-class native harness and a unifying wrapper over the
+harness ecosystem (D-018), built comprehensively and installed opt-in rather than cut down
+(D-019). The research recommendation of a smaller initial release is rejected; its proposed
+deferrals become built-but-opt-in plugins, not gate reductions.
+
+Pipeline (development and test order):
+
+1. Harden the deterministic core first: **FU-03** formal model/mutants/byte vectors, then
+   **FU-04** OS platform conformance. These gate everything downstream; the toolchain is ready.
+2. Qualify the first upstream profile (**Codex App Server**, D-023) and prototype a second,
+   deliberately different adapter as an architecture stress test.
+3. Then **FU-01** language/runtime, **FU-02** store crash/replay (default store + availability
+   seam), **FU-05** broker protocol/chaos.
+4. Build the plugin/portability layer from R-A, delegate-to-tool routing from R-B, legal posture
+   from R-C, and quota measurement from R-D.
+5. Independent acceptance of receipts before any selection. Language, store, renderer and plugin
+   runtime remain Owner selections, decided after experiments.
+
+The availability plugin (replicated store + coordinator election) ships in `remote`/`full`, never
+in the default install (D-020). The interface baseline is
+[INTERFACE-STRATEGY.md](INTERFACE-STRATEGY.md). Autonomous research is an optional, bounded,
+off-by-default plugin (D-025). The 2026-10-02 scope-reframe handoff is intaken at
+[research-lane/scope-reframe-20261002](research-lane/scope-reframe-20261002/).
 
 ## RESET mapping continuation — 2026-09-07
 
