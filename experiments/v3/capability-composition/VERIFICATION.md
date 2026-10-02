@@ -7,8 +7,9 @@ independent verifier), and record the model + version.
 
 ## Candidate under review
 
-- Branch: `loop/work/capcomp-conformance-20261002` at commit
-  `0e74886101d2aee8002afb29593f1021cf64c61b` (or the master merge commit once merged).
+- Verify at the **PR #160 merge commit on master** (or the branch head `07095d4`, which contains
+  this handoff). The R-PC results were produced at code commit
+  `0e74886101d2aee8002afb29593f1021cf64c61b`.
 - Scope: **R-PC fixtures F01/F11/F12** (`run/check_rpc_fixtures.py`) and **F02–F10, F13–F16**
   (`run/check_rpc_invariants.py`), plus the structural gate `check_suite.py`.
 - Explicitly **deferred, not passed:** F17/F18 (scripted accounting/analysis; not provider-free
@@ -19,7 +20,7 @@ independent verifier), and record the model + version.
 ```text
 git clone https://github.com/NotSkittlz/recursion.git recursion-verify-capcomp
 cd recursion-verify-capcomp
-git checkout 0e74886101d2aee8002afb29593f1021cf64c61b
+git checkout <PR #160 merge commit>   # or: git checkout loop/work/capcomp-conformance-20261002
 ```
 
 ## Run
