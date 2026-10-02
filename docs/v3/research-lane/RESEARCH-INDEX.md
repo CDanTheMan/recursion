@@ -57,6 +57,11 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Overnight R-E…R-Y return (Checkpoint3) | `research-lane/overnight-20261002/` (+`check_intake.py`) | intaken; 247 files sha256-verified; all target tests unexecuted |
 | FU-03 Session A (kernel reconciliation) | `experiments/v3/fu-03-kernel-session-a/` (+`check_session_a.py`) | witness confirmed; M25 killed; 36 rows dispositioned; not 36/36 |
 | Shared-contract reconciliation prompt | `prompts/dot-reconciliation-20261002c/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002c.zip`) |
+| FU-03 Session A verification | `experiments/v3/fu-03-kernel-session-a/verification/` | **ACCEPT** (Muse Spark 1.3, candidate `74fb18d`); result on `loop/work/verify-fu03a-20261002` @ `a4c755c` |
+| FU-03 Stage B design (crash cuts/fences/Stop) | `experiments/v3/fu-03-stage-b/` (+`check_stage_b.py`) | design-only; 26 fixtures; 36 refs; unexecuted |
+| Shared-contracts + extensibility return | `research-lane/shared-contracts-20261002/` (+`check_intake.py`) | intaken; 5 files sha256-verified; unexecuted |
+| Product thesis (D-034) | `state/DECISIONS.md`; `docs/v3/PRODUCT.md` thesis | accepted |
+| Capability-driven composition prompts | `prompts/dot-research-20261002d/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002d.zip`) |
 | Architecture edge map | `research-lane/ARCHITECTURE-COVERAGE.md` | maintained |
 | Per-harness coverage matrix | `research-lane/HARNESS-COVERAGE.md` | maintained |
 | Next-phase runbook | `research-lane/NEXT-PHASE.md` | maintained |

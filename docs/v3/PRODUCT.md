@@ -113,6 +113,13 @@ authentication wording still needs route-specific evidence. The historical cohor
 
 Recursion is a community, open-source, self-hosted agent harness for conversation, coding, and sustained high-quality autonomous work across models, subscriptions, APIs, CLIs, repositories, and machines. It turns an owner's intent into reviewable work while preserving authority, privacy, quota, machine responsiveness, and evidence.
 
+Its public thesis is **"the harness that scales with your workflow"**: a capable baseline on its
+own, that grows deterministically and without lock-in as the user adds subscriptions, BYOKs,
+plugins, configurations, nodes and modding, composing the effective system prompt and capabilities
+to fit the workflow. All open source. That thesis is a claim to earn, not an assumption: the
+composition must be reproducible, versioned, cache-aware and injection-safe, and "scales" is
+measured, not asserted (`state/DECISIONS.md` D-034).
+
 Recursion is two things at once: a **first-class native harness** with its own model-and-tool
 loop, and a **first-class unifying wrapper** over the wider harness ecosystem (for example Claude
 Code, Codex, Cursor, Gemini/Google CLI, Grok Build, Hermes, OpenCode, Devin, Cline, Antigravity,

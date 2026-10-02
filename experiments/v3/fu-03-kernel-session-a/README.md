@@ -35,6 +35,18 @@ the 36 mutants.
 - **Oracle:** 51 language-neutral vectors + the trace bridge pass; `RefState` is deterministic and
   `RefProject` binds aggregate/ordinal/tail.
 
+## Independent verification
+
+**ACCEPT — diagnostic scope only.** Verified by **Muse Spark 1.3 Contributor** (a different model
+family) on candidate `74fb18d`, 2026-10-02: fresh clone, hash-verified jar, full TLC re-derivation
+confirming the `NoBlindEffectReplay` witness and that the `RFixed` guard removes it; `M25`
+re-violates without the guard; oracle imports are stdlib-only with hand-stated vectors;
+`check_session_a.py` is non-vacuous on the M25 axis; the symmetry constraint is accepted as a
+bounded assumption. It is **not** 36/36, not a kernel freeze, not qualification. Result file:
+branch `loop/work/verify-fu03a-20261002` @ `a4c755c`.
+**Finding fixed here:** `check_model.py` now enforces `M25 = KILLED` (previously only
+`check_session_a.py` did).
+
 ## Gate
 
 ```text

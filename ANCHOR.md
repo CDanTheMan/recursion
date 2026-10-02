@@ -13,12 +13,14 @@ Build and ship **Recursion v3**: a community, open-source agent harness that is 
 first-class native harness *and* a first-class unifying wrapper over the wider harness ecosystem.
 A person can drive it — a client (terminal first, GUI later), a local execution kernel, a
 context/compaction engine, and a multi-node fabric — with typed adapters for supported upstream
-harnesses. Its purpose is to remove ecosystem lock-in and give users optimized performance on
+harnesses. Its public thesis: **"the harness that scales with your workflow"** — a capable baseline
+alone that grows deterministically, without lock-in, as capabilities are added. Its purpose is to
+remove ecosystem lock-in and give users optimized performance on
 the models and subscriptions they already prefer, including by reducing unnecessary quota/usage
 burn. It does not hold or relay provider credentials it was not explicitly granted; where
 possible it delegates to a user-authenticated tool. The comparison standard is tools like T3
 Code. "First usable release" is defined by the accepted platform release in `docs/v3/PRODUCT.md`
-(see `state/DECISIONS.md` D-018…D-027).
+(see `state/DECISIONS.md` D-018…D-034).
 
 ## Success criteria (near term)
 
