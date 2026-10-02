@@ -48,6 +48,14 @@ autonomous research packets were handed to the research agent
 Nothing was executed; G-32 stays open; the next step is reconciliation + Owner acceptance of any
 candidate contract (see the synthesis's local handoff).
 
+- **Reconciliation draft:** `dot-ra-rd-20261002/synthesis/RECONCILIATION.md` — R-A/R-B shared
+  semantics crosswalked against D-018…D-033 (draft contract candidate, not adopted).
+- **Next research wave issued:** `docs/v3/prompts/dot-research-20261002b/` (R-E trusted launch
+  boundary, R-F headless delegation/fan-out, R-G plugin import, R-H counsel operating-mode); zip
+  handed to the Dot.
+- **Anti-drift map:** `docs/v3/research-lane/RESEARCH-INDEX.md` — every wave, intake, packet,
+  experiment, decision and gate in one place. Add new artifacts there on landing.
+
 ## Next steps in order
 
 1. Owner: approve authority reconciliation; answer G-06 (first), then G-07/G-11.
