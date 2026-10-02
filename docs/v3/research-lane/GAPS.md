@@ -184,3 +184,27 @@ The R-A…R-D research return (46 questions) is intaken at
   R-C to counsel with Lucas's deployment/tier/entity facts.
 - Three-phase local handoff: (1) reconcile evidence + Owner acceptance of any normative contract;
   (2) first qualification spec under separate authorization; (3) freeze measurement + counsel.
+
+## Status update — 2026-10-02 overnight research + audit
+
+The overnight checkpoint (pin `73d70505`) is intaken at
+`docs/v3/research-lane/overnight-20261002/` (247 files, sha256-verified). It is research coverage
+only; **every target test is unexecuted**. Corrections to this register:
+
+- **G-03 is not "does not exist".** A reduced-bound TLA+/TLC model and a 7-mutant battery now
+  exist (`experiments/v3/fu-03-formal-model/`), but they are `researched-not-run` for the
+  acceptance gate: the 4-command-ID bound cannot exceed four transitions, 5/7 is not 5/36, and the
+  proposed 7-step `NoBlindEffectReplay` witness is source-level inference outside the executed
+  bound. The kernel freeze stays conditional.
+- **G-04 is not "zero measured cells".** A bounded host+WSL trace harness exists
+  (`experiments/v3/fu-04-os-conformance/`), but **zero platform profiles are qualified**; WSL is
+  dev/test only (D-028). Native Windows and native Linux remain unqualified.
+- **G-31:** the ten controls and the Lazy-Stop boundary are now defined at design level
+  (`INTERFACE-STRATEGY.md` + D-022); the fixtures remain unrun.
+- New candidate kernel issues (static/inferred, unexecuted) are recorded in the intake's `gaps/`
+  and `additional-kernel-research/` (e.g. SK03 second-attempt unreachability, SG03 effect-key
+  widening, and the `CORR/GOAL` fixture setup qualification). None changes a decided gap status.
+- Owner interpretation still needed: GUI release timing (D-019 built opt-in GUI vs "GUI later").
+
+This supersedes the older wording in the G-03/G-04/G-31 rows above; those rows are retained as the
+historical register.

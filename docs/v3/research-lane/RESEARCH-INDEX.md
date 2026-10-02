@@ -54,6 +54,9 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | R-A…R-D return (46 questions) | `research-lane/dot-ra-rd-20261002/` (+`check_intake.py`, `synthesis/SYNTHESIS.md`) | intaken; proposals only |
 | R-A/R-B reconciliation | `research-lane/dot-ra-rd-20261002/synthesis/RECONCILIATION.md` | draft contract candidates |
 | R-E…R-Y prompts (21 frontier handoffs) | `prompts/dot-research-20261002b/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002b.zip`) |
+| Overnight R-E…R-Y return (Checkpoint3) | `research-lane/overnight-20261002/` (+`check_intake.py`) | intaken; 247 files sha256-verified; all target tests unexecuted |
+| FU-03 Session A (kernel reconciliation) | `experiments/v3/fu-03-kernel-session-a/` (+`check_session_a.py`) | witness confirmed; M25 killed; 36 rows dispositioned; not 36/36 |
+| Shared-contract reconciliation prompt | `prompts/dot-reconciliation-20261002c/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002c.zip`) |
 | Architecture edge map | `research-lane/ARCHITECTURE-COVERAGE.md` | maintained |
 | Per-harness coverage matrix | `research-lane/HARNESS-COVERAGE.md` | maintained |
 | Next-phase runbook | `research-lane/NEXT-PHASE.md` | maintained |
@@ -73,7 +76,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Experiment | Path | Result |
 |---|---|---|
 | FU-03 model | `experiments/v3/fu-03-formal-model/` | reduced-bound TLC baseline clean; 5/7 instantiated mutants killed (`check_fu03*.py`) |
-| FU-04 OS conformance | `experiments/v3/fu-04-os-conformance/` | safe probes + bounded 20-trace harness; 12 pass / 0 fail / 1 unknown / 13 not_run; floors pinned (D-028) |
+| FU-04 OS conformance | `experiments/v3/fu-04-os-conformance/` | safe probes + bounded 20-trace harness; 13 run rows (3 host + 10 WSL): 12 pass / 0 fail / 1 unknown, **10 distinct PF IDs**, **10 not_run**; zero qualified profiles; floors pinned (D-028) |
 
 ## Gates and tools
 

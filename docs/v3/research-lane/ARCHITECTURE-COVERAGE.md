@@ -23,7 +23,11 @@ sources and a one-line note. Coverage of documentation is **not** qualification.
 - **R** (`prompts/dot-research-20261002{,b}/`): R-A plugin portability; B delegation; C route
   legality; D quota; E trusted launch; F headless fan-out; G plugin import; H counsel mode; I Grok
   study; J multi-agent terminal; K multiplexer/TUI; L interface platform; M Claude modding; N
-  graphical client; O performance.
+  graphical client; O performance; **P** prompt-injection/untrusted input; **Q** durable memory;
+  **R** long-horizon autonomy; **S** adaptive optimization; **T** multimodal I/O; **U** sandbox/
+  isolation/supply chain; **V** observability/replay; **W** evaluation/benchmark science; **X**
+  node fabric/remote execution; **Y** workspace/repository graph. Returns are intaken at
+  `research-lane/overnight-20261002/`.
 - **Design docs** (`docs/v3/`): PRODUCT, ARCHITECTURE(+PROOF/OPTIONS), CURRENT-AND-MIGRATION,
   EXECUTIVES, PLANNING, AUTONOMOUS-PLANNING, M1A/B/C contracts/wire profiles, EXECUTION-FABRIC,
   CONTEXT, STATE, SECURITY, PLUGINS-AND-EDITIONS, CLI, TERMINAL-RUNTIME, INTERACTION-SURFACES,
@@ -32,6 +36,13 @@ sources and a one-line note. Coverage of documentation is **not** qualification.
   RESEARCH-INDEX, NEXT-PHASE) and `state/DECISIONS.md` D-017…D-033.
 
 Statuses: **covered-by-spec**, **researched-not-run**, **proposed-packet**, **gap**.
+
+> **Erratum (2026-10-02).** The R-P…R-Y returns are now intaken at
+> `research-lane/overnight-20261002/`. Edges 23, 34, 39, 40, 42, 45, 48 and 54 — and other
+> `gap`/`proposed-packet` rows in the P–Y domain — are therefore **`researched-not-run`**
+> (return present, nothing executed), not `gap`. The R-P…R-Y lane topics are: P injection,
+> Q memory, R autonomy, S adaptation, T multimodal, U isolation, V replay/observability,
+> W evaluation, X node fabric, Y workspace graph.
 
 ## Edge map
 
@@ -122,18 +133,21 @@ Statuses: **covered-by-spec**, **researched-not-run**, **proposed-packet**, **ga
 
 ## Gaps and frontier edges
 
-- Workspace/repo graph (54) → **R-P** proposed.
-- Multimodal I/O (40) → **R-Q** proposed.
-- Long-horizon autonomy/self-scheduling (42) → **R-R** proposed (extends D-025).
-- Explain/replay debugging (48) → **R-S** proposed.
-- Adaptive learning/route feedback (45) → **R-T** proposed (extends DS-11/DS-26, R-D).
-- Accessibility (23) → **R-U** proposed.
-- MCP bridge/tool bounds (39) → **R-V** proposed (extends M1B, DS-23).
-- Untrusted input/prompt injection (34) → **R-W** proposed; no current owner.
-- Leases/forks (10) → **R-X** proposed (extends DS-13, DS-15).
-- Quarantine/ambiguity/emergency stop (7) and per-adapter fencing (8) → **R-Y** proposed.
+- Workspace/repo graph (54) → **R-Y** (return intaken; unexecuted).
+- Multimodal I/O (40) → **R-T** (return intaken; unexecuted).
+- Long-horizon autonomy/self-scheduling (42) → **R-R** (extends D-025; unexecuted).
+- Explain/replay debugging (48) → **R-V** (unexecuted).
+- Adaptive learning/route feedback (45) → **R-S** (extends DS-11/DS-26, R-D; unexecuted).
+- Accessibility (23) → **R-L / R-N** (terminal + graphical; unexecuted).
+- MCP bridge/tool bounds (39) → `overnight-20261002/protocol-edges/` + **R-G** (unexecuted).
+- Untrusted input/prompt injection (34) → **R-P** (unexecuted).
+- Leases/forks (10) → DS-15 / DS-05 / **R-Y** (unexecuted).
+- Quarantine/ambiguity/emergency stop (7) and per-adapter fencing (8) → DS-01 / DS-02 / DS-08 /
+  DS-32 (unexecuted).
+- Memory (27) → **R-Q**; sandbox/isolation (31) → **R-U**; evaluation (50) → **R-W**; node fabric
+  (53) → **R-X**.
 - Credential boundary (33) → **R-E**; plugin contract (30) → **R-A**; import (32) → **R-G**;
-  fan-out (28) → **R-F**; verifier independence (49) and canary (37) → **R-E/R-O**.
+  fan-out (28) → **R-F**; verifier independence (49) and canary (37) → DS-03 / DS-08.
 
 Every researched-not-run edge closes only when its named experiment runs and an independent
 verifier reruns the exact candidate; a packet return is a proposal, not closure.
