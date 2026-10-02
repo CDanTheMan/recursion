@@ -5,6 +5,11 @@ last-updated: 2026-10-02
 ---
 # Capability-composition Owner review
 
+**Resolved 2026-10-02 — see `state/DECISIONS.md` D-036…D-039.** O-01→D-036 (no private offline
+redisplay), O-02→D-037 (fixtures authorized; Python harness only), O-03→D-038 (D-034/D-019 supersede
+older GUI-later exclusions), O-04→D-039 (accept the OS/language advisory; plan a language-agnostic
+architecture). O-05…O-08 remain deferred. This memo is retained as the original request.
+
 The R-PC / R-UI / R-MOB return is **research evidence, not adoption** (see `INTAKE-SYNTHESIS.md`).
 This memo lists only the decisions that need **Lucas**. Each row gives the question, the options, a
 recommendation, what it unblocks and the falsifier. Answering an item lets me record it in
