@@ -38,7 +38,7 @@ sources and a one-line note. Coverage of documentation is **not** qualification.
   CONTEXT, STATE, SECURITY, PLUGINS-AND-EDITIONS, CLI, TERMINAL-RUNTIME, INTERACTION-SURFACES,
   TELEMETRY, ACCEPTANCE, INTERFACE-STRATEGY, ROUTE-CAPABILITIES, PERFORMANCE-PLAN,
   SCIENTIFIC-RESEARCH; plus `research-lane/` maps (SYNTHESIS, GAPS, HARNESS-COVERAGE,
-  RESEARCH-INDEX, NEXT-PHASE) and `state/DECISIONS.md` D-017…D-033.
+  RESEARCH-INDEX, NEXT-PHASE) and `state/DECISIONS.md` D-017…D-035.
 
 Statuses: **covered-by-spec**, **researched-not-run**, **proposed-packet**, **gap**.
 
