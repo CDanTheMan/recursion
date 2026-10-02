@@ -67,6 +67,14 @@ kernel determinism / FU-02 store results.
 - **Option B:** defer until after the fixtures.
 - **Option C:** scope it first (which OSes / which candidate languages).
 
+**Update 2026-10-02 — already delivered.** The packet landed independently of this memo and is
+intaken at `docs/v3/research-lane/ios-android-20261002/` (PR #156): an advisory **iOS (Swift +
+SwiftUI)** and **Android (Kotlin + Compose)** design + language packet, sharing the `MP01…MP11`
+fixture matrix and consuming `recursion.ui-contract@candidate-2`. So O-04 is no longer "commission
+it"; the decision is whether to **accept the delivered advisory packet**, reconcile its fixture
+namespaces with R-MOB's `MOB-F01…F24`, and note that it addresses **mobile clients**, not the D-028
+desktop floors the memo originally scoped.
+
 ## Tier 3 — defer (gated; do not need you today)
 
 - **O-05** Normative adoption of the R-PC/R-UI/R-MOB candidate contracts — defer until independent
