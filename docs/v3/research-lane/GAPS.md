@@ -208,3 +208,24 @@ only; **every target test is unexecuted**. Corrections to this register:
 
 This supersedes the older wording in the G-03/G-04/G-31 rows above; those rows are retained as the
 historical register.
+
+## Status update — 2026-10-02 capability-composition research return (packet d, revision 2)
+
+The capability-composition return is intaken at
+`docs/v3/research-lane/capability-composition-20261002d/` (5 files sha256-verified; source pin
+`b696f6e…`). Research coverage only; **every target runtime/performance fixture is unexecuted**.
+Outcome:
+
+- **Proposals, not closures.** R-PC (composition manifest + eight-pass compiler + F01–F18), R-UI
+  (`recursion.ui-contract@candidate-2` typed contribution points + UI-01…UI-20 + C×V soak), R-MOB
+  (mobile session/read-cache/notification candidates + MOB-F01…F24 + provider-free path simulation).
+- **Revision-2 correction.** The first R-UI delivery used bare local IDs in resolved records
+  (ambiguous across suppliers sharing a local name); candidate-2 adds `ContributionKey`/`NodeKey`
+  and supplier-qualified resolution. A specification defect, not an observed runtime failure. R-PC
+  is byte-unchanged; R-MOB changes one reference line.
+- **New unresolved Owner policy:** private offline-content retention / offline protected redisplay
+  (R-MOB Q11) — the literal never-serves-an-unseen-revocation requirement is unsatisfiable offline.
+- **G-09/G-10/G-19 remain open** (privacy/publication order, renderer/runtime, containment) and
+  **G-32 (licensing/counsel, distribution) remains open and counsel-gated**; no language, store,
+  framework, transport, authentication mechanism, push provider or renderer selected.
+- **Reinforces** D-019/D-021/D-022/D-024/D-029/D-031/D-033/D-034; no conflict found.

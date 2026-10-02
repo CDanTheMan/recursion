@@ -1,8 +1,8 @@
 ---
 title: Next phase — research-to-experiment handoff (fresh context)
 status: active-runbook
-parent-goal: goal-recursion-v2-execution-fabric
-last-updated: 2026-10-03
+parent-goal: goal-recursion-v3-harness-orchestrator
+last-updated: 2026-10-02
 ---
 # Next phase — fresh-context handoff
 
@@ -23,7 +23,7 @@ Read this first on a new context, then `docs/v3/START-HERE.md`, `docs/v3/researc
 
 ## Owner decisions (updated 2026-10-02)
 
-Settled and recorded in `state/DECISIONS.md` D-018…D-027:
+Settled and recorded in `state/DECISIONS.md` D-018…D-035:
 
 - Thesis, release model, availability/failover, delegation-over-intermediation, pause/stop,
   first qualified profile, frontier claim, research plugin, license, counsel packet.
@@ -59,6 +59,10 @@ candidate contract (see the synthesis's local handoff).
   graph); zip handed to the Dot. Coverage maps: `ARCHITECTURE-COVERAGE.md`, `HARNESS-COVERAGE.md`.
 - **Anti-drift map:** `docs/v3/research-lane/RESEARCH-INDEX.md` — every wave, intake, packet,
   experiment, decision and gate in one place. Add new artifacts there on landing.
+- **Capability-composition return (packet d, revision 2):**
+  `docs/v3/research-lane/capability-composition-20261002d/` (R-PC composition compiler, R-UI
+  `recursion.ui-contract@candidate-2`, R-MOB mobile/remote control; +`check_intake.py`). Research
+  evidence only; all fixtures unexecuted; no technology selected.
 
 ## Next steps in order
 
@@ -73,6 +77,10 @@ candidate contract (see the synthesis's local handoff).
    **FU-05** (broker protocol + native chaos), using the accepted FU-03/FU-04 outputs.
 4. Independent acceptance of the receipts (separate session/verifier).
 5. Then selections and construction (audit's proposed bounded packets).
+6. Incorporate the capability-composition candidates (packet d): Owner review of the R-PC/R-UI/R-MOB
+   contract choices and the unresolved offline-retention policy; then independently checked,
+   provider-free conformance fixtures under separately admitted tasks (R-PC F01–F18, R-UI
+   UI-01…UI-20, R-MOB MOB-F01…F24). No technology selection is implied.
 
 ## Local execution discipline
 
