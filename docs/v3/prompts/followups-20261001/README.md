@@ -2,7 +2,7 @@
 title: Follow-up research prompts — 2026-10-01
 status: ready-for-explicit-invocation
 last-updated: 2026-10-01
-parent-goal: goal-recursion-v2-execution-fabric
+parent-goal: goal-recursion-v3-harness-orchestrator
 invocation: each handoff is self-contained; supplying the document launches its session
 ---
 
@@ -42,7 +42,7 @@ in under `## Baked context`.
 Each handoff is self-contained: a Deep Research session needs no repository access because the
 shared authority, scope, evidence and privacy context is baked into every file. The operator
 should read [CONTROL_PLANE.md](../../../../CONTROL_PLANE.md), `ANCHOR.md` and `AGENTS.md` before
-invoking a session. The Hermes constitution remains operative; these prompts propose no
+invoking a session. Hermes-led control was retired on 2026-09-28 (state/DECISIONS.md D-017); these prompts propose no
 amendment and never edit a protected path. Public sessions receive only public or synthetic
 briefs — never secrets, credentials, personal data, private repository content, local paths or
 account/infrastructure identifiers.

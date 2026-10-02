@@ -44,7 +44,7 @@ M1 work merely to restate its conclusions.
 ## Authority, environment, and campaign boundary
 
 Lucas is principal and final authority. CONTROL_PLANE.md remains operative; Hermes
-remains the executive control plane and portfolio owner. Astra is the research lead,
+control-plane role was retired on 2026-09-28 (state/DECISIONS.md D-017). Astra is the research lead,
 sole integrator, and sole writer for this campaign. The ratified future Recursion Head
 and goal-scoped ARM design does not transfer current authority.
 

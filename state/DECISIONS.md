@@ -266,3 +266,90 @@ traces pass. Destructive traces still require a disposable, Owner-approved targe
 VM reset.
 
 **Review:** 2026-12-01
+
+---
+
+## D-029 — Operator-provisioned trusted launch boundary (strong credential non-intermediation)
+Date: 2026-10-02 · Status: ACCEPTED (design research commissioned)
+
+**Options:** A) drive user-authenticated CLIs with policy-level non-intermediation only / B)
+invest in an operator-provisioned trusted launch boundary outside Recursion's readable domain so
+the strong non-access claim holds.
+
+**Chose:** B. Recursion is a trusted orchestrator the user leans on to define and operate their
+own space.
+
+**Because:** same-user processes can still read home, environment, keychain and process memory, so
+"drive the CLI" alone yields only policy-level non-intermediation (R-B §6).
+
+**Consequence:** a new architecture requirement and research packet R-E. If the boundary cannot be
+met on a profile, label that profile "non-intermediation-by-policy only."
+
+**Falsifier:** the boundary cannot be enforced on a supported platform profile.
+
+**Review:** 2026-12-01
+
+## D-030 — Delegation model: harness-native driving + headless fan-out
+Date: 2026-10-02 · Status: ACCEPTED (subject to counsel)
+
+**Chose:** Recursion delegates through the user's own harness/CLI and its native headless/exec
+features (e.g. `codex exec`, `claude -p`, `cursor-agent`, ACP), owning the JSON stream of that
+output; it does not stand in for the provider. High-volume fan-out is authorized through the
+harness's own delegation features inside the user's subscription.
+
+**Because:** the model requests occur through the user's harness and subscription; Recursion
+supplies one customizable front and removes ecosystem lock-in.
+
+**Consequence:** research packets R-F (delegation mechanics) and R-H (counsel framing). Treated as
+within-ToS pending counsel; no credential custody.
+
+**Falsifier:** counsel finds this indistinguishable from credential intermediation on a required
+route, or a harness forbids third-party drivers.
+
+**Review:** 2026-12-01
+
+## D-031 — Product positioning: no vendor-sabotage claim
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Chose:** market Recursion on its unrestrictive, customizable environment — one place to connect
+keys/subscriptions, routing through any harness or its own, with privacy and safety — not on a
+"vendors sabotage quota" claim, which resource measurement cannot establish (R-D).
+
+**Consequence:** PRODUCT/ANCHOR wording updated in the reconciliation; savings claimed only when
+measured per workload.
+
+**Falsifier:** n/a (positioning).
+
+**Review:** 2026-12-01
+
+## D-032 — Parent goal is v3; sweep prompt templates
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Chose:** create `state/goals/goal-recursion-v3-harness-orchestrator.md` as the active parent
+goal; repoint all prompt front matter; sweep retired Hermes-control wording (D-017) from every
+prompt template.
+
+**Because:** the outgoing R-A…R-D packet carried stale authority ("Hermes is the executive control
+plane", "Hermes constitution remains operative") and a v2 parent goal; the Dot had to correct it.
+
+**Consequence:** prompt suites updated. Broader doc drift (e.g. `ARCHITECTURE.md`) is tracked
+separately.
+
+**Falsifier:** n/a (governance hygiene).
+
+**Review:** 2026-12-01
+
+## D-033 — Plugin import/port hypothesis (validate, do not assume)
+Date: 2026-10-02 · Status: ACCEPTED (as a hypothesis to test)
+
+**Chose:** treat "porting is cheap" as a hypothesis; commission research into importing/porting
+existing plugins (notably DeepSeek Harness / Cordis) and cross-harness plugin reuse.
+
+**Because:** R-A finds porting savings unmeasured and an acceptable-port count of zero possible.
+
+**Consequence:** research packet R-G; the D-019 rationale stands but its porting-leverage
+assumption is testable.
+
+**Falsifier:** measured porting cost exceeds a native rewrite, or no ecosystem imports cleanly.
+
+**Review:** 2026-12-01

@@ -2,7 +2,7 @@
 title: R-B — Delegating across harnesses without credential intermediation
 status: ready-for-explicit-invocation
 last-updated: 2026-10-02
-parent-goal: goal-recursion-v2-execution-fabric
+parent-goal: goal-recursion-v3-harness-orchestrator
 invocation: self-contained; supplying this document launches the research
 ---
 
@@ -24,7 +24,7 @@ AI "ARM manager"); configurable context and compaction; plugins and editions; an
 interactive detachable terminal (CLI, optional Telegram); and Windows/Linux operation and
 recovery. A graphical frontend is not required for v3.
 
-Authority: Lucas is the final owner. Hermes is the executive control plane. Workers are
+Authority: Lucas is the final owner. Recursion is a standalone harness and harness orchestrator; Hermes is a retired control plane and an optional upstream integration. Workers are
 bounded executors. An implementer's own PASS is never acceptance; independent review is
 required, and missing verification is never a pass. `CONTROL_PLANE.md` is the operative
 constitution; a research session may propose amendments but must never edit it. No research
