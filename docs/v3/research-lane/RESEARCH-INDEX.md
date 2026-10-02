@@ -60,7 +60,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | FU-03 Session A (kernel reconciliation) | `experiments/v3/fu-03-kernel-session-a/` (+`check_session_a.py`) | witness confirmed; M25 killed; 36 rows dispositioned; not 36/36 |
 | Shared-contract reconciliation prompt | `prompts/dot-reconciliation-20261002c/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002c.zip`) |
 | FU-03 Session A verification | `experiments/v3/fu-03-kernel-session-a/verification/` | **ACCEPT** (Muse Spark 1.3, candidate `74fb18d`); result on `loop/work/verify-fu03a-20261002` @ `a4c755c` |
-| FU-03 Stage B execution (crash cuts/fences/Stop) | `experiments/v3/fu-03-stage-b/run/` (+`check_stage_b_run.py`) | **executed** at `d56cc44`: 16 bounded-consistent / 5 unsupported / 3 unknown / 2 blocked / 0 divergent; **awaits independent verification** |
+| FU-03 Stage B execution (crash cuts/fences/Stop) | `experiments/v3/fu-03-stage-b/run/` (+`check_stage_b_run.py`) | executed at `d56cc44` (16/5/3/2/0); **independently ACCEPT** (Muse Spark; result `experiments/v3/fu-03-stage-b/verification/results/d56cc44-muse-spark-1-3.md`); bounded synthetic scope, not IT-02 |
 | Shared-contracts + extensibility return | `research-lane/shared-contracts-20261002/` (+`check_intake.py`) | intaken; 5 files sha256-verified; unexecuted |
 | Product thesis (D-034) | `state/DECISIONS.md`; `docs/v3/PRODUCT.md` thesis | accepted |
 | Capability-driven composition prompts | `prompts/dot-research-20261002d/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002d.zip`) |

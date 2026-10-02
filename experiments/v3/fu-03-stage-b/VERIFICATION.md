@@ -1,8 +1,9 @@
 # FU-03 Stage B — independent verification handoff
 
-Status: **awaiting independent verification.** An implementer's PASS is not acceptance
-(`CONTROL_PLANE.md` invariant 3). Run this in a separate session on a **different model family**
-(e.g. Muse) and record the model + version.
+Status: **ACCEPT** — independently verified by Muse Spark (`meta/muse-spark-1.3-contributor`) on a
+fresh clone at `d56cc44`, 2026-10-02. Result:
+`verification/results/d56cc44-muse-spark-1-3.md`. Scope: bounded synthetic only — **not IT-02
+acceptance, not qualification**. The original handoff is retained below for reference.
 
 ## Candidate
 
