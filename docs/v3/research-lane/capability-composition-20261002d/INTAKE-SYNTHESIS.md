@@ -86,7 +86,8 @@ data is a versioned additive application facet, never a new base field or author
   unseen revocation" is impossible for a disconnected device; Owner must choose online-only status vs an
   explicit bounded offline snapshot, or reject both. No offline protected redisplay until decided.
 - No language, store, framework, toolkit, renderer, transport, authentication mechanism or push provider
-  is selected; G-09 (privacy/publication order), G-10 (renderer/runtime) and G-19 (containment) stay open.
+  is selected; G-09 (privacy/publication order), G-10 (renderer/runtime) and G-19 (containment) stay
+  open, and **G-32 (licensing/counsel, distribution) remains open and counsel-gated** (D-026/D-027).
 - Any empirical study, live route/platform qualification and independent rerun need separate authorization
   and custody (spend/deploy/live actions are human-gated).
 

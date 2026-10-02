@@ -225,6 +225,7 @@ Outcome:
   is byte-unchanged; R-MOB changes one reference line.
 - **New unresolved Owner policy:** private offline-content retention / offline protected redisplay
   (R-MOB Q11) — the literal never-serves-an-unseen-revocation requirement is unsatisfiable offline.
-- **G-09/G-10/G-19 remain open** (privacy/publication order, renderer/runtime, containment); no
-  language, store, framework, transport, authentication mechanism, push provider or renderer selected.
+- **G-09/G-10/G-19 remain open** (privacy/publication order, renderer/runtime, containment) and
+  **G-32 (licensing/counsel, distribution) remains open and counsel-gated**; no language, store,
+  framework, transport, authentication mechanism, push provider or renderer selected.
 - **Reinforces** D-019/D-021/D-022/D-024/D-029/D-031/D-033/D-034; no conflict found.
