@@ -42,9 +42,11 @@ Still required:
 ## Research commissioned 2026-10-02
 
 The scope-reframe handoff is intaken at `docs/v3/research-lane/scope-reframe-20261002/`. Four
-autonomous research packets are ready to hand to the research agent:
-`docs/v3/prompts/dot-research-20261002/` — R-A plugin portability, R-B cross-harness delegation,
-R-C route legality/licensing, R-D quota-efficiency measurement.
+autonomous research packets were handed to the research agent
+(`docs/v3/prompts/dot-research-20261002/`); their **return** (46 questions) is intaken at
+`docs/v3/research-lane/dot-ra-rd-20261002/` with a synthesis at `.../synthesis/SYNTHESIS.md`.
+Nothing was executed; G-32 stays open; the next step is reconciliation + Owner acceptance of any
+candidate contract (see the synthesis's local handoff).
 
 ## Next steps in order
 

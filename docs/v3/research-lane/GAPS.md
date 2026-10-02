@@ -164,3 +164,23 @@ Owner decisions recorded in `state/DECISIONS.md` D-018…D-027 change the regist
   measurement) under `docs/v3/prompts/dot-research-20261002/`.
 - The 2026-10-02 scope-reframe handoff is intaken at
   `docs/v3/research-lane/scope-reframe-20261002/` (source-documented, nothing executed).
+
+## Status update — 2026-10-02 R-A…R-D research return
+
+The R-A…R-D research return (46 questions) is intaken at
+`docs/v3/research-lane/dot-ra-rd-20261002/` with a synthesis at
+`.../synthesis/SYNTHESIS.md`. Outcome:
+
+- **Proposals, not closures.** R-A (plugin portability contract + manifest schema), R-B
+  (delegation record + HonestAccounting + the H1 productive-continuity experiment), R-C
+  (counsel-ready packet, Q01–Q12), R-D (quota/lock-in measurement spec + preregistration
+  templates). Nothing was executed; no legal clearance; porting savings and continuity remain
+  unmeasured.
+- **G-32 remains open**; R-C prepares the counsel packet only. No route is cleared.
+- **Reinforces** D-019/D-021/D-023/D-024/D-026; no conflict found.
+- New reviewable work items (no IDs assigned yet): adopt/reconcile the R-A plugin contract;
+  reconcile R-A/R-B shared semantics (capability/grant/attenuation/evidence/refusal/accounting);
+  draft the Codex App Server qualification spec; draft the R-D measurement preregistration; hand
+  R-C to counsel with Lucas's deployment/tier/entity facts.
+- Three-phase local handoff: (1) reconcile evidence + Owner acceptance of any normative contract;
+  (2) first qualification spec under separate authorization; (3) freeze measurement + counsel.
