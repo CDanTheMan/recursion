@@ -17,6 +17,9 @@ loop/logs/
 # Local tool binaries (downloaded, not committed): TLA+ tools for FU-03
 tools/tlaplus/
 
+# TLC state store output (generated, potentially very large)
+**/results/metadir_*/
+
 # internal runtime dotfiles (BOARD.md itself IS tracked; its sidecars are not)
 state/.board.tsv
 state/.board-tick
