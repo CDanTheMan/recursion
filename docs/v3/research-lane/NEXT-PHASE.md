@@ -63,6 +63,9 @@ candidate contract (see the synthesis's local handoff).
   `docs/v3/research-lane/capability-composition-20261002d/` (R-PC composition compiler, R-UI
   `recursion.ui-contract@candidate-2`, R-MOB mobile/remote control; +`check_intake.py`). Research
   evidence only; all fixtures unexecuted; no technology selected.
+- **iOS/Android design + language expansion (O-04):** `docs/v3/research-lane/ios-android-20261002/`
+  (advisory iOS Swift/SwiftUI and Android Kotlin/Compose stacks; shared `MP01…MP11` fixtures;
+  +`check_intake.py`). Research evidence only; prototypes/tests unexecuted; no stack selected.
 
 ## Next steps in order
 
