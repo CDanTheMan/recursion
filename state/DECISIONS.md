@@ -378,3 +378,29 @@ capability-driven prompt/context composition (extends R-Q/R-L/R-O/R-A/R-W).
 fixed budget, or the composed prompt is not reproducible, the thesis is wrong for that addition.
 
 **Review:** 2026-12-01
+
+---
+
+## D-035 — Repository topology principle: plugins live outside the core
+Date: 2026-10-02 · Status: ACCEPTED (principle); any repository split remains PROPOSED, not authorized
+
+**Options:** A) monorepo with plugins vendored / B) plugins external to the core repo, referenced
+by digest / C) split the core product into multiple repositories now.
+
+**Chose:** B as the principle. Plugins are external artifacts; first-party plugins ship in editions
+by digest/lockfile. **Keep the core product in this single repository during R&D.** Consider
+extracting GUI/mobile only if they grow enough to justify it. **Do not split the core now.**
+
+**Because:** it keeps the core lean and enables a community plugin ecosystem and portability
+(R-A/D-019/D-033/D-034). Splitting now would harden an unfrozen kernel boundary, contradict the
+single-product framing in `CONTROL_PLANE.md`/`ANCHOR.md`, and multiply version/release drift while
+review throughput is the stated constraint (ANCHOR rationing rule). Recursion is still in R&D.
+
+**Consequence:** the proposal, target shape and migration checklist are recorded in
+`state/PROPOSALS.md` P-001. Any actual split requires an explicit control-plane authoring session
+amending `CONTROL_PLANE.md`/`ANCHOR.md`, recorded here. No repository is renamed or split now.
+
+**Falsifier:** the plugin contract cannot be versioned/verified across repositories, or the core
+cannot stay lean with external plugins, or a split is needed to make forward progress.
+
+**Review:** 2026-12-01.
