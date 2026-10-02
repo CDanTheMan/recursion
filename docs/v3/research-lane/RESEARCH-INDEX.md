@@ -55,6 +55,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | R-A/R-B reconciliation | `research-lane/dot-ra-rd-20261002/synthesis/RECONCILIATION.md` | draft contract candidates |
 | R-E…R-Y prompts (21 frontier handoffs) | `prompts/dot-research-20261002b/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002b.zip`) |
 | Overnight R-E…R-Y return (Checkpoint3) | `research-lane/overnight-20261002/` (+`check_intake.py`) | intaken; 247 files sha256-verified; all target tests unexecuted |
+| FU-03 Session A (kernel reconciliation) | `experiments/v3/fu-03-kernel-session-a/` (+`check_session_a.py`) | witness confirmed; M25 killed; 36 rows dispositioned; not 36/36 |
 | Architecture edge map | `research-lane/ARCHITECTURE-COVERAGE.md` | maintained |
 | Per-harness coverage matrix | `research-lane/HARNESS-COVERAGE.md` | maintained |
 | Next-phase runbook | `research-lane/NEXT-PHASE.md` | maintained |
