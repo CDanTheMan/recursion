@@ -3,7 +3,7 @@
 (* FU-03 increment 2: a fuller integrated-style model with guard            *)
 (* indirection so single-site mutations can be generated mechanically.      *)
 (*                                                                          *)
-(* Still NOT the accepted integrated bound: CmdIds is 1..6 and MaxEvents 16 *)
+(* Still NOT the accepted integrated bound: CmdIds is 1..4 and MaxEvents 6 *)
 (* (the accepted bound is command ids 1..20 and up to 20 committed events). *)
 (* No principals, no authority-dimension predicates, no replay/projection   *)
 (* monitor state, no packet derivation, no CBOR vectors. Guard sites are    *)

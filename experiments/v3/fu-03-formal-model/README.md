@@ -67,7 +67,7 @@ sites), renames the module, runs TLC, and writes `results/mutants.json` plus a r
 | Mutant | Name | Disposition | Violated |
 |---|---|---|---|
 | M02 | CHAIN_PREV_DELETE | KILLED | ChainIntegrity |
-| M03 | CHAIN_ORDINAL_WEAKEN | KILLED | ChainIntegrity |
+| M03 | CHAIN_ORDINAL_WEAKEN | KILLED | TypeOK |
 | M04 | COMMAND_DEDUP_DELETE | KILLED | NoDuplicateIds |
 | M16 | PAUSE_GUARD_DELETE | KILLED | PauseNoProgress |
 | M26 | VERIFIER_SELF_ALLOW | KILLED | VerifierSafety |
@@ -79,6 +79,14 @@ sites), renames the module, runs TLC, and writes `results/mutants.json` plus a r
 `MaxEvents = 6`), so it is not the 36/36 acceptance metric; the remaining 29 ds-FU-03 rows are
 not yet instantiated and require the integrated model (independent reference/replay monitors,
 packet derivation, authority dimensions).
+
+> **Erratum (2026-10-02 overnight audit).** (a) M03 is killed by `TypeOK`, not `ChainIntegrity`.
+> (b) The 4-command-ID bound cannot exceed four accepted transitions, so 5/7 is emphatically
+> **not 5/36**. (c) M25/M31 are `NOT_KILLED_WITHIN_BOUND` and must not be read as equivalence or
+> reachability proofs. (d) The proposed 7-step `NoBlindEffectReplay` witness in the packet is
+> source-level inference **outside** the executed bound, and `SK03` reports that second-attempt
+> completion is unreachable (both result guards require `attempt = 1`). See
+> `docs/v3/research-lane/overnight-20261002/gaps/`.
 
 Battery gate: `python -X utf8 -B experiments/v3/fu-03-formal-model/check_fu03_mutants.py`.
 

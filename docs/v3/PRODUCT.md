@@ -210,13 +210,13 @@ are in [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md#canonical-optimization-decision
 
 ## Release philosophy
 
-V3 is one monumental product release built as independently testable internal milestones. A public `v3.0.0` tag should wait until the mandatory end-to-end contract passes, while core, standard, remote, full and custom release manifests control installed surface area. Future product defaults proposed after constitutional reconciliation include `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable terminals; current immediate PAUSE remains operative. Installing `full` never implies maximum `sovereign` authority. This is an atomic product promise with incremental construction, not a big-bang implementation.
+V3 is one monumental product release built as independently testable internal milestones. A public `v3.0.0` tag should wait until the mandatory end-to-end contract passes, while core, standard, remote, full and custom release manifests control installed surface area. Future product defaults proposed after constitutional reconciliation include `checkpoint` PAUSE, trusted bounded autonomy, digest-aware plugin grants and detachable terminals. D-022 fixes one pause/stop vocabulary (Aggressive / Full / Lazy plus checkpoint / interrupt / drain); installing `full` never implies maximum `sovereign` authority. This is an atomic product promise with incremental construction, not a big-bang implementation.
 
 ## What must be proven
 
 - A strong ARM plus deliberate delegation produces better accepted code per quota unit than uncontrolled swarms.
 - Semantic context artifacts and compaction reduce repeated input without losing owner intent, constraints, or evidence.
-- The coordinator stays responsive on the target VPS under realistic event, SQLite, plugin, and monitoring load.
+- The coordinator stays responsive on the target VPS under realistic event, store, plugin and monitoring load. (No store is selected; SQLite is one unrun challenger.)
 - Users can understand and change routing without reading source or invoking a model.
 - Provider and node failures cannot silently widen spend, privacy exposure, or permissions.
 - V3's additional machinery produces measurable benefit over the accepted v2 baseline.

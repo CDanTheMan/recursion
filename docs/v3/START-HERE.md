@@ -38,10 +38,11 @@ Read only the specification slices needed for the assigned task:
 | Context, plugins and security | [CONTEXT](CONTEXT.md), [PLUGINS-AND-EDITIONS](PLUGINS-AND-EDITIONS.md), [SECURITY](SECURITY.md) |
 | Release obligations and migration | [ACCEPTANCE](ACCEPTANCE.md), [CURRENT-AND-MIGRATION](CURRENT-AND-MIGRATION.md) |
 
-These product specifications do not silently replace the operative Hermes constitution.
-The [constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) is still a
-proposal. Do not reopen answered Owner questions or select a product language, store,
-framework, spending policy, or autonomous operating mode from a research recommendation.
+Hermes-led repository control was retired on 2026-09-28 (`state/DECISIONS.md` D-017); Hermes is an
+optional upstream integration, not the executive control plane. The
+[constitutional amendment proposal](CONSTITUTIONAL-AMENDMENT-PROPOSAL.md) is historical. Do not
+reopen answered Owner questions or select a product language, store, framework, spending policy,
+or autonomous operating mode from a research recommendation.
 
 ## What exists and what remains
 

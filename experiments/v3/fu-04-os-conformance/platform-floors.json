@@ -9,7 +9,7 @@
   },
   "windows": {
     "floor_home_pro": "Windows 11 25H2 (build 26200)",
-    "also_qualified": "Windows 11 24H2 (build 26100) Enterprise",
+    "additional_in_scope_unqualified": "Windows 11 24H2 (build 26100) Enterprise",
     "note": "24H2 Home/Pro reaches end of updates 2026-10-13"
   },
   "linux": {
