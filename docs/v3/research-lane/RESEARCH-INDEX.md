@@ -19,7 +19,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Anchor (mission/scope) | `ANCHOR.md` | current (active parent goal) |
 | Active parent goal | `state/goals/goal-recursion-v3-harness-orchestrator.md` | active |
 | Superseded parent goal | `state/goals/goal-recursion-v2-execution-fabric.md` | superseded (v2/Hermes retired, D-017) |
-| Decision log | `state/DECISIONS.md` | current (D-001…D-035) |
+| Decision log | `state/DECISIONS.md` | current (D-001…D-039) |
 
 ## Decisions (state/DECISIONS.md)
 
@@ -42,6 +42,10 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 - **D-033** plugin import/port is a hypothesis to validate.
 - **D-034** product thesis: "the harness that scales with your workflow."
 - **D-035** plugins live outside the core (principle); no repo split during R&D (`state/PROPOSALS.md` P-001).
+- **D-036** mobile: no private offline redisplay (online-only private view).
+- **D-037** conformance fixtures authorized; Python disposable test harness only; product language open.
+- **D-038** D-034/D-019 supersede older first-release GUI/mobile exclusions.
+- **D-039** iOS/Android advisory accepted; plan a language-agnostic architecture.
 
 ## Research waves and intakes
 
