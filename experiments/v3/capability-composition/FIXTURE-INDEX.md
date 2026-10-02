@@ -7,7 +7,9 @@ last-updated: 2026-10-02
 
 Reconciled registry of every fixture across the three lanes. Status values: `specified` (defined in
 the source report), `implemented` (fixture + oracle + mutation exist in this suite), `verified`
-(independently reviewed). Nothing here is executed yet.
+(independently reviewed). `implemented` means a fixture plus an independent oracle and a detected
+mutant exist and the lane gate passes; it is not Owner acceptance. `deferred` means specified but
+not provider-free behavioral evidence.
 
 ## R-PC — composition conformance (F01–F18)
 
@@ -17,23 +19,27 @@ acceptance). Corpus: the synthetic benchmark corpus (immutable input).
 | ID | Fixture | Status |
 |---|---|---|
 | F01 | Frozen reproduction — 23-byte literal specimen; reversed source enumeration reproduces the same bytes | implemented |
-| F02 | Generated-summary identity — outputs A and B are distinct; replaying A executes no regeneration | specified |
-| F03 | Mandatory closure under pressure — required members survive overflow handling | specified |
-| F04 | Disabled capability zero contribution — zero bytes/registrations/selector queries | specified |
-| F05 | Immediate revocation with coalesced preferences — revocation not erased by coalescing | specified |
-| F06 | Authority laundering — imported content cannot authorize a protected action | specified |
-| F07 | Procedure precedence — declared precedence/override, never load order | specified |
-| F08 | Evidence conflict — both sources preserved; no synthesized decision | specified |
-| F09 | Coherent read cut incl. ABA — cut unavailable rather than guessed | specified |
-| F10 | One governor + stale parent — compare-and-install rejects stale parent | specified |
+| F02 | Generated-summary identity — outputs A and B are distinct; replaying A executes no regeneration | implemented |
+| F03 | Mandatory closure under pressure — required members survive overflow handling | implemented |
+| F04 | Disabled capability zero contribution — zero bytes/registrations/selector queries | implemented |
+| F05 | Immediate revocation with coalesced preferences — revocation not erased by coalescing | implemented |
+| F06 | Authority laundering — imported content cannot authorize a protected action | implemented |
+| F07 | Procedure precedence — declared precedence/override, never load order | implemented |
+| F08 | Evidence conflict — both sources preserved; no synthesized decision | implemented |
+| F09 | Coherent read cut incl. ABA — cut unavailable rather than guessed | implemented |
+| F10 | One governor + stale parent — compare-and-install rejects stale parent | implemented |
 | F11 | Prefix continuity + required forfeiture — correctness beats reuse | implemented |
 | F12 | Span/role coverage incl. Unicode byte mutation and omitted wrapper | implemented |
-| F13 | Route/schema drift — re-admit disclosure; no cache-continuity shortcut | specified |
-| F14 | Checkpoint resume — historical grants never reactivate | specified |
-| F15 | Graph errors before load — cycle/ambiguity fails before body loading | specified |
-| F16 | Observer/oracle sensitivity — independent oracle detects planted faults | specified |
-| F17 | N-increment accounting — 5 increments × 4 arms × 6 tasks = 120 scripted cells | specified |
-| F18 | Scaling adjudication sensitivity — scripted-only disposition labels | specified |
+| F13 | Route/schema drift — re-admit disclosure; no cache-continuity shortcut | implemented |
+| F14 | Checkpoint resume — historical grants never reactivate | implemented |
+| F15 | Graph errors before load — cycle/ambiguity fails before body loading | implemented |
+| F16 | Observer/oracle sensitivity — independent oracle detects planted faults | implemented |
+| F17 | N-increment accounting — 5 increments × 4 arms × 6 tasks = 120 scripted cells | deferred |
+| F18 | Scaling adjudication sensitivity — scripted-only disposition labels | deferred |
+
+Gate: `run/check_rpc_fixtures.py` (F01, F11, F12) and `run/check_rpc_invariants.py` (F02–F10,
+F13–F16). F17/F18 are `deferred`: scripted accounting/analysis, not provider-free behavioral
+evidence.
 
 ## R-UI — UI projection conformance (UI-01…UI-20)
 
