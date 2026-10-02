@@ -353,3 +353,28 @@ assumption is testable.
 **Falsifier:** measured porting cost exceeds a native rewrite, or no ecosystem imports cleanly.
 
 **Review:** 2026-12-01
+
+---
+
+## D-034 — Product thesis: "the harness that scales with your workflow"
+Date: 2026-10-02 · Status: ACCEPTED
+
+**Chose:** the product thesis and public tagline is **"Recursion — the harness that scales with your
+workflow."** It is a capable baseline on its own (Pi-Agent-class) that grows *deterministically and
+without lock-in* as the user adds subscriptions, BYOKs, plugins, configurations, nodes and modding,
+composing the effective system prompt and capabilities to fit the workflow. All open source.
+
+**Because:** it names the moat — deterministic capability→behavior composition plus backend
+guarantees (authority, continuity, accounting, performance) plus true portability — rather than
+table-stakes features (multi-provider routing, plugins, a GUI) that already exist elsewhere.
+
+**Consequence:** the thesis is only true if the composition is reproducible, versioned, cache-aware
+and **injection-safe**, and if "scales" is measurable (not "more is always better" — integration
+tax is real). GUI and mobile are optional **client plugins** over a secure backend; remote/node
+fabric is a **backend capability**, never contingent on a client. New research commissioned:
+capability-driven prompt/context composition (extends R-Q/R-L/R-O/R-A/R-W).
+
+**Falsifier:** if adding a plugin/node/configuration degrades quality, latency or authority at a
+fixed budget, or the composed prompt is not reproducible, the thesis is wrong for that addition.
+
+**Review:** 2026-12-01
