@@ -21,18 +21,29 @@ Read this first on a new context, then `docs/v3/START-HERE.md`, `docs/v3/researc
   standalone and also wraps upstream harnesses. Some entry points still contain stale
   Hermes/v2 migration language and need a control-plane authoring reconciliation.
 
-## Owner decisions still required (research cannot close these)
+## Owner decisions (updated 2026-10-02)
 
-- **G-06** availability/authority contract: may the single fenced canonical writer be
-  temporarily unavailable after coordinator loss? (Decides consensus/failover scope.)
-- **G-07** one pause/stop vocabulary across configuration, formal model and broker.
-- **G-11** platform floors: exact Windows builds, Linux profiles, WSL2 production status,
-  SMB/NFS scope, and the meaning of "survives power loss".
-- **G-32** licensing/IP: counsel review before any distribution/publication/training decision.
-- **Authority reconciliation** — approve a control-plane authoring session.
+Settled and recorded in `state/DECISIONS.md` D-018…D-027:
+
+- Thesis, release model, availability/failover, delegation-over-intermediation, pause/stop,
+  first qualified profile, frontier claim, research plugin, license, counsel packet.
+- **G-06 closed** (D-020); **G-07 closed** (D-022). The 2026-10-02 research recommendation of a
+  smaller initial release was **rejected** (D-019); build comprehensively, install opt-in.
+
+Still required:
+
+- **G-11** platform floors (draft commissioned; needed before FU-04).
+- **G-32** licensing/counsel (packet R-C commissioned; no spend).
 - **Selections** (after the experiments): language, store, renderer, plugin runtime.
 - Always human-gated: spending/quota, credentials, live provider/host actions, deployment,
   publication, merges, autonomy flags.
+
+## Research commissioned 2026-10-02
+
+The scope-reframe handoff is intaken at `docs/v3/research-lane/scope-reframe-20261002/`. Four
+autonomous research packets are ready to hand to the research agent:
+`docs/v3/prompts/dot-research-20261002/` — R-A plugin portability, R-B cross-harness delegation,
+R-C route legality/licensing, R-D quota-efficiency measurement.
 
 ## Next steps in order
 

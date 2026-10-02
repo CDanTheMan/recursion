@@ -148,6 +148,7 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [INTERACTION-SURFACES.md](INTERACTION-SURFACES.md) | How do `#general`, direct ARM topics and collaborative multi-ARM conversations map to authority? |
 | [TELEMETRY.md](TELEMETRY.md) | How are quality, quota, cost, context, and resource use measured? |
 | [ACCEPTANCE.md](ACCEPTANCE.md) | What evidence is required before v3 may ship? |
+| [INTERFACE-STRATEGY.md](INTERFACE-STRATEGY.md) | What is the adopted CLI/TUI/GUI design baseline — object graph, state model, ten controls, three Stops, acceptance journeys? |
 | [ROADMAP.md](ROADMAP.md) | In what order should research and construction proceed? |
 | [DECISION-REGISTER.md](DECISION-REGISTER.md) | Which session conclusions are accepted, superseded, or unresolved? |
 | [REFERENCE-MATRIX.md](REFERENCE-MATRIX.md) | What should be studied in the reference harnesses? |

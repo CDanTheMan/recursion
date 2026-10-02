@@ -111,18 +111,24 @@ authentication wording still needs route-specific evidence. The historical cohor
 
 ## Thesis
 
-Recursion is a self-hosted, headless harness for sustained, high-quality autonomous software development across models, subscriptions, APIs, CLIs, repositories, and machines. It turns an owner's intent into reviewable development while preserving authority, privacy, quota, machine responsiveness, and evidence.
+Recursion is a community, open-source, self-hosted agent harness for conversation, coding, and sustained high-quality autonomous work across models, subscriptions, APIs, CLIs, repositories, and machines. It turns an owner's intent into reviewable work while preserving authority, privacy, quota, machine responsiveness, and evidence.
 
-Its distinguishing value is not another graphical chat UI or provider router. V3 owns the
-durable orchestration harness: actor identity, goals, delegation, routing, state, context,
-tools, evidence, policy and observation. It may delegate an individual turn to an optimized
-external agent loop without becoming a thin wrapper around that loop:
+Recursion is two things at once: a **first-class native harness** with its own model-and-tool
+loop, and a **first-class unifying wrapper** over the wider harness ecosystem (for example Claude
+Code, Codex, Cursor, Gemini/Google CLI, Grok Build, Hermes, OpenCode, Devin, Cline, Antigravity,
+Pi, Command Code and future adapters). It is not a naive router: it owns the durable
+orchestration harness — actor identity, goals, delegation, routing, state, context, tools,
+evidence, policy and observation — and it may delegate an individual turn to an optimized
+external agent loop without becoming a thin wrapper around it. Its purpose is to **remove
+ecosystem lock-in** and give users optimized performance on the models and subscriptions they
+already prefer, including by reducing unnecessary quota/usage burn:
 
 - the owner retains sovereignty and final authority;
 - one main assistant maintains strategic continuity;
 - goal-scoped ARM executives plan and delegate implementation;
-- external and native agent loops remain replaceable execution engines behind Recursion's
-  contracts;
+- native and external agent loops remain replaceable execution engines behind Recursion's contracts;
+- Recursion does not hold or relay provider credentials it was not explicitly granted; where
+  possible it delegates to a user-authenticated tool (`state/DECISIONS.md` D-021);
 - deterministic infrastructure enforces authority, budget, state, and publication;
 - context and evidence survive model, provider, session, and machine changes;
 - results are measured by verified code quality, not output volume.
@@ -194,7 +200,8 @@ are in [PERFORMANCE-PLAN.md](PERFORMANCE-PLAN.md#canonical-optimization-decision
 - Shipping a graphical frontend as part of the initial v3 contract.
 - Guaranteeing that unrelated providers share server-side prompt/KV caches.
 - Persisting hidden chain of thought or treating it as required recovery state.
-- Replacing Git, provider-native authentication, or every provider's optimized inner agent loop.
+- Reimplementing Git, provider-native authentication, or every provider's optimized inner agent
+  loop. Recursion integrates and routes across them; it does not reimplement each vendor loop.
 - Making protected-branch merge, production deployment, credential administration or authority
   expansion implicit/default consequences of ordinary autonomy. A future explicit Full Access
   grant may include supported high-impact capabilities only after constitutional reconciliation.

@@ -140,3 +140,26 @@ The five P1 follow-up prompts were run through the Codex Dot. Their outputs are 
   usable v3 harness, and it flags authority/scope drift to repair before construction.
 - Owner `decision` gaps (G-06, G-07, G-11, G-32) remain decisions; no follow-up research closes
   them.
+
+## Status update — 2026-10-02 rescope and scope-reframe intake
+
+Owner decisions recorded in `state/DECISIONS.md` D-018…D-027 change the register:
+
+- **G-06 closed** by `D-020`: automatic node takeover is required for long-running autonomous
+  work and is user-toggleable; the shipping core is single-node with a fenced writer and a
+  store/availability seam; replicated failover is a first-party plugin.
+- **G-07 closed** by `D-022`: one prompt/stop vocabulary (Aggressive/Full/Lazy + `checkpoint`/
+  `interrupt`/`drain`) across configuration, formal model and broker.
+- **G-11 remains open**; a concrete platform-floor draft (Windows build floor, Linux profiles,
+  WSL2 status, SMB/NFS scope, "survives power loss") is commissioned for Owner approval before
+  FU-04.
+- **G-32 remains open** and is counsel-gated; research packet R-C prepares a counsel-ready
+  question packet (no spend).
+- **Release-cut recommendation rejected** (`D-019`): the 2026-10-02 research recommended a smaller
+  initial release with named deferrals; the Owner chose the comprehensive build with opt-in
+  install instead. The proposed deferrals become built-but-opt-in plugins, not gate reductions.
+- New research gaps commissioned as packets R-A (plugin portability), R-B (cross-harness
+  delegation / productive continuity), R-C (route legality and licensing), R-D (quota-efficiency
+  measurement) under `docs/v3/prompts/dot-research-20261002/`.
+- The 2026-10-02 scope-reframe handoff is intaken at
+  `docs/v3/research-lane/scope-reframe-20261002/` (source-documented, nothing executed).
