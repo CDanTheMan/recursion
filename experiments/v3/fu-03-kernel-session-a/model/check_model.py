@@ -5,7 +5,7 @@ Requires a prior run of run_baselines.py and mutants.py. Certifies only:
   * the RBig baseline result is recorded (a recorded NoBlindEffectReplay
     witness, or a clean exit);
   * the RFixed baseline is clean;
-  * M25 and M31 carry a non-empty disposition;
+  * M25 is KILLED; M31 carries a non-empty disposition;
   * every KILLED row was killed by its expected invariant;
   * all 36 registry ids appear with a disposition.
 
@@ -90,9 +90,10 @@ def main() -> int:
     for row in receipts.values():
         if row.get("disposition") not in VALID:
             fail(f"{row['mutant_id']} has invalid disposition {row.get('disposition')!r}")
-    for mutant_id in ("M25", "M31"):
-        if not receipts[mutant_id].get("disposition"):
-            fail(f"{mutant_id} has an empty disposition")
+    if receipts["M25"].get("disposition") != "KILLED":
+        fail("M25 must be KILLED by the reconciled model")
+    if not receipts["M31"].get("disposition"):
+        fail("M31 has an empty disposition")
     for row in receipts.values():
         if row["disposition"] == "KILLED" and row.get("violated_invariant") != row.get("expected_invariant"):
             fail(f"{row['mutant_id']} killed by {row.get('violated_invariant')}, "
