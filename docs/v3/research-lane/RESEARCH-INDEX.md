@@ -19,7 +19,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Anchor (mission/scope) | `ANCHOR.md` | current (active parent goal) |
 | Active parent goal | `state/goals/goal-recursion-v3-harness-orchestrator.md` | active |
 | Superseded parent goal | `state/goals/goal-recursion-v2-execution-fabric.md` | superseded (v2/Hermes retired, D-017) |
-| Decision log | `state/DECISIONS.md` | current (D-001…D-033) |
+| Decision log | `state/DECISIONS.md` | current (D-001…D-035) |
 
 ## Decisions (state/DECISIONS.md)
 
@@ -64,6 +64,7 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Shared-contracts + extensibility return | `research-lane/shared-contracts-20261002/` (+`check_intake.py`) | intaken; 5 files sha256-verified; unexecuted |
 | Product thesis (D-034) | `state/DECISIONS.md`; `docs/v3/PRODUCT.md` thesis | accepted |
 | Capability-driven composition prompts | `prompts/dot-research-20261002d/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002d.zip`) |
+| Capability-composition return (R-PC/R-UI/R-MOB, rev 2) | `research-lane/capability-composition-20261002d/` (+`check_intake.py`) | intaken; 5 files sha256-verified; R-UI `@candidate-2`; all target tests unexecuted |
 | Architecture edge map | `research-lane/ARCHITECTURE-COVERAGE.md` | maintained |
 | Per-harness coverage matrix | `research-lane/HARNESS-COVERAGE.md` | maintained |
 | Next-phase runbook | `research-lane/NEXT-PHASE.md` | maintained |

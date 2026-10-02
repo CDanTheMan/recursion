@@ -1,7 +1,7 @@
 ---
 title: Architecture coverage and edge map
 status: research-coverage-not-qualification
-last-updated: 2026-10-01
+last-updated: 2026-10-02
 ---
 
 # Architecture coverage and edge map
@@ -27,7 +27,10 @@ sources and a one-line note. Coverage of documentation is **not** qualification.
   **R** long-horizon autonomy; **S** adaptive optimization; **T** multimodal I/O; **U** sandbox/
   isolation/supply chain; **V** observability/replay; **W** evaluation/benchmark science; **X**
   node fabric/remote execution; **Y** workspace/repository graph. Returns are intaken at
-  `research-lane/overnight-20261002/`.
+     `research-lane/overnight-20261002/`. The capability-composition packet d return adds **PC**
+   capability-driven prompt/context composition, **UI** capability-driven UI projection
+   (`recursion.ui-contract@candidate-2`) and **MOB** mobile/remote control, intaken at
+   `research-lane/capability-composition-20261002d/`.
 - **Design docs** (`docs/v3/`): PRODUCT, ARCHITECTURE(+PROOF/OPTIONS), CURRENT-AND-MIGRATION,
   EXECUTIVES, PLANNING, AUTONOMOUS-PLANNING, M1A/B/C contracts/wire profiles, EXECUTION-FABRIC,
   CONTEXT, STATE, SECURITY, PLUGINS-AND-EDITIONS, CLI, TERMINAL-RUNTIME, INTERACTION-SURFACES,
@@ -43,6 +46,12 @@ Statuses: **covered-by-spec**, **researched-not-run**, **proposed-packet**, **ga
 > (return present, nothing executed), not `gap`. The R-P…R-Y lane topics are: P injection,
 > Q memory, R autonomy, S adaptation, T multimodal, U isolation, V replay/observability,
 > W evaluation, X node fabric, Y workspace graph.
+>
+> **Erratum (2026-10-02, packet d).** The R-PC/R-UI/R-MOB capability-composition candidates are
+> intaken at `research-lane/capability-composition-20261002d/`; edges they touch (21 CLI/TUI/GUI,
+> 23 accessibility, 24 multi-agent UX, 26 compaction/cache, 30 plugin/capability graph, 40
+> multimodal, 44 perf engineering, 48 explain/replay, 53 multi-node/remote) are
+> `researched-not-run`, not `gap`.
 
 ## Edge map
 
