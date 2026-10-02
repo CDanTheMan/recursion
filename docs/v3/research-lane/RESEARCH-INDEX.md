@@ -53,7 +53,9 @@ path (a ruled-out approach without its reason is a dead end waiting to be redisc
 | Scope-reframe handoff intake | `research-lane/scope-reframe-20261002/` (+`check_intake.py`) | intaken |
 | R-A…R-D return (46 questions) | `research-lane/dot-ra-rd-20261002/` (+`check_intake.py`, `synthesis/SYNTHESIS.md`) | intaken; proposals only |
 | R-A/R-B reconciliation | `research-lane/dot-ra-rd-20261002/synthesis/RECONCILIATION.md` | draft contract candidates |
-| R-E…R-H prompts | `prompts/dot-research-20261002b/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002b.zip`) |
+| R-E…R-Y prompts (21 frontier handoffs) | `prompts/dot-research-20261002b/` (+`check_research_stack.py`) | issued (zip: `Recursion_Dot_Research_Packet_20261002b.zip`) |
+| Architecture edge map | `research-lane/ARCHITECTURE-COVERAGE.md` | maintained |
+| Per-harness coverage matrix | `research-lane/HARNESS-COVERAGE.md` | maintained |
 | Next-phase runbook | `research-lane/NEXT-PHASE.md` | maintained |
 
 ## Specs and design baselines (docs/v3)

@@ -50,9 +50,13 @@ candidate contract (see the synthesis's local handoff).
 
 - **Reconciliation draft:** `dot-ra-rd-20261002/synthesis/RECONCILIATION.md` — R-A/R-B shared
   semantics crosswalked against D-018…D-033 (draft contract candidate, not adopted).
-- **Next research wave issued:** `docs/v3/prompts/dot-research-20261002b/` (R-E trusted launch
-  boundary, R-F headless delegation/fan-out, R-G plugin import, R-H counsel operating-mode); zip
-  handed to the Dot.
+- **Next research wave issued:** `docs/v3/prompts/dot-research-20261002b/` — **21 frontier
+  handoffs R-E…R-Y** (trusted launch boundary, headless delegation/fan-out, plugin import,
+  counsel operating-mode, Grok Build source study, multi-agent terminal UX, terminal multiplexer/
+  TUI, interface platform, Claude Code terminal modding, graphical client, backend performance,
+  prompt-injection defense, durable memory, long-horizon autonomy, adaptive optimization,
+  multimodal I/O, sandbox/supply chain, observability, evaluation science, node fabric, workspace
+  graph); zip handed to the Dot. Coverage maps: `ARCHITECTURE-COVERAGE.md`, `HARNESS-COVERAGE.md`.
 - **Anti-drift map:** `docs/v3/research-lane/RESEARCH-INDEX.md` — every wave, intake, packet,
   experiment, decision and gate in one place. Add new artifacts there on landing.
 

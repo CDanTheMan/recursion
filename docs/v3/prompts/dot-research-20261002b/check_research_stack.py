@@ -42,6 +42,23 @@ EXPECTED = [
     "R-F-headless-delegation-and-fanout.md",
     "R-G-plugin-import-and-cross-harness-reuse.md",
     "R-H-counsel-operating-mode.md",
+    "R-I-grok-build-source-study.md",
+    "R-J-multi-agent-terminal-communication.md",
+    "R-K-terminal-multiplexer-and-tui.md",
+    "R-L-interface-platform-cli-tui-gui.md",
+    "R-M-claude-code-terminal-modding.md",
+    "R-N-graphical-client-architecture.md",
+    "R-O-performance-and-configurability-engineering.md",
+    "R-P-prompt-injection-and-untrusted-input-defense.md",
+    "R-Q-durable-memory-and-knowledge-architecture.md",
+    "R-R-long-horizon-autonomy-and-scheduling.md",
+    "R-S-adaptive-optimization-and-outcome-learning.md",
+    "R-T-multimodal-io-and-attachments.md",
+    "R-U-sandbox-runtime-isolation-and-supply-chain.md",
+    "R-V-observability-introspection-and-replay-debugging.md",
+    "R-W-harness-evaluation-and-benchmark-science.md",
+    "R-X-node-fabric-and-remote-execution-protocol.md",
+    "R-Y-workspace-and-repository-graph.md",
 ]
 
 REQUIRED_HEADINGS = [
@@ -153,7 +170,7 @@ def main() -> int:
         if name not in found_names:
             errors.append(f"{name}: expected handoff is missing")
     for name in sorted(found_names - set(EXPECTED)):
-        errors.append(f"{name}: unexpected R file (the packet is fixed at four handoffs)")
+            errors.append(f"{name}: unexpected R file (the packet is fixed at twenty-one handoffs)")
 
     seen_titles: dict[str, str] = {}
     for path in r_files:
