@@ -20,6 +20,7 @@ ROOT = HERE.parents[2]
 MANIFEST = ROOT / "docs/v3/research-lane/followups-20261002/machine/platform-manifest.json"
 TRACES = ROOT / "docs/v3/research-lane/followups-20261002/machine/negative-traces.json"
 PROBES = HERE / "results" / "probes.json"
+FLOORS = HERE / "platform-floors.json"
 
 
 def fail(message: str) -> None:
@@ -28,7 +29,7 @@ def fail(message: str) -> None:
 
 
 def main() -> int:
-    for path in (MANIFEST, TRACES, PROBES):
+    for path in (MANIFEST, TRACES, PROBES, FLOORS):
         if not path.exists():
             fail(f"missing file: {path}")
 
@@ -64,9 +65,24 @@ def main() -> int:
     if not probes.get("destructive_not_run"):
         fail("destructive traces are not explicitly recorded as not run")
 
-    print(f"FU04_PASS manifest unqualified ({len(profiles)} profiles); "
+    case_ids = {p.get("case_id") for p in profiles}
+    floors = json.loads(FLOORS.read_text(encoding="utf-8"))
+    mapped = {d["case_id"]: d["disposition"] for d in floors.get("profile_dispositions", [])}
+    if set(mapped) != case_ids:
+        fail(f"floors mapping does not cover every manifest case: {sorted(case_ids ^ set(mapped))}")
+    if any(d == "qualified" for d in mapped.values()):
+        fail("floors claim a qualified profile without trace evidence")
+    oos = floors.get("storage", {}).get("out_of_scope", [])
+    if "SMB" not in oos or "NFS" not in oos:
+        fail("SMB/NFS must be out of canonical scope")
+    if not floors.get("power_loss", {}).get("definition"):
+        fail("power-loss definition missing")
+
+    in_scope = sorted(k for k, v in mapped.items() if v == "in_scope_unqualified")
+    print(f"FU04_PASS manifest unqualified ({len(profiles)} profiles; in scope: {in_scope}); "
           f"{len(fixtures)} traces unexecuted; {len(observed)} safe probes observed; "
-          f"{len(probes['destructive_not_run'])} destructive traces not run")
+          f"{len(probes['destructive_not_run'])} destructive traces not run; "
+          f"floors pinned (D-028)")
     return 0
 
 

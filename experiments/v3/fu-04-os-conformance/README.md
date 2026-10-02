@@ -34,6 +34,15 @@ python -X utf8 -B experiments/v3/fu-04-os-conformance/probe_windows.py
 python -X utf8 -B experiments/v3/fu-04-os-conformance/check_fu04.py
 ```
 
+## Platform floors (G-11 / D-028)
+
+`platform-floors.json` pins the approved floors: Windows 11 **25H2 (26200)** minimum Home/Pro plus
+**24H2 (26100) Enterprise**, x64 primary; Linux **6.12 LTS** primary / **6.6 LTS** minimum with
+**cgroup v2**; **WSL2 dev/test only**; canonical state on **local NTFS/ext4 only** (SMB/NFS out of
+scope); "survives power loss" = application-consistent after an abrupt **VM reset** at the commit
+boundary. Every manifest case is mapped to `in_scope_unqualified`, `dev_test_only`, `out_of_scope`
+or `later`; **no profile is qualified** and the manifest stays `proposed_unexecuted`.
+
 ## Next increments
 
 1. Owner fixes G-11 platform floors, then `pin_state` and `profile_key` are populated with exact
