@@ -39,6 +39,26 @@ TOOLS = [
 ]
 
 
+def find_tool(name: str) -> str | None:
+    """Locate a tool on PATH or in the usual Windows install locations."""
+    found = shutil.which(name)
+    if found:
+        return found
+    exe = f"{name}.exe"
+    candidates = [
+        Path("C:/Program Files/Go/bin") / exe,
+        Path.home() / ".cargo" / "bin" / exe,
+    ]
+    for pattern in ("Eclipse Adoptium", "Eclipse Foundation"):
+        base = Path("C:/Program Files") / pattern
+        if base.exists():
+            candidates.extend(sorted(base.glob(f"*/bin/{exe}")))
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 def main() -> int:
     gaps: list[str] = []
     notes: list[str] = []
@@ -51,8 +71,8 @@ def main() -> int:
     for name, mandatory in TOOLS:
         if name == "python":
             continue
-        found = shutil.which(name)
-        state = "OK" if found else ("MISSING" if mandatory else "missing (not needed for FU-03/04)")
+        found = find_tool(name)
+        state = f"OK ({found})" if found else ("MISSING" if mandatory else "missing (not needed for FU-03/04)")
         print(f"{name}: {state}")
         if not found and mandatory:
             gaps.append(name)

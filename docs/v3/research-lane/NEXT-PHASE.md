@@ -62,14 +62,18 @@ Read this first on a new context, then `docs/v3/START-HERE.md`, `docs/v3/researc
 
 ## Machine readiness
 
-Ready: Python 3.12.10 (stdlib `sqlite3`, `hashlib`, `struct`, `zlib`), git 2.48.1,
-Node 24, WSL `Ubuntu-24.04`.
-Missing for this phase: **Java** (TLA+/TLC, FU-03), **Rust** and **Go** (FU-01, later).
+Ready (installed 2026-10-03): Python 3.12.10 (stdlib `sqlite3`, `hashlib`, `struct`, `zlib`),
+git 2.48.1, Node 24, WSL `Ubuntu-24.04`, **Java 21.0.12.1 (Temurin)**,
+**Rust 1.99.0 / Cargo 1.99.0**, **Go 1.27.0**.
+
+TLA+ tools: `tools/tlaplus/tla2tools.jar`, official release **v1.7.4** (TLA+ 1.7.4 / TLC 2.19,
+rev `5a47802`), fetched from the official GitHub release on 2026-10-03 — SHA-256
+`936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88`, 2,274,532 bytes. The binary
+is gitignored (`tools/tlaplus/`); pin this hash into the FU-03 run identity and re-hash if the
+local bytes change.
 
 - Run the readiness gate: `python -X utf8 -B tools/check_next_phase.py`
-- Install the toolchain (winget): `powershell -ExecutionPolicy Bypass -File tools/setup-next-phase.ps1`
-- TLA+ tools (`tla2tools.jar`) are not on winget — fetch the pinned release manually into
-  `tools/tlaplus/` before running TLC (supply-chain action; Owner-approved).
+- Reinstall/refresh the toolchain (winget): `powershell -ExecutionPolicy Bypass -File tools/setup-next-phase.ps1`
 
 ## Resume checklist for a fresh context
 
