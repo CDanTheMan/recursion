@@ -20,6 +20,15 @@
   provider `timeout_seconds` stops it the same way. Children started by that
   process are stopped too: a process group on Linux and a job object on
   Windows. Resume still continues tasks that were cancelled.
+- `recursion clean` leaves a run in place when it is `running`, `pending`, or
+  resumable, and records the reason under `skipped`. An unlanded run branch
+  (no `land.status` of `merged`, and not already in the current or default
+  branch) and a worktree with uncommitted changes are skipped unless
+  `--include-unlanded` is set. `--dry-run` prints the same removed and skipped
+  lists.
+- `recursion land` refuses a target branch that is checked out in another
+  worktree. The merge commit uses the repository's git identity when one is
+  configured, and the recursion identity otherwise.
 
 ## 0.2.0 — 2026-10-14
 
@@ -76,3 +85,16 @@ after that cut.
   stderr is a terminal, or when `--progress` is set, those commands print
   plain progress lines on stderr. JSONL stays on `--log`, and on stderr when
   progress lines are off.
+- A dependent task's prompt includes a size-capped summary, commit, and diff
+  for each dependency. The planner prompt includes a size-capped repository
+  map of tracked files and key docs.
+- `recursion land <run-id>` merges a finished run branch into the current
+  branch, or `--into`, with a normal non-fast-forward merge. A dirty tree or
+  a conflict is refused and recorded in the report. `recursion clean` prunes
+  old run state, worktrees, and task branches, with `--older-than` and
+  `--dry-run`.
+- `docs/ARCHITECTURE.md` diagrams plan, schedule, worktree, provider,
+  review, landing, and report. The README and user guide cover the landed
+  providers and commands, with Linux and Windows troubleshooting. The docs
+  drift test checks subcommands, flags, provider names, config keys, and
+  that diagram.

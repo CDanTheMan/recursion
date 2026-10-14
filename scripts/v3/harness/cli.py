@@ -1,4 +1,4 @@
-"""``recursion`` command: plan, run, status, resume, cancel, providers, doctor, init, config, and logs."""
+"""``recursion`` command: plan, run, status, resume, cancel, providers, doctor, init, config, logs, land, and clean."""
 
 from __future__ import annotations
 
@@ -10,11 +10,13 @@ from pathlib import Path
 from scripts.v3.harness.availability import default_cli_finder, provider_report
 from scripts.v3.harness.capabilities import select_candidates
 from scripts.v3.harness.config import ROOT, default_config_path, load_config, write_starter
+from scripts.v3.harness.clean import clean_runs
 from scripts.v3.harness.cooldowns import CooldownStore
 from scripts.v3.harness.dag import admit_goal
 from scripts.v3.harness.doctor import diagnose, discover_installed
 from scripts.v3.harness.errors import HarnessError
 from scripts.v3.harness.isolation import GitWorktreeIsolator
+from scripts.v3.harness.land import land_run
 from scripts.v3.harness.log import JsonLog, read_events, select_events
 from scripts.v3.harness.orchestrate import (
     cancel_run,
@@ -121,6 +123,21 @@ def build_parser() -> argparse.ArgumentParser:
     logs.add_argument("--provider", help="provider name")
     logs.add_argument("--level", choices=("info", "warning", "error"), help="minimum level: info, warning, or error")
     logs.add_argument("--tail", type=int, help="print only the last N matching events")
+
+    land = commands.add_parser("land", help="merge a finished run branch into a target branch")
+    _add_common(land)
+    land.add_argument("run_id", help="saved run id")
+    land.add_argument("--into", help="branch that receives the run (default: the current branch)")
+
+    clean = commands.add_parser("clean", help="prune old run state, worktrees, and task branches")
+    _add_common(clean)
+    clean.add_argument("--older-than", type=_days_arg, default=7, help="prune runs older than this many days")
+    clean.add_argument("--dry-run", action="store_true", help="list what would be removed or skipped")
+    clean.add_argument(
+        "--include-unlanded",
+        action="store_true",
+        help="also remove unlanded run branches and worktrees with uncommitted changes",
+    )
     return parser
 
 
@@ -161,6 +178,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = config_command(args)
         elif args.command == "logs":
             payload = logs_command(args)
+        elif args.command == "land":
+            payload = land_command(args)
+        elif args.command == "clean":
+            payload = clean_command(args)
         else:
             raise HarnessError(f"unknown command {args.command}")
     except HarnessError as exc:
@@ -343,6 +364,20 @@ def logs_command(args: argparse.Namespace) -> list[dict]:
         provider=args.provider,
         level=args.level,
         tail=args.tail,
+    )
+
+
+def land_command(args: argparse.Namespace) -> dict:
+    return land_run(_store(args), args.run_id, repo=ROOT, into=args.into)
+
+
+def clean_command(args: argparse.Namespace) -> dict:
+    return clean_runs(
+        _store(args),
+        repo=ROOT,
+        older_than_days=args.older_than,
+        dry_run=bool(args.dry_run),
+        include_unlanded=bool(args.include_unlanded),
     )
 
 
@@ -530,6 +565,12 @@ def _route_view(route: dict, route_id: str) -> dict:
         "selected_route_id": route_id,
         "status": route["status"],
     }
+
+
+def _days_arg(text: str) -> int:
+    if not text.isdigit():
+        raise argparse.ArgumentTypeError("older-than must be an integer >= 0")
+    return int(text)
 
 
 def _concurrency_arg(text: str) -> int:

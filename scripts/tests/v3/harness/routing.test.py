@@ -427,7 +427,9 @@ class RoutingTests(unittest.TestCase):
                 sleep=lambda seconds: None,
             )
         self.assertEqual([task["status"] for task in resumed["tasks"]], ["completed", "completed"])
-        self.assertEqual(calls, ["Build the note.", "Build the note.", "Test the note."])
+        self.assertEqual([call.split("\n", 1)[0] for call in calls], ["Build the note.", "Build the note.", "Test the note."])
+        self.assertIn("Dependency context:", calls[2])
+        self.assertIn("Summary: ok", calls[2])
         self.assertEqual(resumed["cooldowns"], {})
 
     def test_invalid_graph_falls_back_to_lines(self) -> None:

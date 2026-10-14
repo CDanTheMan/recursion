@@ -1,9 +1,11 @@
 # Recursion user guide
 
 This guide is for the `recursion` command in this checkout. The product map is
-[docs/v3/START-HERE.md](v3/START-HERE.md). The slice notes are
+[docs/v3/START-HERE.md](v3/START-HERE.md). How one run moves from plan to
+report is [ARCHITECTURE.md](ARCHITECTURE.md). The slice notes are
 [docs/v3/HARNESS-SLICE.md](v3/HARNESS-SLICE.md). The shipped config is
-[config/harness.json](../config/harness.json).
+[config/harness.json](../config/harness.json). The schema checked at startup
+is [config/harness.schema.json](../config/harness.schema.json).
 
 `recursion` plans a task through the M1A kernel, admits frozen route fixture
 `F-M1B-001`, and then runs a provider. The selected route id on that fixture
@@ -101,12 +103,13 @@ means the command refused the request or the run ended `budget-exceeded`,
 
 ```text
 usage: recursion [-h]
-                 {plan,run,status,resume,cancel,providers,doctor,init,config,logs}
+                 {plan,run,status,resume,cancel,providers,doctor,init,config,logs,land,clean}
                  ...
 ```
 
 `-h` and `--help` show that text and exit. `plan`, `run`, `status`,
-`resume`, `cancel`, and `providers` also accept `--config` and `--state-dir`.
+`resume`, `cancel`, `providers`, `land`, and `clean` also accept `--config`
+and `--state-dir`.
 `doctor` accepts `--config` and `--live`, and does not accept `--state-dir`. `init` accepts
 a path and `--force`, and does not accept `--config` or `--state-dir`.
 `config validate` accepts `--config`. `logs` accepts `--state-dir` and does
@@ -115,8 +118,8 @@ not read the config.
 | Flag | Help text | Where |
 |---|---|---|
 | `-h`, `--help` | show this help message and exit | every command |
-| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `config validate` |
-| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `logs` |
+| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `config validate`, `land`, `clean` |
+| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `logs`, `land`, `clean` |
 
 The default state directory is `.recursion/runs` in the repository root.
 One run is `RUN-` plus 16 hex characters, stored as `<run-id>.json`.
@@ -409,6 +412,73 @@ stderr. Each object has `event`, `ts`, and `level` (`info`, `warning`, or
 `--level error` keeps errors. `--tail` is applied after those filters. Stdout
 is JSONL, one event per line. A missing run or a missing log exits `2`.
 
+### land
+
+```text
+usage: recursion land [-h] [--config CONFIG] [--state-dir STATE_DIR]
+                      [--into INTO]
+                      run_id
+```
+
+Help: merge a finished run branch into a target branch.
+
+| Flag | Help text |
+|---|---|
+| `run_id` | saved run id |
+| `--into INTO` | branch that receives the run (default: the current branch) |
+
+`land` merges `recursion/run/<run-id>` into the current branch, or into
+`--into`, with `git merge --no-ff`. The run must be `completed` and the run
+branch must exist. A dirty worktree is refused before any merge. A conflict
+aborts the merge and leaves the target branch where it was. `land` also
+refuses when the target branch is checked out in a worktree other than the
+one it is running in, so that checkout is not left stale. The message starts
+with `target branch is checked out in another worktree`. These refusals are
+stored on the run as `land.status` `refused` or `conflict`, and the report
+is rewritten. A merge stores `land.status` `merged` and the new commit.
+The merge commit uses this repository's `user.name` and `user.email` when
+they are configured. A missing name falls back to `recursion`, and a missing
+email falls back to `recursion@localhost`. Exit code `0` means the merge
+landed. Exit code `2` means it did not.
+
+### clean
+
+```text
+usage: recursion clean [-h] [--config CONFIG] [--state-dir STATE_DIR]
+                       [--older-than OLDER_THAN] [--dry-run]
+                       [--include-unlanded]
+```
+
+Help: prune old run state, worktrees, and task branches.
+
+| Flag | Help text |
+|---|---|
+| `--older-than OLDER_THAN` | prune runs older than this many days |
+| `--dry-run` | list what would be removed or skipped |
+| `--include-unlanded` | also remove unlanded run branches and worktrees with uncommitted changes |
+
+The default is 7 days. `0` selects every run created before now. A selected
+run loses its record, report, JSONL log, task branches
+`recursion/task/<run-id>/`, run branch `recursion/run/<run-id>`, and any
+worktree checked out on those branches. The main worktree is not removed.
+These runs and checkouts are listed under `skipped` and are not deleted:
+
+| Reason | What stays |
+|---|---|
+| `running` | The run status is `running`, or a task is still `running`. |
+| `pending` | The run status is `pending`, or a task is still `pending`. |
+| `resumable` | `resume` can continue the run (`failed`, `cancelled`, `unreviewed`, and the other unfinished statuses). |
+| `checked out` | One of the run's branches is checked out in the main worktree. The run record stays. |
+| `unlanded` | The run branch has no `land.status` of `merged`, and that branch is not already contained in the current branch or the default branch. Task branches, clean worktrees, and the state files are still removed. |
+| `dirty worktree` | The worktree has uncommitted changes. The branch checked out there stays too. |
+
+`--include-unlanded` removes an `unlanded` run branch and a `dirty worktree`.
+It does not remove a `running`, `pending`, or `resumable` run, and it does
+not remove a branch `checked out` in the main worktree. `--dry-run` prints
+the same `removed` and `skipped` lists and deletes nothing. Stdout is JSON
+with `dry_run`, `include_unlanded`, `older_than_days`, `removed`, and
+`skipped`.
+
 ## Config reference
 
 `config/harness.json` is the default file. The loader requires version `1`
@@ -673,15 +743,19 @@ provider for one JSON object whose only key is `tasks`. The prompt includes
 a `depends_on` example: `test` depends on `build`, and independent tasks use
 `[]`. Each task has `id`, `description`, `required_capabilities`, and
 `depends_on`. The harness checks the shape, unique ids, known dependency
-ids, and cycles. Invalid output, or
-no planning provider, falls back to one task per non-empty line and logs
-`plan.fallback` with a fixed reason. The raw planner body is not stored.
-Each description is still its own M1A admission. A task's
+ids, and cycles. The same prompt includes a size-capped repository map:
+tracked file paths, plus the opening text of `README.md`,
+`docs/USER-GUIDE.md`, and `docs/v3/START-HERE.md` when they exist. Invalid
+output, or no planning provider, falls back to one task per non-empty line
+and logs `plan.fallback` with a fixed reason. The raw planner body is not
+stored. Each description is still its own M1A admission. A task's
 `required_capabilities` further filters its candidates. Task `i` starts at
 the `i`-th remaining candidate, then continues in order. A task starts only
 after every dependency is `completed` and landed, and its worktree is cut
-from the run branch so it sees that work. A failed, rejected, conflicted,
-or unreviewed dependency marks dependents `skipped` with
+from the run branch so it sees that work. The worker prompt also includes a
+size-capped summary, commit, and diff for each dependency. Token-shaped
+text in that context is redacted. A failed, rejected, conflicted, or
+unreviewed dependency marks dependents `skipped` with
 `dependency <id> is <status>`.
 
 ## Cross-provider review
@@ -775,6 +849,15 @@ key in a stored object is replaced entirely.
 | `--fallback applies to an explicit --provider` | `--fallback` was set alone. |
 | `unrecognized arguments` | The flag is not on that subcommand. Exit code 2. |
 | `concurrency must be an integer >= 1` | `--concurrency` was `0` or not an integer. Exit code 2. |
+| `older-than must be an integer >= 0` | `--older-than` was negative or not an integer. Exit code 2. |
+| `run is not finished` | `land` was asked to merge a run whose status is not `completed`. |
+| `run branch is missing` | The finished run has no `recursion/run/<run-id>` branch. |
+| `working tree is dirty` | `land` refused because `git status --porcelain` was not empty. The report records `land.status` `refused`. |
+| `merge conflict` | `land` aborted the merge. The target branch is unchanged. The report records `land.status` `conflict` and the paths. |
+| `unknown branch` | `--into` names a branch that is not in this repository. |
+| `invalid branch name` | `--into` is not a branch name. |
+| `pass --into when HEAD is detached` | `land` has no current branch to receive the run. |
+| `target branch is checked out in another worktree` | `land` refused because that branch is checked out in a different worktree. The target branch is unchanged. The report records `land.status` `refused`. |
 | `missing provider config` | `--config` or `config/harness.json` is not a file. |
 | `provider config is not JSON` | The file does not parse. |
 | `config keys mismatch` | A required key is missing or an unknown key is present. |
@@ -812,14 +895,47 @@ key in a stored object is replaced entirely.
 raise one of these errors. It is a JSONL line on stderr unless progress
 lines are on, in which case stderr shows `run refused` and the error class.
 
-## Windows
+### Linux
+
+Install from this checkout with `python -m pip install -e .`, then
+`python -m pip install -r requirements.txt`, so `jsonschema` is present and
+`config/harness.json` resolves. Invoke `scripts/recursion` as
+`python -X utf8 -B scripts/recursion` when the console script is not on
+`PATH`.
+
+`claude`, `codex`, `grok`, `gemini`, and `opencode` must be executable files
+on `PATH`. Cursor's command is `cursor-agent`. `recursion doctor` and
+`recursion providers` report whether that command resolves. They do not start
+a billed prompt. A live run still needs `--allow-live` and that product's
+own login. A missing command is `CLI was not found on PATH`.
+
+Git is required for task worktrees. `git <subcommand> failed` means the
+worktree could not be added or removed. `git worktree prune` drops a
+checkout left behind by an interrupted run. A cancel or a provider timeout
+stops the running process and its process group. Text files in this repository
+are LF (`.gitattributes`). Leave `core.autocrlf` false so a checkout does
+not rewrite fixtures the checkers compare byte for byte.
+
+If the locale is not UTF-8, set `PYTHONIOENCODING=utf-8`. Config, JSONL,
+run records, and provider output are read and written as UTF-8.
+
+### Windows
 
 Use PowerShell for the install and quickstart above. The harness reads and
 writes config, logs, run records, and provider output as UTF-8. When you use
 `scripts/recursion` instead of the console script, start it with
 `python -X utf8` so the Windows console uses UTF-8 too.
 
-Task worktrees are created with `git -c core.longpaths=true`. Turn on Windows
-long paths if a worktree path still exceeds the legacy path limit. This
-repository stores text as LF (`.gitattributes`). Leave `core.autocrlf` off so
-a checkout does not rewrite the fixtures the checkers compare byte for byte.
+`doctor` and `providers` resolve a command with `PATHEXT` and also try
+`.exe`, `.cmd`, and `.bat`, ignoring case. `cursor-agent` is the Cursor
+command this harness calls. A `.cmd` shim that is only a name on `PATH` is
+still reported as installed when that search finds it.
+
+Task worktrees are created with `git -c core.longpaths=true`. Turn on
+Windows long paths if a worktree path still exceeds the legacy path limit.
+A cancel or a provider timeout stops the running process and the job object
+that contains it.
+`doctor` reports `git.longpaths` from `git config --get core.longpaths`.
+This repository stores text as LF (`.gitattributes`). Leave `core.autocrlf`
+off so a checkout does not rewrite the fixtures the checkers compare byte
+for byte.
