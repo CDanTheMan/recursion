@@ -110,7 +110,10 @@ packet=<packet id>
 Say hello
 ```
 
-`fixture-b` answers the review with `VERDICT approve`. The task status is
+`fixture-b` answers the review with `VERDICT approve`, unless the task
+contains the line `fixture: revise once` (one revise, then approve). The
+fixture also writes `.recursion-fixture/hello.txt` in the task worktree, so
+the run branch has a commit to merge. The task status is
 `completed` and the command exits `0`. `review.accept_unreviewed` stays
 false. `recursion land <run-id>` can merge that finished run, and
 `recursion clean` can prune it later, without flipping `accept_unreviewed`.
@@ -620,8 +623,12 @@ not store one.
 
 No install and no sign-in. `fixture` and `fixture-b` are both enabled in
 [config/harness.json](../config/harness.json). An execute transcript names the
-provider, the route, the packet, and the task. A review transcript is
-`VERDICT approve` followed by `fixture review` or `fixture-b review`. A plan
+provider, the route, the packet, and the task. An execute also writes
+`.recursion-fixture/hello.txt` in the task worktree (`hello` and the
+provider name), so the task commit advances the run branch. A review
+transcript is `VERDICT approve` followed by `fixture review` or
+`fixture-b review`, unless the task contains the line `fixture: revise once`.
+That line asks for one `VERDICT revise`, and the next review approves. A plan
 whose goal starts with a line `graph` is a dependency list. Each following
 line is `id: description`, then optional ` requires cap,cap`, then optional
 ` depends id,id`. Any other goal is still one independent task per

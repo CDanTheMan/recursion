@@ -5,10 +5,11 @@
 ### Added
 
 - `fixture-b` is a second offline fixture. It never starts a CLI and needs no
-  account. For a review it returns `VERDICT approve`. Execute and plan match
-  `fixture`, with the provider name `fixture-b`. The shipped config enables
-  `fixture` and `fixture-b` at equal weight, so a run that does not pin one
-  provider is reviewed and can complete without `review.accept_unreviewed`.
+  account. For a review it returns `VERDICT approve`, unless the task contains
+  the line `fixture: revise once` (one revise, then approve). Execute and plan
+  match `fixture`, with the provider name `fixture-b`. The shipped config
+  enables `fixture` and `fixture-b` at equal weight, so a run that does not pin
+  one provider is reviewed and can complete without `review.accept_unreviewed`.
   A config that leaves only one fixture enabled still records the task as
   `unreviewed`.
 
@@ -17,6 +18,10 @@
 - The README quickstart no longer sets `review.accept_unreviewed`. `init`
   enables both fixtures, and the run does not pin a provider, so review
   finishes and `land` and `clean` succeed.
+- `fixture` and `fixture-b` write `.recursion-fixture/hello.txt` when they
+  execute a task, so the run branch advances and `recursion land` creates a
+  merge commit. A task without `fixture: revise once` still approves on the
+  first review.
 
 ## 0.1.0 — 2026-10-14
 

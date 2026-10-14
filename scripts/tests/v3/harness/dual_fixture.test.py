@@ -71,11 +71,23 @@ class DualFixtureTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(added.returncode, 0, added.stderr)
+                before = _rev_at(land_tree, "HEAD")
                 landed = land_run(RunStore(root), run_id, repo=land_tree, into=land_branch)
+                after = _rev_at(land_tree, "HEAD")
                 self.assertEqual(landed["status"], "completed")
                 self.assertEqual(landed["land"]["status"], "merged")
                 self.assertEqual(landed["land"]["branch"], land_branch)
-                self.assertTrue(landed["land"]["commit"])
+                self.assertEqual(landed["land"]["commit"], after)
+                self.assertNotEqual(before, after)
+                parents = _rev_at(land_tree, "HEAD^@").split()
+                self.assertEqual(len(parents), 2)
+                self.assertIn(before, parents)
+                mark = subprocess.check_output(
+                    ["git", "show", "HEAD:.recursion-fixture/hello.txt"],
+                    cwd=land_tree,
+                    text=True,
+                )
+                self.assertEqual(mark, "hello\nprovider=fixture\n")
                 self.assertEqual(_rev("HEAD"), head)
 
                 cleaned = clean_runs(
@@ -130,6 +142,36 @@ class DualFixtureTests(unittest.TestCase):
                 self.assertTrue(all(task["execution"]["live"] is False for task in payload["tasks"]))
             finally:
                 _drop_run_branches(payload["run_id"])
+
+    def test_fixture_revise_once_then_approves(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = None
+            code, payload = _run(
+                [
+                    "run",
+                    "--task",
+                    "Say hello\nfixture: revise once",
+                    "--state-dir",
+                    str(root),
+                ]
+            )
+            try:
+                self.assertEqual(code, 0)
+                self.assertEqual(payload["status"], "completed")
+                self.assertEqual(payload["execution"]["provider"], "fixture")
+                self.assertFalse(payload["execution"]["live"])
+                self.assertEqual(
+                    [review["verdict"] for review in payload["reviews"]],
+                    ["revise", "approve"],
+                )
+                self.assertEqual(payload["reviews"][0]["reviewer"], "fixture-b")
+                self.assertEqual(payload["reviews"][1]["reviewer"], "fixture-b")
+                self.assertIn("asked for one revise", payload["reviews"][0]["notes"])
+                self.assertIn("fixture-b review", payload["reviews"][1]["notes"])
+            finally:
+                if payload is not None and payload.get("run_id"):
+                    _drop_run_branches(payload["run_id"])
 
     def test_one_fixture_stays_unreviewed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -191,8 +233,12 @@ def _config(path: Path, *, enabled: set[str] | None, disable: set[str] | None = 
 
 
 def _rev(ref: str) -> str:
+    return _rev_at(ROOT, ref)
+
+
+def _rev_at(repo: Path, ref: str) -> str:
     completed = subprocess.run(
-        ["git", "rev-parse", ref], cwd=ROOT, capture_output=True, text=True, check=True
+        ["git", "rev-parse", ref], cwd=repo, capture_output=True, text=True, check=True
     )
     return completed.stdout.strip()
 
