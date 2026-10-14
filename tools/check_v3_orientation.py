@@ -43,6 +43,7 @@ PRODUCT_SLICE = {
     "scripts/recursion",
     "scripts/tests/v3/harness/adapters.test.py",
     "scripts/tests/v3/harness/harness.test.py",
+    "scripts/tests/v3/harness/landing.test.py",
     "scripts/tests/v3/harness/orchestration.test.py",
     "scripts/tests/v3/harness/review.test.py",
     "scripts/v3/__init__.py",
@@ -51,6 +52,7 @@ PRODUCT_SLICE = {
     "scripts/v3/harness/capabilities.py",
     "scripts/v3/harness/cli.py",
     "scripts/v3/harness/config.py",
+    "scripts/v3/harness/dag.py",
     "scripts/v3/harness/dispatch.py",
     "scripts/v3/harness/errors.py",
     "scripts/v3/harness/isolation.py",
@@ -234,6 +236,7 @@ def harness_programs() -> list[tuple[str, ...]]:
     return [
         ("scripts/tests/v3/harness/adapters.test.py",),
         ("scripts/tests/v3/harness/harness.test.py",),
+        ("scripts/tests/v3/harness/landing.test.py",),
         ("scripts/tests/v3/harness/orchestration.test.py",),
         ("scripts/tests/v3/harness/review.test.py",),
     ]
