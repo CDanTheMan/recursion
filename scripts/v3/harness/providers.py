@@ -292,9 +292,16 @@ class GeminiHeadlessProvider(ProviderAdapter):
         *,
         allow_live: bool = False,
         timeout_seconds: int | None = None,
+        should_stop=None,
     ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+        return _run_cli(
+            self,
+            request,
+            stdin_text=None,
+            timeout_seconds=timeout_seconds,
+            should_stop=should_stop,
+        )
 
 
 class CursorHeadlessProvider(ProviderAdapter):
@@ -318,9 +325,16 @@ class CursorHeadlessProvider(ProviderAdapter):
         *,
         allow_live: bool = False,
         timeout_seconds: int | None = None,
+        should_stop=None,
     ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+        return _run_cli(
+            self,
+            request,
+            stdin_text=None,
+            timeout_seconds=timeout_seconds,
+            should_stop=should_stop,
+        )
 
 
 class OpenCodeHeadlessProvider(ProviderAdapter):
@@ -344,9 +358,16 @@ class OpenCodeHeadlessProvider(ProviderAdapter):
         *,
         allow_live: bool = False,
         timeout_seconds: int | None = None,
+        should_stop=None,
     ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+        return _run_cli(
+            self,
+            request,
+            stdin_text=None,
+            timeout_seconds=timeout_seconds,
+            should_stop=should_stop,
+        )
 
 
 def adapters() -> dict[str, type[ProviderAdapter]]:
