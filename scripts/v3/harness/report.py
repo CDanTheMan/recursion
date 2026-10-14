@@ -31,6 +31,7 @@ def build_report(record: dict) -> dict:
                 "merge_conflict": task.get("merge_conflict") or [],
                 "merge_status": task.get("merge_status"),
                 "provider": task.get("provider"),
+                "recoveries": _recoveries(task),
                 "reviews": task.get("reviews") or [],
                 "status": task.get("status"),
                 "task": task.get("task"),
@@ -106,6 +107,12 @@ def render_markdown(report: dict) -> str:
         lines.append(f"Merge: {task.get('merge_status') or 'none'}")
         if task.get("merge_conflict"):
             lines.append("Conflict: " + ", ".join(task["merge_conflict"]))
+        for attempt in task.get("recoveries") or []:
+            attempt_paths = ", ".join(attempt.get("merge_conflict") or []) or "none"
+            lines.append(
+                f"Recovery {attempt.get('attempt')}: {attempt.get('status')} "
+                f"provider={attempt.get('provider') or 'none'} paths={attempt_paths}"
+            )
         lines.append(f"Duration: {_seconds(task['duration_seconds'])}")
         lines.append(f"Attempts: {len(task['attempts'])}")
         lines.append(f"Usage: {_usage(task['usage'])}")
@@ -123,6 +130,16 @@ def render_markdown(report: dict) -> str:
         lines.append("```")
         lines.append("")
     return "\n".join(lines)
+
+
+def _recoveries(task: dict) -> list:
+    recovery = task.get("recovery")
+    if not isinstance(recovery, dict):
+        return []
+    attempts = recovery.get("attempts")
+    if not isinstance(attempts, list):
+        return []
+    return list(attempts)
 
 
 def _seconds(value: object) -> str:

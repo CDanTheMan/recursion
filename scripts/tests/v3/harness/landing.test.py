@@ -328,6 +328,7 @@ class LandingTests(unittest.TestCase):
                 {"left": racing("left", "left\n"), "right": racing("right", "right\n")},
                 ["left", "right"],
                 concurrency=2,
+                conflict_retries=0,
             )
             landed = [task for task in finished["tasks"] if task["status"] == "completed"]
             conflicted = [task for task in finished["tasks"] if task["status"] == "conflict"]
@@ -487,6 +488,7 @@ def _drive_repo(
     max_rounds: int = 0,
     keep_worktrees: bool = False,
     groups: list[list[str]] | None = None,
+    conflict_retries: int = 1,
 ) -> dict:
     chosen = groups if groups is not None else [[name] for name in names]
     tasks = [f"Write file {index}." for index in range(len(chosen))]
@@ -513,6 +515,7 @@ def _drive_repo(
             max_rounds=max_rounds,
             isolator=isolator,
             keep_worktrees=keep_worktrees,
+            conflict_retries=conflict_retries,
         )
         finished["report_body"] = json.loads(Path(finished["report"]["json"]).read_text(encoding="utf-8"))
         finished["report_markdown"] = Path(finished["report"]["markdown"]).read_text(encoding="utf-8")

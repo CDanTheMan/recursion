@@ -22,12 +22,17 @@
     "landing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["base_ref"],
+      "required": ["base_ref", "conflict_retries"],
       "properties": {
         "base_ref": {
           "type": "string",
           "minLength": 1,
           "pattern": "^[^\\n\\r]+$"
+        },
+        "conflict_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many times to reconcile a task after its merge into the run branch conflicts. 0 disables recovery."
         }
       }
     },

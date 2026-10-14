@@ -245,8 +245,11 @@ def _review(value: object) -> dict:
 def _landing(value: object) -> dict:
     if not isinstance(value, dict):
         raise HarnessError("config landing must be an object")
-    _require_exact_keys(value, {"base_ref"}, "landing")
-    return {"base_ref": _git_ref(value["base_ref"], "landing.base_ref")}
+    _require_exact_keys(value, {"base_ref", "conflict_retries"}, "landing")
+    return {
+        "base_ref": _git_ref(value["base_ref"], "landing.base_ref"),
+        "conflict_retries": _nonnegative_int(value["conflict_retries"], "landing.conflict_retries"),
+    }
 
 
 def _bool(value: object, where: str) -> bool:
@@ -288,6 +291,12 @@ def _optional_number(value: object, where: str) -> float | None:
     return float(value)
 
 
+def _nonnegative_int(value: object, where: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise HarnessError(f"{where} must be an integer >= 0")
+    return value
+
+
 def _positive_int(value: object, where: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise HarnessError(f"{where} must be an integer >= 1")
@@ -304,7 +313,7 @@ def starter_config(enabled: set[str]) -> dict:
     return {
         "version": 1,
         "review": {"accept_unreviewed": False, "max_rounds": 2},
-        "landing": {"base_ref": "HEAD"},
+        "landing": {"base_ref": "HEAD", "conflict_retries": 1},
         "budgets": {
             "max_input_tokens": 1000000,
             "max_output_tokens": 1000000,
