@@ -28,7 +28,9 @@ Start here:
 | `experiments/v3/` | v3 research experiments and provider-free evidence checks |
 | `schemas/control-plane/v3/` | v3 contract schemas (planning, execution, integrity) |
 | `scripts/v3/` | v3 planning replay and validation |
-| `scripts/v3/harness/` | harness slice: plan a task, admit one route, run one provider |
+| `scripts/v3/harness/` | harness: plan a task, admit one route, run a provider |
+| `scripts/recursion` | terminal entry point: `plan`, `run`, `status` |
+| `config/harness.json` | provider commands and capabilities; no credentials |
 | `scripts/tests/v3/` | v3 M1 test programs and fixtures |
 | `tools/check_v3_orientation.py` | 2026-09-13 orientation-repair gate; scope vs merge-base with master |
 | `state/` | decision log and v3 goal/task records |
@@ -41,14 +43,22 @@ From the repository root, with Python 3.11 or newer. Route admission uses the M1
 
 ```text
 python -m pip install "jsonschema==4.23.0"
-python -X utf8 -B -m scripts.v3.harness --task "Summarize the harness slice" --provider fixture
+python -X utf8 -B scripts/recursion plan --task "Summarize the harness slice"
+python -X utf8 -B scripts/recursion run --task "Summarize the harness slice"
+python -X utf8 -B scripts/recursion status
 ```
+
+`plan` admits the task and the M1B route and does not start a provider. `run` does the same, then picks an enabled provider from [config/harness.json](config/harness.json) that has the required capabilities. The default requirement is `execute`, so the fixture runs first. `status` prints that config and, with `--log FILE`, a count of JSONL events. Events go to stderr. `--log FILE` also appends them.
+
+`--capability subscription` skips the fixture and tries Claude, then Codex, then Grok. Each provider is retried once before the next one runs. `--provider codex` pins Codex. `--provider grok --fallback` tries Grok first, then the other capable providers. A headless process starts only with `--allow-live`.
+
+The pinned commands are `claude -p --output-format stream-json` (prompt on stdin), `codex exec --json <prompt>`, and `grok -p <prompt> --output-format streaming-json`. The single-adapter entry point is still `python -X utf8 -B -m scripts.v3.harness --task "..." --provider fixture`.
 
 On Windows, if `python` is not the 3.11+ launcher, use `py -3` with the same flags. Paths in this repository exceed 260 characters. Prefix git commands with `git -c core.longpaths=true` for clone, checkout, status, and diff. That flag is per command. The Python command above does not change.
 
-`--provider claude` is the headless CLI adapter. Its argv is `claude -p --output-format stream-json`, and the task is written to that process's stdin. The process is not started unless you also pass `--allow-live`. Leave that flag off in tests and CI.
+Leave `--allow-live` off in tests and CI. The config file has commands and capabilities only. Do not put keys or tokens in it.
 
-The contracts gate runs the existing M1 checks and the harness test:
+The contracts gate runs the existing M1 checks and the harness tests:
 
 ```text
 python -X utf8 -B tools/check_v3_orientation.py --contracts

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "routing": {
+    "required_capabilities": ["execute"],
+    "preference": ["fixture", "claude", "codex", "grok"],
+    "retries": 1
+  },
+  "providers": [
+    {
+      "name": "fixture",
+      "enabled": true,
+      "capabilities": ["execute", "deterministic"],
+      "argv": ["fixture-provider", "--output-format", "json"]
+    },
+    {
+      "name": "claude",
+      "enabled": true,
+      "capabilities": ["execute", "stream-json", "subscription"],
+      "argv": ["claude", "-p", "--output-format", "stream-json"]
+    },
+    {
+      "name": "codex",
+      "enabled": true,
+      "capabilities": ["execute", "jsonl", "subscription"],
+      "argv": ["codex", "exec", "--json"]
+    },
+    {
+      "name": "grok",
+      "enabled": true,
+      "capabilities": ["execute", "streaming-json", "subscription"],
+      "argv": ["grok", "-p", "--output-format", "streaming-json"]
+    }
+  ]
+}
