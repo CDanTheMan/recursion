@@ -68,6 +68,7 @@ def test_scope_checks() -> None:
 
 @pytest.mark.parametrize("program", _programs(), ids=lambda program: " ".join(program))
 def test_schema_and_fixture_validator(program: tuple[str, ...]) -> None:
-    assert program[0].startswith(("schemas/control-plane/v3/", "scripts/tests/v3/"))
-    assert "scripts/v3/harness/" not in program[0]
-    _run(program)
+    relative = program[0].replace("\\", "/")
+    assert relative.startswith(("schemas/control-plane/v3/", "scripts/tests/v3/"))
+    assert "scripts/v3/harness/" not in relative
+    _run((relative, *program[1:]))

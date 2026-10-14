@@ -4,13 +4,11 @@ testpaths = ["tests"]
 [tool.coverage.run]
 parallel = true
 branch = true
-source = [
-    "tests",
-    "tools/check_v3_orientation.py",
-    "tools/test_check_v3_orientation_scope.py",
-    "schemas/control-plane/v3",
-    "scripts/tests/v3",
-    "scripts/v3",
+source = ["tests", "tools", "schemas", "scripts"]
+omit = [
+    "tools/check_next_phase.py",
+    "tools/check_public_scope.py",
+    "tools/check_rescope.py",
 ]
 data_file = "tests/.coverage"
 

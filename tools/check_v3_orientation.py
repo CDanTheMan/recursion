@@ -203,7 +203,7 @@ def contract_programs() -> list[tuple[str, ...]]:
     for area in ("planning", "execution", "integrity"):
         programs.append((f"schemas/control-plane/v3/{area}/materialize.py", "--check"))
         programs.append((f"scripts/tests/v3/{area}/materialize_fixtures.py", "--check"))
-        programs.extend((str(p.relative_to(ROOT)),) for p in sorted(
+        programs.extend((p.relative_to(ROOT).as_posix(),) for p in sorted(
             (ROOT / "scripts/tests/v3" / area).glob("*.test.py")
         ))
     return programs
