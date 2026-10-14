@@ -29,7 +29,10 @@ is not a provider name.
 ## schedule
 
 Ready tasks are the ones whose dependencies are `completed` and landed.
-`orchestration.concurrency` is how many of those run at once. A failed,
+`orchestration.concurrency` is how many of those run at once. `run` and
+`resume` can override that number with `--concurrency`. The run record
+stores the effective value, and a later resume keeps it unless the flag is
+passed again. A failed,
 rejected, conflicted, or unreviewed dependency marks later tasks `skipped`.
 
 Each task's candidates are the enabled providers that hold its capabilities.
@@ -79,4 +82,6 @@ The state directory receives `<run-id>.report.json` and `<run-id>.report.md`.
 The report lists status, duration, usage, the run branch, and each task's
 provider, reviews, branch, commit, and diff. The same directory keeps the
 run record and `<run-id>.jsonl`. `recursion logs` reads that JSONL. Token-shaped
-text is replaced with `[REDACTED]` before those files are written.
+text is replaced with `[REDACTED]` before those files are written. Stderr
+shows those events as JSONL, or as plain progress lines when it is a
+terminal or `--progress` is set. `--log` keeps the JSONL stream either way.

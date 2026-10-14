@@ -80,7 +80,9 @@ task is `unreviewed` and the command exits `2` unless
 
 `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `init`,
 `config validate`, and `logs`. `plan` admits tasks and does not start a live
-CLI. `run` schedules them. `status`, `resume`, and `cancel` use the saved
+CLI. `run` schedules them. `--concurrency` overrides how many ready tasks
+run at once, and `--progress` prints plain lines on stderr instead of JSONL.
+`status`, `resume`, and `cancel` use the saved
 run. `providers` shows whether each CLI is on `PATH`, its weight, and any
 cooldown. `doctor` checks git and sign-in without printing secrets. `init`
 writes a starter config. `config validate` checks

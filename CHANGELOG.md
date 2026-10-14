@@ -49,6 +49,12 @@ after that cut.
 - Event logs, run records, and reports replace token-shaped text with
   `[REDACTED]`. `recursion logs RUN-...` prints a run's JSONL and can filter
   by task, provider, and level.
+- `run` and `resume` accept `--concurrency N` (integer `>= 1`) to override
+  `orchestration.concurrency` for that invocation. The effective value is
+  stored on the run. Resume without the flag keeps the stored value. When
+  stderr is a terminal, or when `--progress` is set, those commands print
+  plain progress lines on stderr. JSONL stays on `--log`, and on stderr when
+  progress lines are off.
 - `docs/ARCHITECTURE.md` diagrams plan, schedule, worktree, provider,
   review, landing, and report. The README and user guide cover the landed
   providers and commands, with Linux and Windows troubleshooting. The docs
