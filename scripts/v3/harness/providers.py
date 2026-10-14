@@ -7,6 +7,8 @@ The harness does not read credentials. Retries and fallback live in
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 
@@ -117,6 +119,22 @@ def _rate_limited(completed: subprocess.CompletedProcess[str]) -> bool:
     return "rate limit" in stderr or "too many requests" in stderr
 
 
+def _spawn_command(argv: tuple[str, ...]) -> list[str]:
+    """Run argv. A Windows ``.cmd`` or ``.bat`` shim is started through ``cmd.exe``.
+
+    ``CreateProcess`` does not execute batch files named without an extension.
+    Real ``.exe`` commands stay unchanged.
+    """
+
+    if os.name != "nt":
+        return list(argv)
+    found = shutil.which(argv[0])
+    if not found or not found.lower().endswith((".cmd", ".bat")):
+        return list(argv)
+    comspec = os.environ.get("ComSpec") or "cmd.exe"
+    return [comspec, "/d", "/c", found, *argv[1:]]
+
+
 def _run_cli(
     adapter: ProviderAdapter,
     request: ProviderRequest,
@@ -125,6 +143,7 @@ def _run_cli(
     timeout_seconds: int | None,
 ) -> ProviderResult:
     argv = adapter.argv(request)
+    command = _spawn_command(argv)
     kwargs: dict = {
         "text": True,
         "encoding": "utf-8",
@@ -140,7 +159,7 @@ def _run_cli(
     else:
         kwargs["input"] = stdin_text
     try:
-        completed = subprocess.run(list(argv), **kwargs)
+        completed = subprocess.run(command, **kwargs)
     except FileNotFoundError as exc:
         raise ProviderCLIMissing(
             f"{adapter.name} CLI was not found on PATH ({argv[0]}). "
