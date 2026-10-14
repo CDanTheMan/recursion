@@ -127,7 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
     clean = commands.add_parser("clean", help="prune old run state, worktrees, and task branches")
     _add_common(clean)
     clean.add_argument("--older-than", type=_days_arg, default=7, help="prune runs older than this many days")
-    clean.add_argument("--dry-run", action="store_true", help="list what would be removed")
+    clean.add_argument("--dry-run", action="store_true", help="list what would be removed or skipped")
+    clean.add_argument(
+        "--include-unlanded",
+        action="store_true",
+        help="also remove unlanded run branches and worktrees with uncommitted changes",
+    )
     return parser
 
 
@@ -367,6 +372,7 @@ def clean_command(args: argparse.Namespace) -> dict:
         repo=ROOT,
         older_than_days=args.older_than,
         dry_run=bool(args.dry_run),
+        include_unlanded=bool(args.include_unlanded),
     )
 
 

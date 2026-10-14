@@ -414,16 +414,23 @@ Help: merge a finished run branch into a target branch.
 `land` merges `recursion/run/<run-id>` into the current branch, or into
 `--into`, with `git merge --no-ff`. The run must be `completed` and the run
 branch must exist. A dirty worktree is refused before any merge. A conflict
-aborts the merge and leaves the target branch where it was. Both refusals
-are stored on the run as `land.status` `refused` or `conflict`, and the
-report is rewritten. A merge stores `land.status` `merged` and the new
-commit. Exit code `0` means the merge landed. Exit code `2` means it did not.
+aborts the merge and leaves the target branch where it was. `land` also
+refuses when the target branch is checked out in a worktree other than the
+one it is running in, so that checkout is not left stale. The message starts
+with `target branch is checked out in another worktree`. These refusals are
+stored on the run as `land.status` `refused` or `conflict`, and the report
+is rewritten. A merge stores `land.status` `merged` and the new commit.
+The merge commit uses this repository's `user.name` and `user.email` when
+they are configured. A missing name falls back to `recursion`, and a missing
+email falls back to `recursion@localhost`. Exit code `0` means the merge
+landed. Exit code `2` means it did not.
 
 ### clean
 
 ```text
 usage: recursion clean [-h] [--config CONFIG] [--state-dir STATE_DIR]
                        [--older-than OLDER_THAN] [--dry-run]
+                       [--include-unlanded]
 ```
 
 Help: prune old run state, worktrees, and task branches.
@@ -431,15 +438,30 @@ Help: prune old run state, worktrees, and task branches.
 | Flag | Help text |
 |---|---|
 | `--older-than OLDER_THAN` | prune runs older than this many days |
-| `--dry-run` | list what would be removed |
+| `--dry-run` | list what would be removed or skipped |
+| `--include-unlanded` | also remove unlanded run branches and worktrees with uncommitted changes |
 
 The default is 7 days. `0` selects every run created before now. A selected
 run loses its record, report, JSONL log, task branches
 `recursion/task/<run-id>/`, run branch `recursion/run/<run-id>`, and any
 worktree checked out on those branches. The main worktree is not removed.
-A branch checked out there is skipped and the run record stays. `--dry-run`
-prints the same lists and deletes nothing. Stdout is JSON with `dry_run`,
-`older_than_days`, `removed`, and `skipped`.
+These runs and checkouts are listed under `skipped` and are not deleted:
+
+| Reason | What stays |
+|---|---|
+| `running` | The run status is `running`, or a task is still `running`. |
+| `pending` | The run status is `pending`, or a task is still `pending`. |
+| `resumable` | `resume` can continue the run (`failed`, `cancelled`, `unreviewed`, and the other unfinished statuses). |
+| `checked out` | One of the run's branches is checked out in the main worktree. The run record stays. |
+| `unlanded` | The run branch has no `land.status` of `merged`, and that branch is not already contained in the current branch or the default branch. Task branches, clean worktrees, and the state files are still removed. |
+| `dirty worktree` | The worktree has uncommitted changes. The branch checked out there stays too. |
+
+`--include-unlanded` removes an `unlanded` run branch and a `dirty worktree`.
+It does not remove a `running`, `pending`, or `resumable` run, and it does
+not remove a branch `checked out` in the main worktree. `--dry-run` prints
+the same `removed` and `skipped` lists and deletes nothing. Stdout is JSON
+with `dry_run`, `include_unlanded`, `older_than_days`, `removed`, and
+`skipped`.
 
 ## Config reference
 
@@ -749,6 +771,7 @@ key in a stored object is replaced entirely.
 | `unknown branch` | `--into` names a branch that is not in this repository. |
 | `invalid branch name` | `--into` is not a branch name. |
 | `pass --into when HEAD is detached` | `land` has no current branch to receive the run. |
+| `target branch is checked out in another worktree` | `land` refused because that branch is checked out in a different worktree. The target branch is unchanged. The report records `land.status` `refused`. |
 | `missing provider config` | `--config` or `config/harness.json` is not a file. |
 | `provider config is not JSON` | The file does not parse. |
 | `config keys mismatch` | A required key is missing or an unknown key is present. |
