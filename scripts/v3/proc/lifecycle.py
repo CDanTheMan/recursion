@@ -1,8 +1,10 @@
 """Stop a live provider process and the children it starts.
 
 Linux puts the child in its own session and, on cancel or timeout, signals
-that process group. Windows places the child in a job object and terminates
-the job, so grandchildren die with the CLI. Captured output is UTF-8.
+that process group. The recorded group is not the harness group, so the
+signal cannot hit the harness. Windows places the child in a job object
+before any of its code runs and terminates the job, so grandchildren die
+with the CLI. Captured output is UTF-8.
 """
 
 from __future__ import annotations
@@ -16,6 +18,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 POLL_SECONDS = 0.05
+_KERNEL32 = None
+_KERNEL32_LOCK = threading.Lock()
 
 
 class ProcessCancelled(Exception):
@@ -97,6 +101,8 @@ def _supervise(
         if child.wait_for(wait):
             child.finish_io()
             if should_stop is not None and should_stop():
+                # The direct child can exit and leave grandchildren behind.
+                _stop_tree(child)
                 return "cancel"
             return "ok"
 
@@ -130,6 +136,8 @@ class _Child:
         self._threads: list[threading.Thread] = []
         self._io_errors: list[BaseException] = []
         self._closed = False
+        self._killed = False
+        self.container: tuple[str, int] | None = None
 
     def wait_for(self, seconds: float) -> bool:
         raise NotImplementedError
@@ -221,16 +229,17 @@ class _PopenChild(_Child):
         return True
 
     def kill_tree(self) -> None:
-        if self.returncode is not None:
+        if self._killed:
             return
-        if self.proc.poll() is not None:
-            self.returncode = self.proc.returncode
-            return
+        self._killed = True
         self._killer(self.proc)
         try:
             self.proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            self.proc.kill()
+            try:
+                self.proc.kill()
+            except OSError:
+                pass
             try:
                 self.proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
@@ -247,29 +256,58 @@ def _spawn_posix(argv: list[str], cwd: str | None, stdin_text: str | None) -> _P
         stderr=subprocess.PIPE,
         start_new_session=True,
     )
-    child = _PopenChild(proc, _kill_posix_group)
+    try:
+        pgid = os.getpgid(proc.pid)
+    except ProcessLookupError:
+        pgid = proc.pid if isinstance(proc.pid, int) else -1
+    if isinstance(pgid, int) and pgid > 0 and pgid == os.getpgrp():
+        proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        raise OSError("provider process stayed in the harness process group")
+    child = _PopenChild(proc, lambda process, group=pgid: _kill_posix_group(process, group))
+    child.container = ("group", pgid if isinstance(pgid, int) else -1)
     child.start_stdin(stdin_text)
     return child
 
 
-def _kill_posix_group(proc: subprocess.Popen) -> None:
-    pid = proc.pid
-    if not isinstance(pid, int) or pid <= 0:
-        proc.kill()
+def _kill_posix_group(proc: subprocess.Popen, pgid: int | None = None) -> None:
+    """Signal ``pgid`` unless that group is the harness group.
+
+    ``killpg(0)`` and ``killpg`` of the harness group would stop this process.
+    A missing or matching group kills only the direct child.
+    """
+
+    if pgid is None:
+        pid = proc.pid
+        try:
+            pgid = os.getpgid(pid) if isinstance(pid, int) and pid > 0 else -1
+        except ProcessLookupError:
+            pgid = -1
+    try:
+        harness_group = os.getpgrp()
+    except AttributeError:
+        harness_group = -1
+    if not isinstance(pgid, int) or pgid <= 0 or pgid == harness_group:
+        try:
+            proc.kill()
+        except OSError:
+            pass
         return
     try:
-        group = os.getpgid(pid)
+        os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
-        return
-    if group <= 0 or group == os.getpgrp():
-        proc.kill()
-        return
-    try:
-        os.killpg(group, signal.SIGKILL)
-    except ProcessLookupError:
-        proc.kill()
+        try:
+            proc.kill()
+        except OSError:
+            pass
     except PermissionError:
-        proc.kill()
+        try:
+            proc.kill()
+        except OSError:
+            pass
 
 
 def _spawn_windows(argv: list[str], cwd: str | None, stdin_text: str | None) -> _Child:
@@ -287,53 +325,96 @@ def _spawn_windows_in_job(kernel, job, argv: list[str], cwd: str | None, stdin_t
         return _spawn_windows_at_creation(kernel, job, argv, cwd, stdin_text)
     except FileNotFoundError:
         raise
-    except _WindowsSpawnFailed:
-        return _spawn_windows_assign_after(kernel, job, argv, cwd, stdin_text)
+    except OSError as first:
+        try:
+            return _spawn_windows_suspended(kernel, job, argv, cwd, stdin_text)
+        except FileNotFoundError:
+            raise
+        except OSError as second:
+            raise second from first
 
 
-def _spawn_windows_assign_after(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None) -> _PopenChild:
-    proc = subprocess.Popen(
-        argv,
-        cwd=cwd,
-        stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-    )
+def _spawn_windows_suspended(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None) -> _WindowsPipeChild:
+    """Start suspended, assign the job, then resume.
+
+    The process cannot spawn a grandchild until ``AssignProcessToJobObject``
+    has succeeded, so a failed assignment does not leave an uncontained tree.
+    """
+
+    import ctypes
+
+    pipes = _WindowsEnds(stdin_text is not None)
+    process_info = None
+    child = None
     try:
-        handle = getattr(proc, "_handle", None)
-        if handle is not None:
-            kernel.AssignProcessToJobObject(job, int(handle))
-        child = _PopenChild(proc, lambda process: _kill_windows_job(kernel, job, process))
-
-        def release() -> None:
-            _close_handle(kernel, job)
-
-        child._release = release  # type: ignore[method-assign]
-        child.start_stdin(stdin_text)
+        startup = _plain_startup(pipes)
+        command = ctypes.create_unicode_buffer(subprocess.list2cmdline(argv))
+        application = argv[0] if os.path.isfile(argv[0]) else None
+        process_info = _process_information()
+        created = kernel.CreateProcessW(
+            application,
+            command,
+            None,
+            None,
+            True,
+            0x00000004,  # CREATE_SUSPENDED
+            None,
+            cwd,
+            ctypes.byref(startup),
+            ctypes.byref(process_info),
+        )
+        if not created:
+            raise _windows_spawn_error(argv[0])
+        if not kernel.AssignProcessToJobObject(job, process_info.hProcess):
+            error = ctypes.get_last_error()
+            kernel.TerminateProcess(process_info.hProcess, 1)
+            raise _WindowsSpawnFailed(error, f"AssignProcessToJobObject failed ({error})", argv[0])
+        resumed = kernel.ResumeThread(process_info.hThread)
+        _close_handle(kernel, process_info.hThread)
+        process_info.hThread = None
+        if resumed == 0xFFFFFFFF:
+            kernel.TerminateProcess(process_info.hProcess, 1)
+            raise _WindowsSpawnFailed(ctypes.get_last_error(), "ResumeThread failed", argv[0])
+        pipes.close_child_ends()
+        child = _WindowsPipeChild(kernel, job, process_info.hProcess, None, int(process_info.dwProcessId))
+        process_info = None
+        child.container = ("job", job)
+        _attach_pipe(child, pipes, "stdout_parent", child.stdout, "rb")
+        _attach_pipe(child, pipes, "stderr_parent", child.stderr, "rb")
+        if stdin_text is not None:
+            _attach_pipe(child, pipes, "stdin_parent", None, "wb", stdin_text)
         return child
     except Exception:
-        proc.kill()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            pass
+        if child is not None:
+            child.kill_tree()
+            _close_handle(kernel, child._thread)
+            _close_handle(kernel, child._process)
+            child._thread = None
+            child._process = None
+            child._job = None
+            child._closed = True
+        elif process_info is not None and process_info.hProcess:
+            kernel.TerminateProcess(process_info.hProcess, 1)
+            _close_handle(kernel, process_info.hThread)
+            _close_handle(kernel, process_info.hProcess)
+        pipes.close_all()
         raise
-
-
-def _kill_windows_job(kernel, job, proc: subprocess.Popen) -> None:
-    if job:
-        kernel.TerminateJobObject(job, 1)
-    try:
-        proc.kill()
-    except OSError:
-        pass
 
 
 def _kernel32():
     import ctypes
     from ctypes import wintypes
 
+    global _KERNEL32
+    with _KERNEL32_LOCK:
+        if _KERNEL32 is not None:
+            return _KERNEL32
+        kernel = _bind_kernel32(ctypes, wintypes)
+        _KERNEL32 = kernel
+        return kernel
+
+
+def _bind_kernel32(ctypes, wintypes):
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
     kernel.CreateJobObjectW.restype = wintypes.HANDLE
@@ -343,6 +424,14 @@ def _kernel32():
     kernel.AssignProcessToJobObject.restype = wintypes.BOOL
     kernel.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
     kernel.TerminateJobObject.restype = wintypes.BOOL
+    kernel.QueryInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    kernel.QueryInformationJobObject.restype = wintypes.BOOL
     kernel.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
     kernel.TerminateProcess.restype = wintypes.BOOL
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
@@ -483,13 +572,14 @@ class _WindowsPipeChild(_Child):
         return True
 
     def kill_tree(self) -> None:
-        if self.returncode is not None:
+        if self._killed:
             return
+        self._killed = True
         if self._job:
             self._kernel.TerminateJobObject(self._job, 1)
-        if self._process:
+        if self.returncode is None and self._process:
             self._kernel.TerminateProcess(self._process, 1)
-        self.wait_for(5)
+            self.wait_for(5)
 
     def _release(self) -> None:
         _close_handle(self._kernel, self._thread)
@@ -535,14 +625,16 @@ def _spawn_windows_at_creation(kernel, job, argv: list[str], cwd: str | None, st
         # Keep the handle arrays alive until CreateProcess returns.
         del handles
         pipes.close_child_ends()
+        _close_handle(kernel, process_info.hThread)
         child = _WindowsPipeChild(
             kernel,
             job,
             process_info.hProcess,
-            process_info.hThread,
+            None,
             int(process_info.dwProcessId),
         )
         process_info = None
+        child.container = ("job", job)
         _attach_pipe(child, pipes, "stdout_parent", child.stdout, "rb")
         _attach_pipe(child, pipes, "stderr_parent", child.stderr, "rb")
         if stdin_text is not None:
@@ -722,6 +814,41 @@ def _startup_info(attribute, pipes: _WindowsEnds, msvcrt):
     info.StartupInfo.hStdError = pipes.handle(pipes.stderr_child)
     info.lpAttributeList = ctypes.addressof(attribute)
     del msvcrt
+    return info
+
+
+def _plain_startup(pipes: _WindowsEnds):
+    import ctypes
+    from ctypes import wintypes
+
+    class StartupInfoW(ctypes.Structure):
+        _fields_ = [
+            ("cb", wintypes.DWORD),
+            ("lpReserved", wintypes.LPWSTR),
+            ("lpDesktop", wintypes.LPWSTR),
+            ("lpTitle", wintypes.LPWSTR),
+            ("dwX", wintypes.DWORD),
+            ("dwY", wintypes.DWORD),
+            ("dwXSize", wintypes.DWORD),
+            ("dwYSize", wintypes.DWORD),
+            ("dwXCountChars", wintypes.DWORD),
+            ("dwYCountChars", wintypes.DWORD),
+            ("dwFillAttribute", wintypes.DWORD),
+            ("dwFlags", wintypes.DWORD),
+            ("wShowWindow", wintypes.WORD),
+            ("cbReserved2", wintypes.WORD),
+            ("lpReserved2", ctypes.POINTER(ctypes.c_byte)),
+            ("hStdInput", wintypes.HANDLE),
+            ("hStdOutput", wintypes.HANDLE),
+            ("hStdError", wintypes.HANDLE),
+        ]
+
+    info = StartupInfoW()
+    info.cb = ctypes.sizeof(StartupInfoW)
+    info.dwFlags = 0x00000100  # STARTF_USESTDHANDLES
+    info.hStdInput = pipes.handle(pipes.stdin_child)
+    info.hStdOutput = pipes.handle(pipes.stdout_child)
+    info.hStdError = pipes.handle(pipes.stderr_child)
     return info
 
 

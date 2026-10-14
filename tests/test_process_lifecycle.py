@@ -5,6 +5,7 @@ The child is a local Python stub. No Claude, Codex, or Grok binary is required.
 
 from __future__ import annotations
 
+import gc
 import os
 import signal
 import subprocess
@@ -102,15 +103,19 @@ def test_cancel_stops_the_provider_process_and_its_child() -> None:
         parent_pid = 0
         child_pid = 0
         group = 0
+        harness = os.getpid()
+        harness_group = os.getpgrp() if os.name != "nt" else None
         try:
             _wait_file(ready, thread)
             parent_pid, group = _read_parent(parent)
             child_pid = int(grandchild.read_text(encoding="utf-8").strip())
             assert _alive(parent_pid)
             assert _alive(child_pid)
+            assert _alive(harness)
             if os.name != "nt":
                 assert parent_pid == group
-                assert group != os.getpgrp()
+                assert group != harness_group
+                assert os.getpgrp() == harness_group
             stop.set()
             thread.join(15)
             assert not thread.is_alive()
@@ -118,6 +123,9 @@ def test_cancel_stops_the_provider_process_and_its_child() -> None:
             assert box.get("cancelled") is True
             _wait_dead(parent_pid)
             _wait_dead(child_pid)
+            assert _alive(harness)
+            if os.name != "nt":
+                assert os.getpgrp() == harness_group
         finally:
             stop.set()
             thread.join(10)
@@ -278,6 +286,198 @@ def test_live_call_round_trips_utf8_and_reports_a_missing_cli() -> None:
     assert captured.stderr == "café"
 
 
+def test_finished_commands_release_pipes_and_keep_utf8() -> None:
+    def once() -> None:
+        result = run_command(
+            [
+                sys.executable,
+                "-X",
+                "utf8",
+                "-B",
+                "-c",
+                "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())",
+            ],
+            stdin_text="héllo 你好",
+        )
+        assert result.returncode == 0
+        assert result.stdout == "héllo 你好"
+        assert isinstance(result.stdout, str)
+
+    once()
+    gc.collect()
+    baseline = _resource_count()
+    for _ in range(15):
+        once()
+    gc.collect()
+    growth = _resource_count() - baseline
+    assert growth <= 4, f"process handles grew by {growth}"
+
+
+def test_live_tree_belongs_to_the_supervisor_container() -> None:
+    from scripts.v3.proc import lifecycle
+
+    with tempfile.TemporaryDirectory() as directory:
+        command, ready, grandchild, parent = _paths(Path(directory))
+        child = lifecycle._spawn(list(command), None, None)
+        parent_pid = 0
+        child_pid = 0
+        group = 0
+        try:
+            _wait_ready(ready)
+            parent_pid, group = _read_parent(parent)
+            child_pid = int(grandchild.read_text(encoding="utf-8").strip())
+            assert child.container is not None
+            kind, ident = child.container
+            assert _alive(parent_pid)
+            assert _alive(child_pid)
+            if kind == "group":
+                assert os.name != "nt"
+                assert ident == group == parent_pid
+                assert ident != os.getpgrp()
+            else:
+                assert os.name == "nt"
+                assert kind == "job"
+                pids = _job_pids(child._kernel, ident)
+                assert parent_pid in pids
+                assert child_pid in pids
+            child.kill_tree()
+            _wait_dead(parent_pid)
+            _wait_dead(child_pid)
+        finally:
+            child.close()
+            _reap(parent_pid, group)
+            _reap(child_pid)
+
+
+def test_cancel_after_the_parent_exits_kills_the_grandchild() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        script = root / "orphan.py"
+        script.write_text(_ORPHAN, encoding="utf-8", newline="\n")
+        grandchild = root / "grandchild"
+        parent = root / "parent"
+        command = (
+            sys.executable,
+            "-X",
+            "utf8",
+            "-B",
+            str(script),
+            str(grandchild),
+            str(parent),
+        )
+
+        def should_stop() -> bool:
+            if not parent.is_file() or parent.stat().st_size == 0:
+                return False
+            pid = int(parent.read_text(encoding="utf-8").split()[0])
+            return not _alive(pid)
+
+        parent_pid = 0
+        child_pid = 0
+        group = 0
+        try:
+            with pytest.raises(RunCancelled):
+                _run_cli(
+                    _StubAdapter(command),
+                    REQUEST,
+                    stdin_text=None,
+                    timeout_seconds=20,
+                    should_stop=should_stop,
+                )
+            parent_pid, group = _read_parent(parent)
+            child_pid = int(grandchild.read_text(encoding="utf-8").strip())
+            _wait_dead(parent_pid)
+            _wait_dead(child_pid)
+        finally:
+            _reap(parent_pid, group)
+            _reap(child_pid)
+
+
+def test_group_kill_refuses_the_harness_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.v3.proc import lifecycle
+
+    events: list[tuple] = []
+
+    def killpg(group: int, sig: int) -> None:
+        events.append(("killpg", group, sig))
+
+    monkeypatch.setattr(lifecycle.os, "getpgrp", lambda: 4242, raising=False)
+    monkeypatch.setattr(lifecycle.os, "killpg", killpg, raising=False)
+
+    class Proc:
+        pid = 99
+
+        def kill(self) -> None:
+            events.append(("kill", self.pid))
+
+    lifecycle._kill_posix_group(Proc(), 4242)  # type: ignore[arg-type]
+    assert events == [("kill", 99)]
+    events.clear()
+    lifecycle._kill_posix_group(Proc(), 0)  # type: ignore[arg-type]
+    assert events == [("kill", 99)]
+    events.clear()
+    lifecycle._kill_posix_group(Proc(), 777)  # type: ignore[arg-type]
+    assert events == [("killpg", 777, signal.SIGKILL)]
+
+
+def test_every_live_adapter_runs_under_the_supervisor(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.v3.harness import providers
+    from scripts.v3.proc.lifecycle import CommandResult
+
+    calls: list[dict] = []
+
+    def fake_run(argv, **kwargs):
+        del argv
+        calls.append(kwargs)
+        return CommandResult(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(providers, "run_command", fake_run)
+    request = ProviderRequest(task="task text", packet_id="PACKET-TEST", route_id="route-a")
+    live = [name for name in providers.adapters() if name != "fixture"]
+    assert {"claude", "codex", "grok"} <= set(live)
+    for name in live:
+        adapter = providers.adapters()[name]()
+        result = adapter.execute(request, allow_live=True, timeout_seconds=9, should_stop=lambda: False)
+        assert result.live is True
+        assert result.provider == name
+        assert result.text == "ok"
+    assert len(calls) == len(live)
+    assert all(call["timeout_seconds"] == 9 for call in calls)
+    assert all(callable(call["should_stop"]) for call in calls)
+    for name, call in zip(live, calls, strict=True):
+        if name == "claude":
+            assert call["stdin_text"] == "task text"
+        else:
+            assert call["stdin_text"] is None
+    before = len(calls)
+    providers.adapters()["fixture"]().execute(
+        request, allow_live=True, timeout_seconds=9, should_stop=lambda: False
+    )
+    assert len(calls) == before
+
+
+_ORPHAN = """\
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+grandchild_path = Path(sys.argv[1])
+parent_path = Path(sys.argv[2])
+child = subprocess.Popen(
+    [sys.executable, "-X", "utf8", "-B", "-c", "import time; time.sleep(300)"],
+    stdin=subprocess.DEVNULL,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+if os.name == "nt":
+    parent_path.write_text(str(os.getpid()), encoding="utf-8")
+else:
+    parent_path.write_text(f"{os.getpid()} {os.getpgid(0)}", encoding="utf-8")
+grandchild_path.write_text(str(child.pid), encoding="utf-8")
+"""
+
+
 def _paths(root: Path) -> tuple[tuple[str, ...], Path, Path, Path]:
     script = root / "stub.py"
     script.write_text(_STUB, encoding="utf-8", newline="\n")
@@ -286,6 +486,51 @@ def _paths(root: Path) -> tuple[tuple[str, ...], Path, Path, Path]:
     parent = root / "parent"
     command = (sys.executable, "-X", "utf8", "-B", str(script), str(ready), str(grandchild), str(parent))
     return command, ready, grandchild, parent
+
+
+def _wait_ready(path: Path, timeout: float = 20) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file() and path.stat().st_size > 0:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"provider process did not become ready: {path}")
+
+
+def _job_pids(kernel, job) -> set[int]:
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessList(ctypes.Structure):
+        _fields_ = [
+            ("NumberOfAssignedProcesses", wintypes.DWORD),
+            ("NumberOfProcessIdsInList", wintypes.DWORD),
+            ("ProcessIdList", ctypes.c_size_t * 32),
+        ]
+
+    info = ProcessList()
+    returned = wintypes.DWORD()
+    ok = kernel.QueryInformationJobObject(job, 3, ctypes.byref(info), ctypes.sizeof(info), ctypes.byref(returned))
+    if not ok:
+        raise ctypes.WinError(ctypes.get_last_error())
+    count = min(int(info.NumberOfProcessIdsInList), 32)
+    return {int(info.ProcessIdList[index]) for index in range(count)}
+
+
+def _resource_count() -> int:
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel.GetProcessHandleCount.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel.GetProcessHandleCount.restype = wintypes.BOOL
+        count = wintypes.DWORD()
+        if not kernel.GetProcessHandleCount(kernel.GetCurrentProcess(), ctypes.byref(count)):
+            raise OSError(ctypes.get_last_error(), "GetProcessHandleCount failed")
+        return int(count.value)
+    return len(list(Path("/proc/self/fd").iterdir()))
 
 
 def _wait_file(path: Path, thread: threading.Thread, timeout: float = 20) -> None:
