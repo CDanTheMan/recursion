@@ -41,9 +41,12 @@ Everything below is provider-free. It runs on a plain checkout with Python 3.11+
 | T-03 | Does the OR-032 recovery reservation ledger satisfy its guards and mutations? | `python -X utf8 -B experiments/v3/recovery-ledger-20260914/test_ledger.py` | PASS, 16 tests |
 | T-04 | Does the DQ-16 delegated-Q bundle pass its static preflight and fake controls? | `python -X utf8 -B experiments/v3/delegated-q-coupling-20260914/test_contract.py` then `check.py --mode preflight` | preflight only; `--mode execute` is admission-gated |
 
-`tools/check_v3_orientation.py` is the frozen 2026-09-13 orientation-repair gate: it binds to that
-repair's allowed-path scope and fails on any later change by design. Do not use it as a general
-check for new branches; use the per-task gate instead.
+`tools/check_v3_orientation.py` is the 2026-09-13 orientation-repair gate. By default it
+diffs the worktree against the merge-base of HEAD and master, so a clean master checkout
+passes and a work branch fails when it touches a path outside that repair's allowlist.
+`--baseline COMMIT` restores a pinned comparison; the repair pin is
+`797be4f18edf3f9e0f2dbac9432f190dbe1ed969`. Do not use it as a general check for new
+branches; use the per-task gate instead.
 
 ### Next, bounded (needs a new gate inside the packet's allowed paths)
 
