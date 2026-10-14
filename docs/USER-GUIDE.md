@@ -70,9 +70,12 @@ Windows PowerShell:
 recursion run --task "Say hello" --provider fixture
 ```
 
-Stdout is one JSON object. Stderr is JSONL events (`plan.admitted`,
-`route.selected`, `provider.candidates`, `task.started`, `provider.attempt`,
-`provider.result`, `task.completed`). A successful single task includes
+Stdout is one JSON object. When stderr is not a terminal, it is JSONL
+events (`plan.admitted`, `route.selected`, `provider.candidates`,
+`task.started`, `provider.attempt`, `provider.result`, `task.completed`).
+When stderr is a terminal, or when `run` or `resume` is passed `--progress`,
+stderr is short plain lines for those events instead. `--log` keeps the
+JSONL stream in a file either way. A successful single task includes
 `status` `completed`, `run_id`, `execution.text`, and `report` paths. The
 fixture text is:
 
@@ -98,19 +101,22 @@ means the command refused the request or the run ended `budget-exceeded`,
 
 ```text
 usage: recursion [-h]
-                 {plan,run,status,resume,cancel,providers,doctor,init} ...
+                 {plan,run,status,resume,cancel,providers,doctor,init,config,logs}
+                 ...
 ```
 
 `-h` and `--help` show that text and exit. `plan`, `run`, `status`,
 `resume`, `cancel`, and `providers` also accept `--config` and `--state-dir`.
 `doctor` accepts `--config` and does not accept `--state-dir`. `init` accepts
 a path and `--force`, and does not accept `--config` or `--state-dir`.
+`config validate` accepts `--config`. `logs` accepts `--state-dir` and does
+not read the config.
 
 | Flag | Help text | Where |
 |---|---|---|
 | `-h`, `--help` | show this help message and exit | every command |
-| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor` |
-| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers` |
+| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `config validate` |
+| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `logs` |
 
 The default state directory is `.recursion/runs` in the repository root.
 One run is `RUN-` plus 16 hex characters, stored as `<run-id>.json`.
@@ -128,7 +134,7 @@ Help: admit tasks and the M1B route; do not start a provider.
 |---|---|
 | `--task TASK` | one task admitted through M1A |
 | `--goal GOAL` | plan a task graph, or one task per line when planning falls back |
-| `--log LOG` | append JSONL events to this file as well as stderr |
+| `--log LOG` | append JSONL events to this file, and to stderr when progress lines are off |
 
 Pass exactly one of `--task` or `--goal`. `--task` returns `planning`,
 `route`, and `task`. `--goal` asks a provider for a task graph and returns
@@ -144,7 +150,8 @@ and does not start a live CLI.
 usage: recursion run [-h] [--config CONFIG] [--state-dir STATE_DIR]
                      [--task TASK] [--goal GOAL] [--provider PROVIDER]
                      [--capability CAPABILITY] [--fallback] [--allow-live]
-                     [--base-ref BASE_REF] [--keep-worktrees] [--log LOG]
+                     [--base-ref BASE_REF] [--keep-worktrees]
+                     [--concurrency CONCURRENCY] [--progress] [--log LOG]
 ```
 
 Help: plan, admit a route, and execute capable providers.
@@ -159,13 +166,24 @@ Help: plan, admit a route, and execute capable providers.
 | `--allow-live` | start a headless CLI; omitted in tests and CI |
 | `--base-ref BASE_REF` | git ref the run branch is cut from (default: config landing.base_ref) |
 | `--keep-worktrees` | keep worktrees and branches for failed tasks |
-| `--log LOG` | append JSONL events to this file as well as stderr |
+| `--concurrency CONCURRENCY` | override orchestration.concurrency for this invocation |
+| `--progress` | print plain progress lines on stderr instead of JSONL |
+| `--log LOG` | append JSONL events to this file, and to stderr when progress lines are off |
 
 Pass exactly one of `--task` or `--goal`. `--capability` may be repeated.
 `--fallback` is refused unless `--provider` is set. `--task` prints one task
 result when the status is `completed` or `unreviewed`. `--goal` prints the
 saved run record. A single task that fails prints the error on stderr and
 does not print the JSON result.
+
+`--concurrency N` overrides `orchestration.concurrency` for this invocation.
+`N` is an integer `>= 1`. The run record stores that value, and the scheduler
+uses the stored value. Omit the flag to use the config value.
+
+`--progress` prints plain progress lines on stderr instead of JSONL. A
+terminal does the same without the flag. `--log` still receives JSONL.
+Lines name the outcome (`task 0 started`, `provider fixture attempt 0`,
+`task 0 completed provider=fixture`) and do not include error text.
 
 ### status
 
@@ -191,7 +209,8 @@ Help: show providers, log summary, and saved runs.
 ```text
 usage: recursion resume [-h] [--config CONFIG] [--state-dir STATE_DIR] --run
                         RUN [--allow-live] [--base-ref BASE_REF]
-                        [--keep-worktrees] [--log LOG]
+                        [--keep-worktrees] [--concurrency CONCURRENCY]
+                        [--progress] [--log LOG]
 ```
 
 Help: continue unfinished tasks from a saved run.
@@ -202,7 +221,9 @@ Help: continue unfinished tasks from a saved run.
 | `--allow-live` | `--help` prints no description |
 | `--base-ref BASE_REF` | git ref used when the run branch does not exist yet |
 | `--keep-worktrees` | keep worktrees and branches for failed tasks |
-| `--log LOG` | append JSONL events to this file as well as stderr |
+| `--concurrency CONCURRENCY` | override orchestration.concurrency for this invocation |
+| `--progress` | print plain progress lines on stderr instead of JSONL |
+| `--log LOG` | append JSONL events to this file, and to stderr when progress lines are off |
 
 `--allow-live` has the same effect as on `run`: a headless CLI starts only
 when it is set. Resume clears a stored cancel, marks the run `running`, and
@@ -210,6 +231,8 @@ sets tasks in `failed`, `cancelled`, `running`, `budget-exceeded`,
 `review-rejected`, `skipped`, `conflict`, or `unreviewed` back to `pending`.
 Tasks already `completed` stay completed. The saved `depends_on` list is kept,
 so a retried dependency can unblock the tasks that were waiting on it.
+`--concurrency` replaces the stored concurrency before the run continues.
+Omit it to keep the value already on the record. `--progress` matches `run`.
 
 ### cancel
 
@@ -323,6 +346,53 @@ An existing file is left unchanged unless `--force` is set. A directory is
 refused even with `--force`. Both cases exit `2`. Parent directories are
 created. The file is UTF-8 with LF newlines.
 
+### config validate
+
+```text
+usage: recursion config validate [-h] [--config CONFIG]
+```
+
+Help: check the config against the schema and the adapters.
+
+| Flag | Help text |
+|---|---|
+| `--config CONFIG` | provider config JSON (default: config/harness.json) |
+
+`recursion config validate` reads the file, checks it against
+[config/harness.schema.json](../config/harness.schema.json), then applies the
+same adapter checks as startup. `plan`, `run`, `status`, `resume`, `doctor`,
+and `init` load the config through that same check. A schema failure names
+the field, for example `routing.retries: -1 is less than the minimum of 0`.
+Success prints `ok`, `path`, and `version`. Exit code `0` means the file is
+valid. Exit code `2` means it is not.
+
+### logs
+
+```text
+usage: recursion logs [-h] [--state-dir STATE_DIR] [--task TASK]
+                      [--provider PROVIDER] [--level {info,warning,error}]
+                      [--tail TAIL]
+                      run_id
+```
+
+Help: show JSONL events for one saved run.
+
+| Flag | Help text |
+|---|---|
+| `run_id` | saved run id |
+| `--state-dir STATE_DIR` | directory for resumable run records |
+| `--task TASK` | task index or task id |
+| `--provider PROVIDER` | provider name |
+| `--level {info,warning,error}` | minimum level: info, warning, or error |
+| `--tail TAIL` | print only the last N matching events |
+
+`run` and `resume` append events to `<state-dir>/<run-id>.jsonl` as well as
+stderr. Each object has `event`, `ts`, and `level` (`info`, `warning`, or
+`error`). Task events include `index` and `run_id`. `--task` keeps one task.
+`--provider` keeps one provider. `--level warning` keeps warnings and errors.
+`--level error` keeps errors. `--tail` is applied after those filters. Stdout
+is JSONL, one event per line. A missing run or a missing log exits `2`.
+
 ## Config reference
 
 `config/harness.json` is the default file. The loader requires version `1`
@@ -369,7 +439,7 @@ count as zero. `null` means no ceiling.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `concurrency` | `2` | Integer `>= 1`. How many ready tasks run at once. |
+| `concurrency` | `2` | Integer `>= 1`. How many ready tasks run at once. `--concurrency` on `run` and `resume` overrides it for that invocation and stores the effective value. Resume without the flag keeps the stored value. |
 
 ### routing
 
@@ -606,6 +676,11 @@ terminates that process. A provider timeout terminates it the same way.
 On Linux the call stops the process group. On Windows it stops the job
 object that contains the process.
 
+`recursion logs RUN-...` prints the JSONL file for that run. Tokens and
+API-key-looking strings are replaced with `[REDACTED]` before they are
+written to the event log, the run record, or the report. A secret-shaped
+key in a stored object is replaced entirely.
+
 ## Troubleshooting
 
 | Message | What it means |
@@ -613,9 +688,11 @@ object that contains the process.
 | `pass one of --task or --goal` | `plan` and `run` need exactly one of those flags. |
 | `--fallback applies to an explicit --provider` | `--fallback` was set alone. |
 | `unrecognized arguments` | The flag is not on that subcommand. Exit code 2. |
+| `concurrency must be an integer >= 1` | `--concurrency` was `0` or not an integer. Exit code 2. |
 | `missing provider config` | `--config` or `config/harness.json` is not a file. |
 | `provider config is not JSON` | The file does not parse. |
 | `config keys mismatch` | A required key is missing or an unknown key is present. |
+| `routing.retries:` (and other field paths) | The JSON Schema rejected that field. The text after the path says what is wrong. |
 | `config key '...' is not allowed` | The key looks like a secret. |
 | `provider config version must be 1` | `version` is not the integer `1`. |
 | `unknown provider` | The name is not `fixture`, `claude`, `codex`, `grok`, `gemini`, `cursor`, or `opencode`. |
@@ -645,8 +722,9 @@ object that contains the process.
 | `no provider has the required capabilities` | The task's `required_capabilities` matched no candidate. |
 | `planner returned invalid JSON` | The planner's text was not the required object, so the goal fell back to lines. |
 
-`plan`, `run`, and `resume` also emit a `run.refused` JSONL event when they
-raise one of these errors.
+`plan`, `run`, and `resume` also emit a `run.refused` event when they
+raise one of these errors. It is a JSONL line on stderr unless progress
+lines are on, in which case stderr shows `run refused` and the error class.
 
 ## Windows
 

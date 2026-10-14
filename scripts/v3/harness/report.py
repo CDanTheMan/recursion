@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.v3.harness.redact import redact
+
 
 def build_report(record: dict) -> dict:
     tasks = []
@@ -54,7 +56,9 @@ def build_report(record: dict) -> dict:
 
 
 def write_reports(directory: Path, record: dict) -> dict:
-    payload = build_report(record)
+    payload = redact(build_report(record))
+    if not isinstance(payload, dict):
+        payload = {}
     json_path = directory / f"{record['run_id']}.report.json"
     markdown_path = directory / f"{record['run_id']}.report.md"
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
