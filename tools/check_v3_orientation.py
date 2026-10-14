@@ -36,7 +36,7 @@ ALLOWED = {
     "tests/test_docs_drift.py", "tests/test_adapter_streams.py", "tests/test_e2e_console.py",
     "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
     "examples/sample-goal.txt", "examples/harness.json", "examples/stubs/provider_stub.py",
-    "tests/test_config_logs.py",
+    "tests/test_config_logs.py", "docs/ARCHITECTURE.md",
 }
 PRODUCT_SLICE = {
     ".gitignore",

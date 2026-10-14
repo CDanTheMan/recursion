@@ -1,9 +1,11 @@
 # Recursion user guide
 
 This guide is for the `recursion` command in this checkout. The product map is
-[docs/v3/START-HERE.md](v3/START-HERE.md). The slice notes are
+[docs/v3/START-HERE.md](v3/START-HERE.md). How one run moves from plan to
+report is [ARCHITECTURE.md](ARCHITECTURE.md). The slice notes are
 [docs/v3/HARNESS-SLICE.md](v3/HARNESS-SLICE.md). The shipped config is
-[config/harness.json](../config/harness.json).
+[config/harness.json](../config/harness.json). The schema checked at startup
+is [config/harness.schema.json](../config/harness.schema.json).
 
 `recursion` plans a task through the M1A kernel, admits frozen route fixture
 `F-M1B-001`, and then runs a provider. The selected route id on that fixture
@@ -699,14 +701,44 @@ key in a stored object is replaced entirely.
 `plan`, `run`, and `resume` also emit a `run.refused` JSONL event when they
 raise one of these errors.
 
-## Windows
+### Linux
+
+Install from this checkout with `python -m pip install -e .`, then
+`python -m pip install -r requirements.txt`, so `jsonschema` is present and
+`config/harness.json` resolves. Invoke `scripts/recursion` as
+`python -X utf8 -B scripts/recursion` when the console script is not on
+`PATH`.
+
+`claude`, `codex`, `grok`, `gemini`, and `opencode` must be executable files
+on `PATH`. Cursor's command is `cursor-agent`. `recursion doctor` and
+`recursion providers` report whether that command resolves. They do not start
+a billed prompt. A live run still needs `--allow-live` and that product's
+own login. A missing command is `CLI was not found on PATH`.
+
+Git is required for task worktrees. `git <subcommand> failed` means the
+worktree could not be added or removed. `git worktree prune` drops a
+checkout left behind by an interrupted run. Text files in this repository
+are LF (`.gitattributes`). Leave `core.autocrlf` false so a checkout does
+not rewrite fixtures the checkers compare byte for byte.
+
+If the locale is not UTF-8, set `PYTHONIOENCODING=utf-8`. Config, JSONL,
+run records, and provider output are read and written as UTF-8.
+
+### Windows
 
 Use PowerShell for the install and quickstart above. The harness reads and
 writes config, logs, run records, and provider output as UTF-8. When you use
 `scripts/recursion` instead of the console script, start it with
 `python -X utf8` so the Windows console uses UTF-8 too.
 
-Task worktrees are created with `git -c core.longpaths=true`. Turn on Windows
-long paths if a worktree path still exceeds the legacy path limit. This
-repository stores text as LF (`.gitattributes`). Leave `core.autocrlf` off so
-a checkout does not rewrite the fixtures the checkers compare byte for byte.
+`doctor` and `providers` resolve a command with `PATHEXT` and also try
+`.exe`, `.cmd`, and `.bat`, ignoring case. `cursor-agent` is the Cursor
+command this harness calls. A `.cmd` shim that is only a name on `PATH` is
+still reported as installed when that search finds it.
+
+Task worktrees are created with `git -c core.longpaths=true`. Turn on
+Windows long paths if a worktree path still exceeds the legacy path limit.
+`doctor` reports `git.longpaths` from `git config --get core.longpaths`.
+This repository stores text as LF (`.gitattributes`). Leave `core.autocrlf`
+off so a checkout does not rewrite the fixtures the checkers compare byte
+for byte.

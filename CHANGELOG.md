@@ -49,3 +49,8 @@ after that cut.
 - Event logs, run records, and reports replace token-shaped text with
   `[REDACTED]`. `recursion logs RUN-...` prints a run's JSONL and can filter
   by task, provider, and level.
+- `docs/ARCHITECTURE.md` diagrams plan, schedule, worktree, provider,
+  review, landing, and report. The README and user guide cover the landed
+  providers and commands, with Linux and Windows troubleshooting. The docs
+  drift test checks subcommands, flags, provider names, config keys, and
+  that diagram.
