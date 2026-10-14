@@ -24,6 +24,47 @@ python -m pip install -r requirements.txt
 (Draft 2020-12) and pytest. `bash scripts/install.sh` on Linux, or
 `powershell -ExecutionPolicy Bypass -File scripts/install.ps1` on Windows,
 creates a virtualenv, installs this checkout, and runs `recursion doctor`.
+The Quickstart is the fixture path through `land` and `clean`.
+
+## Quickstart
+
+From the repository root, with the fixture provider. The script checks out
+`recursion-quickstart` so `land` has a branch and does not merge into
+`master`. The starter config and the run JSON are written outside this
+checkout: a new file inside it makes the worktree dirty, and `land` then
+refuses. `init` leaves `review.accept_unreviewed` false. The fixture has no
+second provider, so that default makes `run` exit `2` with status
+`unreviewed`, and `land` refuses because the run is not finished. The script
+sets `accept_unreviewed` to true before `run`.
+
+A fixture task that edits no files leaves the run branch at the same commit
+as the target. `land` still exits `0`, stores `land.status` `merged`, and
+records the current HEAD. Git does not add a commit. `clean --older-than 0`
+then removes that finished run. An `unreviewed` run is left in place as
+`resumable`.
+
+When stderr is not a terminal, `plan` and `run` print JSONL events there.
+When stderr is a terminal, or when `--progress` is set, those events are
+short plain lines. Stdout of `run` is one JSON object.
+
+```bash
+git checkout -B recursion-quickstart
+python -m pip install -e .
+recursion doctor
+work="${RUNNER_TEMP:-${TMPDIR:-${TEMP:-/tmp}}}/recursion-quickstart-$$"
+mkdir -p "$work"
+export CFG="$work/harness.json"
+export OUT="$work"
+recursion init "$CFG"
+python -c "import json, os, pathlib; p = pathlib.Path(os.environ['CFG']); data = json.loads(p.read_text(encoding='utf-8')); data['review']['accept_unreviewed'] = True; p.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')"
+recursion plan --task "Say hello" --config "$CFG"
+recursion run --task "Say hello" --provider fixture --config "$CFG" > "$OUT/run.json"
+rid="$(python -c "import json, os, pathlib; print(json.loads(pathlib.Path(os.environ['OUT'], 'run.json').read_text(encoding='utf-8'))['run_id'])")"
+recursion status --run "$rid" --config "$CFG"
+recursion logs "$rid"
+recursion land "$rid" --config "$CFG"
+recursion clean --older-than 0 --config "$CFG"
+```
 
 ## Run tests
 
@@ -73,8 +114,10 @@ python -m pip install -e .
 recursion run --task "Say hello" --provider fixture
 ```
 
-The command prints a JSON result on stdout. Events are JSONL on stderr.
-With only `fixture` as a candidate, review has no second provider, so the
+The command prints a JSON result on stdout. When stderr is not a terminal,
+events are JSONL there. When stderr is a terminal, or when `--progress` is
+set, those events are short plain lines. With only `fixture` as a candidate,
+review has no second provider, so the
 task is `unreviewed` and the command exits `2` unless
 `review.accept_unreviewed` is true.
 

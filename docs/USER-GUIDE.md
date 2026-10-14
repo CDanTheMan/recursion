@@ -114,6 +114,21 @@ means the command refused the request or the run ended `budget-exceeded`,
 `cancelled`, `conflict`, `failed`, `review-rejected`, `skipped`, or
 `unreviewed`.
 
+### Through land and clean
+
+The [README](../README.md) quickstart continues through `doctor`, `init`,
+`plan`, `status`, `logs`, `land`, and `clean`. Write the starter config
+outside this checkout. A file created inside it makes `git status` dirty,
+and `land` then refuses with `working tree is dirty`. `init` leaves
+`review.accept_unreviewed` false, so the fixture run is `unreviewed`, exits
+`2`, and `land` refuses with `run is not finished`. Set `accept_unreviewed`
+to true in that starter before `run`. `land` needs a current branch. A
+detached HEAD needs `--into`, or check out a branch first. A fixture task
+that edits no files leaves the run branch at the same commit as the target.
+`land` still records `land.status` `merged` and the current HEAD, and git
+does not add a commit. `clean --older-than 0` then removes that finished
+run. An `unreviewed` run is skipped as `resumable`.
+
 ## Commands and flags
 
 `recursion --help` lists these subcommands and no others:
@@ -452,8 +467,11 @@ refuses when the target branch is checked out in a worktree other than the
 one it is running in, so that checkout is not left stale. The message starts
 with `target branch is checked out in another worktree`. These refusals are
 stored on the run as `land.status` `refused` or `conflict`, and the report
-is rewritten. A merge stores `land.status` `merged` and the new commit.
-The merge commit uses this repository's `user.name` and `user.email` when
+is rewritten. A merge stores `land.status` `merged` and the commit that
+is checked out afterward. When the run branch is already contained in the
+target, git reports that the branch is already up to date, no commit is
+added, and the recorded commit is the current HEAD. A fixture task that
+edits no files does that. The merge commit uses this repository's `user.name` and `user.email` when
 they are configured. A missing name falls back to `recursion`, and a missing
 email falls back to `recursion@localhost`. Exit code `0` means the merge
 landed. Exit code `2` means it did not.
