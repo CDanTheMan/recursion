@@ -14,8 +14,10 @@ from unittest.mock import patch
 
 import pytest
 
+from scripts.v3.harness.cooldowns import CooldownStore
 from scripts.v3.harness.dispatch import execute_with_policy
 from scripts.v3.harness.errors import (
+    HarnessError,
     LiveProviderDisabled,
     ProviderCLIMissing,
     ProviderRateLimited,
@@ -178,24 +180,44 @@ def test_missing_executable_fails_cleanly(adapter_cls) -> None:
     assert "SECRET" not in message
 
 
-def test_rate_limit_then_success_uses_the_adapter_error() -> None:
-    adapter = ClaudeHeadlessProvider()
+def test_rate_limit_falls_back_without_retrying(tmp_path) -> None:
+    claude = ClaudeHeadlessProvider()
+    codex = CodexExecProvider()
     limited = _completed([], stdout="", stderr="SECRET rate limit", returncode=429)
-    ok = _completed(list(adapter.argv(REQUEST)), stdout=CLAUDE_SUCCESS)
+    ok = _completed(list(codex.argv(REQUEST)), stdout=CODEX_SUCCESS)
     pauses: list[float] = []
+    store = CooldownStore(tmp_path / "cooldowns.json")
     with patch("scripts.v3.harness.providers.run_command", side_effect=[limited, ok]):
         result, attempts = execute_with_policy(
+            REQUEST,
+            ["claude", "codex"],
+            allow_live=True,
+            retries=1,
+            backoff_seconds=1,
+            sleep=pauses.append,
+            timeout_seconds={"claude": 15, "codex": 15},
+            open_adapter={"claude": claude, "codex": codex}.get,
+            cooldowns=store,
+            cooldown_seconds=60,
+            now=lambda: 1_000_000,
+        )
+    assert pauses == []
+    assert [item["error"] if not item["ok"] else None for item in attempts] == ["ProviderRateLimited", None]
+    assert result.text == CODEX_SUCCESS
+    assert parse_usage(result.text)["input_tokens"] == 4
+    body = (tmp_path / "cooldowns.json").read_text(encoding="utf-8")
+    assert "SECRET" not in body
+    assert "rate-limited" in body
+    with pytest.raises(HarnessError):
+        execute_with_policy(
             REQUEST,
             ["claude"],
             allow_live=True,
             retries=1,
             backoff_seconds=1,
             sleep=pauses.append,
-            timeout_seconds={"claude": 15},
-            open_adapter=lambda _name: adapter,
+            open_adapter=lambda _name: claude,
+            cooldowns=store,
+            now=lambda: 1_000_000,
         )
-    assert pauses == [1]
-    assert [item["error"] if not item["ok"] else None for item in attempts] == ["ProviderRateLimited", None]
-    assert result.text == CLAUDE_SUCCESS
-    assert parse_usage(result.text)["input_tokens"] == 12
-    assert "SECRET" not in json.dumps(parse_usage(result.text))
+    assert pauses == []

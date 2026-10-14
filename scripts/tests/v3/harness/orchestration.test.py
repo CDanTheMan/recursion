@@ -21,7 +21,13 @@ if str(ROOT) not in sys.path:
 from scripts.v3.harness.cli import main  # noqa: E402
 from scripts.v3.harness.config import load_config  # noqa: E402
 from scripts.v3.harness.dispatch import execute_with_policy  # noqa: E402
-from scripts.v3.harness.errors import ProviderCLIMissing, ProviderRateLimited, ProviderTimeout  # noqa: E402
+from scripts.v3.harness.errors import (  # noqa: E402
+    HarnessError,
+    ProviderCLIMissing,
+    ProviderRateLimited,
+    ProviderTimeout,
+    ProviderTransient,
+)
 from scripts.v3.harness.orchestrate import (  # noqa: E402
     cancel_run,
     create_run,
@@ -250,7 +256,7 @@ class OrchestrationTests(unittest.TestCase):
                 del request, allow_live, timeout_seconds
                 calls["n"] += 1
                 if calls["n"] == 1:
-                    raise ProviderRateLimited("claude was rate-limited")
+                    raise ProviderTransient("claude hit a transient error")
                 return ProviderResult(provider="claude", argv=("claude",), text="ok", live=False)
 
         slept: list[float] = []
@@ -266,6 +272,24 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(slept, [3])
         self.assertEqual(result.text, "ok")
         self.assertEqual([item["ok"] for item in attempts], [False, True])
+
+        class Limited:
+            def execute(self, request, *, allow_live=False, timeout_seconds=None):
+                del request, allow_live, timeout_seconds
+                raise ProviderRateLimited("claude was rate-limited")
+
+        limited_sleeps: list[float] = []
+        with self.assertRaises(HarnessError):
+            execute_with_policy(
+                REQUEST,
+                ["claude"],
+                allow_live=False,
+                retries=1,
+                backoff_seconds=3,
+                sleep=limited_sleeps.append,
+                open_adapter=lambda name: Limited(),
+            )
+        self.assertEqual(limited_sleeps, [])
 
     def test_package_declares_a_console_script(self) -> None:
         payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
