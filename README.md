@@ -41,6 +41,7 @@ same gate CI runs on pull requests and on pushes to `master`.
 | Path | What it is |
 |---|---|
 | `docs/USER-GUIDE.md` | How to install and run the harness |
+| `docs/ARCHITECTURE.md` | How one run moves from plan to report |
 | `docs/v3/` | Product specifications, research, and evidence |
 | `CHANGELOG.md` | What has landed on this fork |
 | `experiments/v3/` | Provider-free experiments and checks |
@@ -71,7 +72,42 @@ recursion run --task "Say hello" --provider fixture
 ```
 
 The command prints a JSON result on stdout. Events are JSONL on stderr.
-Commands, flags, config, providers, and recovery are in
+With only `fixture` as a candidate, review has no second provider, so the
+task is `unreviewed` and the command exits `2` unless
+`review.accept_unreviewed` is true.
+
+### Commands
+
+`plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `init`,
+`config validate`, and `logs`. `plan` admits tasks and does not start a live
+CLI. `run` schedules them. `--concurrency` overrides how many ready tasks
+run at once, and `--progress` prints plain lines on stderr instead of JSONL.
+`status`, `resume`, and `cancel` use the saved
+run. `cancel` stops a provider that is still running, and the children that
+process started. `providers` shows whether each CLI is on `PATH`, its weight, and any
+cooldown. `doctor` checks git and sign-in without printing secrets. `init`
+writes a starter config. `config validate` checks
+[config/harness.schema.json](config/harness.schema.json). `logs` prints one
+run's JSONL and can filter by task, provider, and level.
+
+### Providers
+
+`fixture` is enabled and starts no process. Live adapters, started only with
+`--allow-live`, are `claude`, `codex`, `grok`, `gemini`, `cursor`
+(`cursor-agent`), and `opencode`. The shipped config leaves `gemini`,
+`cursor`, and `opencode` disabled. The harness does not store API keys.
+
+### What a run does
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the picture. In short: plan a
+graph, schedule ready tasks by weight and cooldown, check out a worktree,
+call a provider, review with a different provider, land accepted work on
+`recursion/run/<run-id>`, and write a JSON and Markdown report. Budgets stop
+a run when a known usage figure crosses its ceiling. Sample inputs are
+[examples/sample-goal.txt](examples/sample-goal.txt) and
+[examples/harness.json](examples/harness.json).
+
+Commands, flags, config, and Windows and Linux troubleshooting are in
 [docs/USER-GUIDE.md](docs/USER-GUIDE.md).
 
 ## Retired

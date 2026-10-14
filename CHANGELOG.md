@@ -64,3 +64,8 @@ after that cut.
   stderr is a terminal, or when `--progress` is set, those commands print
   plain progress lines on stderr. JSONL stays on `--log`, and on stderr when
   progress lines are off.
+- `docs/ARCHITECTURE.md` diagrams plan, schedule, worktree, provider,
+  review, landing, and report. The README and user guide cover the landed
+  providers and commands, with Linux and Windows troubleshooting. The docs
+  drift test checks subcommands, flags, provider names, config keys, and
+  that diagram.
