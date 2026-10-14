@@ -36,10 +36,12 @@ ALLOWED = {
     "tests/test_docs_drift.py", "tests/test_adapter_streams.py", "tests/test_e2e_console.py",
     "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
     "examples/sample-goal.txt", "examples/harness.json", "examples/stubs/provider_stub.py",
+    "tests/test_config_logs.py",
 }
 PRODUCT_SLICE = {
     ".gitignore",
     "config/harness.json",
+    "config/harness.schema.json",
     "docs/v3/HARNESS-SLICE.md",
     "pyproject.toml",
     "scripts/__init__.py",
@@ -73,6 +75,7 @@ PRODUCT_SLICE = {
     "scripts/v3/harness/orchestrate.py",
     "scripts/v3/harness/planning.py",
     "scripts/v3/harness/providers.py",
+    "scripts/v3/harness/redact.py",
     "scripts/v3/harness/report.py",
     "scripts/v3/harness/review.py",
     "scripts/v3/harness/routing.py",

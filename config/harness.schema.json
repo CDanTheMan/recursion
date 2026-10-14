@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CDanTheMan/recursion/config/harness.schema.json",
+  "title": "Recursion harness config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["budgets", "landing", "orchestration", "providers", "review", "routing", "version"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "Config document version. Only 1 is accepted."
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accept_unreviewed", "max_rounds"],
+      "properties": {
+        "accept_unreviewed": {"type": "boolean"},
+        "max_rounds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "landing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_ref"],
+      "properties": {
+        "base_ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\n\\r]+$"
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_cost", "max_input_tokens", "max_output_tokens"],
+      "properties": {
+        "max_cost": {"type": ["number", "null"], "minimum": 0},
+        "max_input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "max_output_tokens": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "orchestration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concurrency"],
+      "properties": {
+        "concurrency": {"type": "integer", "minimum": 1}
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backoff_seconds", "preference", "required_capabilities", "retries"],
+      "properties": {
+        "backoff_seconds": {"type": "integer", "minimum": 0},
+        "preference": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
+        },
+        "required_capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_+-]{0,63}$"}
+        },
+        "retries": {"type": "integer", "minimum": 0}
+      }
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["argv", "capabilities", "enabled", "name", "timeout_seconds"],
+        "properties": {
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "capabilities": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_+-]{0,63}$"}
+          },
+          "enabled": {"type": "boolean"},
+          "name": {"type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+          "timeout_seconds": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

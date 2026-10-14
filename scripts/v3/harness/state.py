@@ -11,6 +11,7 @@ from pathlib import Path
 
 from scripts.v3.harness.config import ROOT
 from scripts.v3.harness.errors import HarnessError
+from scripts.v3.harness.redact import redact
 
 
 _RUN_ID = re.compile(r"RUN-[0-9a-f]{16}")
@@ -80,7 +81,8 @@ class RunStore:
         path = self._path(record["run_id"])
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".json.tmp")
-        temporary.write_text(json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        stored = redact(record)
+        temporary.write_text(json.dumps(stored, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         temporary.replace(path)
 
     @contextmanager

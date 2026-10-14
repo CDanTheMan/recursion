@@ -10,7 +10,8 @@ after that cut.
 ### Added
 
 - `recursion` console script, installed with `python -m pip install -e .`.
-  Subcommands: `plan`, `run`, `status`, `resume`, `cancel`, `doctor`, `init`.
+  Subcommands: `plan`, `run`, `status`, `resume`, `cancel`, `doctor`, `init`,
+  `config validate`, and `logs`.
 - Provider adapters `fixture`, `claude`, `codex`, and `grok`. Live CLIs start
   only with `--allow-live`. The config refuses secret-shaped keys.
 - Provider adapters `gemini`, `cursor` (`cursor-agent`), and `opencode`,
@@ -37,3 +38,8 @@ after that cut.
 - Sample goal and config in `examples/`, and a console end-to-end test that
   installs `recursion` and drives `plan`, `run`, `status`, `cancel`, `resume`,
   and the report through fake `claude`, `codex`, and `grok` executables.
+- `config/harness.schema.json` is checked when a config is loaded.
+  `recursion config validate` reports the field and the schema error.
+- Event logs, run records, and reports replace token-shaped text with
+  `[REDACTED]`. `recursion logs RUN-...` prints a run's JSONL and can filter
+  by task, provider, and level.
