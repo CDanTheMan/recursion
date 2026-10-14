@@ -63,20 +63,20 @@ Linux:
 
 ```bash
 python -m pip install -e .
-recursion run --task "Say hello" --provider fixture
+recursion run --task "Say hello"
 ```
 
 Windows PowerShell:
 
 ```powershell
 python -m pip install -e .
-recursion run --task "Say hello" --provider fixture
+recursion run --task "Say hello"
 ```
 
 The command prints a JSON result on stdout. Events are JSONL on stderr.
-With only `fixture` as a candidate, review has no second provider, so the
-task is `unreviewed` and the command exits `2` unless
-`review.accept_unreviewed` is true.
+The shipped config enables `fixture` and `fixture-b`. Neither starts a CLI.
+A run that does not pin one provider is reviewed by the other fixture and
+can finish without setting `review.accept_unreviewed`.
 
 ### Commands
 
@@ -95,7 +95,7 @@ finished run into a branch. `clean` prunes old run state.
 
 ### Providers
 
-`fixture` is enabled and starts no process. Live adapters, started only with
+`fixture` and `fixture-b` are enabled and start no process. Live adapters, started only with
 `--allow-live`, are `claude`, `codex`, `grok`, `gemini`, `cursor`
 (`cursor-agent`), and `opencode`. The shipped config leaves `gemini`,
 `cursor`, and `opencode` disabled. The harness does not store API keys.

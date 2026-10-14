@@ -51,8 +51,8 @@ worktree.
 
 ## provider
 
-The worker is the first candidate that finishes. `fixture` never starts a
-process. `claude`, `codex`, `grok`, `gemini`, `cursor` (`cursor-agent`), and
+The worker is the first candidate that finishes. `fixture` and `fixture-b`
+never start a process. `claude`, `codex`, `grok`, `gemini`, `cursor` (`cursor-agent`), and
 `opencode` start only with `--allow-live`. The harness does not read or store
 API keys. Usage figures are read from the provider's stdout when that stream
 carries them. Stderr is not stored. `cancel`, and a provider
@@ -61,7 +61,9 @@ it started: a process group on Linux and a job object on Windows.
 
 ## review
 
-A different candidate reviews the task, the output, and the diff. The first
+A different candidate reviews the task, the output, and the diff. The shipped
+config enables `fixture` and `fixture-b`, so an offline run has a reviewer
+other than the worker. The first
 non-empty line is `VERDICT approve` or `VERDICT revise`. Approve accepts the
 task. Revise sends the notes back to the same worker, up to
 `review.max_rounds`. Anything else is treated as revise. A reviewer that

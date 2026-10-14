@@ -17,12 +17,13 @@
   },
   "routing": {
     "required_capabilities": ["execute"],
-    "preference": ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
+    "preference": ["fixture", "fixture-b", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
     "retries": 1,
     "backoff_seconds": 1,
     "cooldown_seconds": 60,
     "weights": {
       "fixture": 1,
+      "fixture-b": 1,
       "claude": 1,
       "codex": 1,
       "grok": 1,
@@ -37,6 +38,13 @@
       "enabled": true,
       "capabilities": ["execute", "deterministic"],
       "argv": ["fixture-provider", "--output-format", "json"],
+      "timeout_seconds": 120
+    },
+    {
+      "name": "fixture-b",
+      "enabled": true,
+      "capabilities": ["execute", "deterministic"],
+      "argv": ["fixture-b-provider", "--output-format", "json"],
       "timeout_seconds": 120
     },
     {

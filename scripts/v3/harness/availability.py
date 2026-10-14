@@ -108,7 +108,7 @@ def provider_report(config: dict, cooldowns, *, finder) -> list[dict]:
     for item in config["providers"]:
         name = item["name"]
         command = item["argv"][0]
-        found = True if name == "fixture" else finder(command) is not None
+        found = True if _offline(name) else finder(command) is not None
         cool = active.get(name)
         rows.append(
             {
@@ -124,6 +124,19 @@ def provider_report(config: dict, cooldowns, *, finder) -> list[dict]:
             }
         )
     return rows
+
+
+def _offline(name: str) -> bool:
+    """True for a fixture that never starts a process.
+
+    Imported lazily. ``providers`` already imports ``classify_failure`` from
+    this module.
+    """
+
+    from scripts.v3.harness.providers import adapters
+
+    cls = adapters().get(name)
+    return cls is not None and bool(getattr(cls, "OFFLINE", False))
 
 
 def default_cli_finder(command: str):

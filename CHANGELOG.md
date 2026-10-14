@@ -4,6 +4,13 @@
 
 ### Added
 
+- `fixture-b` is a second offline fixture. It never starts a CLI and needs no
+  account. For a review it returns `VERDICT approve`. Execute and plan match
+  `fixture`, with the provider name `fixture-b`. The shipped config enables
+  `fixture` and `fixture-b` at equal weight, so a run that does not pin one
+  provider is reviewed and can complete without `review.accept_unreviewed`.
+  A config that leaves only one fixture enabled still records the task as
+  `unreviewed`.
 - `scripts/install.sh` and `scripts/install.ps1` create a virtualenv, install
   this checkout, run `recursion doctor`, and print the next commands. CI runs
   the Linux script and the Windows script, then checks `recursion --help`.

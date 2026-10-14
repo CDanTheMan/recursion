@@ -1,4 +1,4 @@
-"""Provider adapters. Headless CLIs, plus a fixture that never starts a process.
+"""Provider adapters. Headless CLIs, plus fixtures that never start a process.
 
 Each adapter builds argv and starts a process only when ``allow_live`` is set.
 The harness does not read credentials. Retries and fallback live in
@@ -79,11 +79,17 @@ class ProviderAdapter:
 
 
 class FixtureProvider(ProviderAdapter):
-    """Deterministic stand-in used by local runs and the contracts gate."""
+    """Deterministic stand-in used by local runs and the contracts gate.
+
+    ``OFFLINE`` marks a provider that never starts a process and needs no
+    account. Subclasses share this behavior so a second fixture can review
+    the first.
+    """
 
     name = "fixture"
     STATIC_ARGV = ("fixture-provider", "--output-format", "json")
     CAPABILITIES = ("execute", "deterministic")
+    OFFLINE = True
 
     def argv(self, request: ProviderRequest) -> tuple[str, ...]:
         del request
@@ -99,19 +105,26 @@ class FixtureProvider(ProviderAdapter):
     ) -> ProviderResult:
         del allow_live, timeout_seconds, should_stop
         if request.kind == "review":
-            text = "VERDICT approve\nfixture review"
+            text = f"VERDICT approve\n{self.name} review"
         elif request.kind == "plan":
             text = _fixture_plan(request.task)
         else:
             text = "\n".join(
                 (
-                    "provider=fixture",
+                    f"provider={self.name}",
                     f"route={request.route_id}",
                     f"packet={request.packet_id}",
                     request.task,
                 )
             )
         return ProviderResult(provider=self.name, argv=self.argv(request), text=text, live=False)
+
+
+class FixtureBProvider(FixtureProvider):
+    """Second offline fixture. Review can pick it when the worker is ``fixture``."""
+
+    name = "fixture-b"
+    STATIC_ARGV = ("fixture-b-provider", "--output-format", "json")
 
 
 def _fixture_plan(task: str) -> str:
@@ -459,6 +472,7 @@ def adapters() -> dict[str, type[ProviderAdapter]]:
 
     classes = (
         FixtureProvider,
+        FixtureBProvider,
         ClaudeHeadlessProvider,
         CodexExecProvider,
         GrokHeadlessProvider,

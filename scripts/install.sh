@@ -22,10 +22,11 @@ cat <<'EOF'
 Next steps:
   source .venv/bin/activate
   recursion --help
-  recursion run --task "Say hello" --provider fixture
+  recursion run --task "Say hello"
 
-The fixture provider starts no CLI. With only that provider, review has no
-second candidate, so the run is unreviewed and exits 2 unless
-review.accept_unreviewed is true. A live provider needs --allow-live.
+The shipped config enables fixture and fixture-b. Neither starts a CLI.
+That run is reviewed by the other fixture and can finish without setting
+review.accept_unreviewed. Pinning one provider with --provider leaves no
+distinct reviewer. A live provider needs --allow-live.
 See docs/USER-GUIDE.md.
 EOF

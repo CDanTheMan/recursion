@@ -74,19 +74,24 @@ python -m pip install -r requirements.txt
 
 ## Quickstart
 
-The `fixture` provider returns a deterministic transcript and starts no
-process. It does not need `--allow-live`.
+The shipped config enables `fixture` and `fixture-b`. Both return a
+deterministic transcript and start no process. Neither needs an account or
+`--allow-live`. Their weights are equal, and `fixture` is first in
+`routing.preference`, so a run that does not pin one provider uses `fixture`
+as the worker and `fixture-b` as the reviewer. A later task in the same run
+starts at the next candidate, so `fixture-b` can be the worker and `fixture`
+the reviewer.
 
 Linux:
 
 ```bash
-recursion run --task "Say hello" --provider fixture
+recursion run --task "Say hello"
 ```
 
 Windows PowerShell:
 
 ```powershell
-recursion run --task "Say hello" --provider fixture
+recursion run --task "Say hello"
 ```
 
 Stdout is one JSON object. When stderr is not a terminal, it is JSONL
@@ -105,14 +110,19 @@ packet=<packet id>
 Say hello
 ```
 
-With only `fixture` as a candidate, review is `skipped` because there is no
-second provider. The default `review.accept_unreviewed` is false, so the task
-is `unreviewed` and the command exits `2`. The JSON result is still printed.
-Set `accept_unreviewed` to true when a missing reviewer should leave the
-worker result accepted. Exit code `0` means the run completed. Exit code `2`
-means the command refused the request or the run ended `budget-exceeded`,
-`cancelled`, `conflict`, `failed`, `review-rejected`, `skipped`, or
-`unreviewed`.
+`fixture-b` answers the review with `VERDICT approve`. The task status is
+`completed` and the command exits `0`. `review.accept_unreviewed` stays
+false. `recursion land <run-id>` can merge that finished run, and
+`recursion clean` can prune it later, without flipping `accept_unreviewed`.
+
+`recursion run --task "Say hello" --provider fixture` pins one provider.
+Review is `skipped` (`no distinct reviewer`), the task is `unreviewed`, and
+the command exits `2`. The same happens when the config leaves only one
+fixture enabled. The JSON result is still printed. Set `accept_unreviewed`
+to true when a missing reviewer should leave the worker result accepted.
+Exit code `0` means the run completed. Exit code `2` means the command
+refused the request or the run ended `budget-exceeded`, `cancelled`,
+`conflict`, `failed`, `review-rejected`, `skipped`, or `unreviewed`.
 
 ## Commands and flags
 
@@ -287,9 +297,9 @@ Each row has `name`, `enabled`, `command` (the first argv entry),
 `capabilities`, `weight`, `cli_found`, and `cooldown`. `cooldown` is `null`
 or `{reason, until}`. `until` is UTC, `YYYY-MM-DDTHH:MM:SSZ`.
 
-`cli_found` is true for `fixture` without looking it up. For every other
-provider it is true when `doctor`'s PATH search finds the command, including
-Windows `.exe`, `.cmd`, and `.bat` shims. The command does not start the CLI
+`cli_found` is true for `fixture` and `fixture-b` without looking them up.
+For every other provider it is true when `doctor`'s PATH search finds the
+command, including Windows `.exe`, `.cmd`, and `.bat` shims. The command does not start the CLI
 and does not probe sign-in. Active cooldowns come from
 `<state-dir>/cooldowns.json`.
 
@@ -316,10 +326,10 @@ when it is unset or another value. On other systems `git.longpaths` is
 null. A missing git does not by itself make `ok` false.
 
 Each provider row has `name`, `command`, `enabled`, `installed`, `resolved`,
-`version`, `signed_in`, `auth_method`, and `usable`. `fixture` is installed
-without a PATH lookup. It is usable when it is enabled, and `signed_in` is
-`not-applicable`. Another provider is installed when its command resolves on
-`PATH`. On Windows the search also tries `PATHEXT` and always tries `.exe`,
+`version`, `signed_in`, `auth_method`, and `usable`. `fixture` and
+`fixture-b` are installed without a PATH lookup. Each is usable when it is
+enabled, and `signed_in` is `not-applicable`. Another provider is installed
+when its command resolves on `PATH`. On Windows the search also tries `PATHEXT` and always tries `.exe`,
 `.cmd`, and `.bat`, ignoring case. It is usable when it is enabled and
 installed. `version` is the first line of `<command> --version` when that
 exits 0.
@@ -338,7 +348,8 @@ stdout.
 | `opencode` | `~/.local/share/opencode/auth.json` exists and is non-empty (the file is not read), otherwise `opencode auth list --format json --standalone`. An empty list, or the text `No authenticated integrations`, is signed out. `--standalone` keeps the check from attaching to a background server. |
 
 A disabled provider can be installed and still not usable. The shipped config
-leaves `gemini`, `cursor`, and `opencode` disabled, so a machine with only
+leaves `gemini`, `cursor`, and `opencode` disabled. `fixture` and `fixture-b`
+are enabled, so `ok` is true with no CLI installed. A machine with only
 `fixture` enabled still has `ok` true.
 
 ### init
@@ -354,8 +365,8 @@ Help: write a starter config that enables providers doctor can see.
 | `path` | config path to create |
 | `--force` | overwrite an existing file |
 
-`init` writes a version-1 file. It enables `fixture` and every other
-registered provider whose command resolves on PATH. Sign-in is not required.
+`init` writes a version-1 file. It enables `fixture`, `fixture-b`, and every
+other registered provider whose command resolves on PATH. Sign-in is not required.
 The other providers are present and disabled. Budgets, review rounds,
 `review.accept_unreviewed`, `landing.base_ref`, concurrency, retries,
 `cooldown_seconds`, `weights`, and the capability preference match the
@@ -533,7 +544,7 @@ count as zero. `null` means no ceiling.
 | Key | Default | Meaning |
 |---|---|---|
 | `required_capabilities` | `["execute"]` | Every selected provider must have each of these. |
-| `preference` | `["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"]` | Tie-break when weights are equal. Each configured provider once. |
+| `preference` | `["fixture", "fixture-b", "claude", "codex", "grok", "gemini", "cursor", "opencode"]` | Tie-break when weights are equal. Each configured provider once. |
 | `retries` | `1` | Integer `>= 0`. Extra tries of the same provider after the first. |
 | `backoff_seconds` | `1` | Integer `>= 0`. On a transient error or a timeout, wait `backoff_seconds * (attempt + 1)` before the next try of that provider. |
 | `cooldown_seconds` | `60` | Integer `>= 0`. How long a provider stays unavailable when the CLI does not report a reset time. |
@@ -549,6 +560,7 @@ a different command.
 | name | enabled | capabilities | argv | timeout_seconds |
 |---|---|---|---|---|
 | `fixture` | `true` | `execute`, `deterministic` | `fixture-provider --output-format json` | `120` |
+| `fixture-b` | `true` | `execute`, `deterministic` | `fixture-b-provider --output-format json` | `120` |
 | `claude` | `true` | `execute`, `stream-json`, `subscription` | `claude -p --output-format stream-json` | `120` |
 | `codex` | `true` | `execute`, `jsonl`, `subscription` | `codex exec --json` | `120` |
 | `grok` | `true` | `execute`, `streaming-json`, `subscription` | `grok -p --output-format streaming-json` | `120` |
@@ -558,8 +570,9 @@ a different command.
 
 `enabled` is a boolean. A disabled provider is skipped. Naming it with
 `--provider` is an error. `timeout_seconds` is an integer `>= 1`. A live
-process that exceeds it fails as a timeout. The `fixture` adapter never
-starts a process, including when its argv names `fixture-provider`.
+process that exceeds it fails as a timeout. The `fixture` and `fixture-b`
+adapters never start a process, including when their argv names
+`fixture-provider` or `fixture-b-provider`.
 
 ## Providers
 
@@ -570,13 +583,19 @@ not store one.
 
 ### Fixture
 
-No install and no sign-in. `recursion run --provider fixture` is the local
-path. An execute transcript names the provider, the route, the packet, and
-the task. A review transcript is `VERDICT approve` followed by `fixture review`.
-A plan whose goal starts with a line `graph` is a dependency list. Each
-following line is `id: description`, then optional ` requires cap,cap`, then
-optional ` depends id,id`. Any other goal is still one independent task per
-non-empty line. An invalid graph falls back to that line split.
+No install and no sign-in. `fixture` and `fixture-b` are both enabled in
+[config/harness.json](../config/harness.json). An execute transcript names the
+provider, the route, the packet, and the task. A review transcript is
+`VERDICT approve` followed by `fixture review` or `fixture-b review`. A plan
+whose goal starts with a line `graph` is a dependency list. Each following
+line is `id: description`, then optional ` requires cap,cap`, then optional
+` depends id,id`. Any other goal is still one independent task per
+non-empty line. An invalid graph falls back to that line split. `fixture-b`
+uses the same plan and execute behavior with its own provider name. It exists
+so review can pick a provider other than the worker without a live CLI.
+
+`examples/harness.json` is a live-CLI sample. It lists both fixtures and
+leaves them disabled. The shipped config is the one that reviews offline.
 
 ### Claude Code
 
@@ -705,10 +724,14 @@ and the diff. The reviewer is asked to put `VERDICT approve` or
 Notes stored on the task are at most 1000 characters. The prompt clips the
 output and the diff at 2000 characters. The reviewer can read the worktree.
 Edits it makes are removed, the verdict is `rejected-write`, and the raw
-review body is not stored. If no other provider exists, the verdict is
-`skipped` (`no distinct reviewer`). If every reviewer fails, the verdict is
-`skipped` (`no reviewer completed`) and the failed attempts are stored on
-that review. Reviewer writes made before the failure are removed too.
+review body is not stored. The shipped config keeps `fixture` and `fixture-b`
+enabled, so an offline run has a distinct reviewer and does not need
+`accept_unreviewed`. If no other provider exists, the verdict is `skipped`
+(`no distinct reviewer`). If every reviewer fails, the verdict is `skipped`
+(`no reviewer completed`) and the failed attempts are stored on that review.
+Reviewer writes made before the failure are removed too. A config that
+leaves only one fixture enabled still ends `unreviewed` when no other
+reviewer finishes.
 With `accept_unreviewed` false, either skip leaves the task `unreviewed`
 and does not merge it. With `accept_unreviewed` true, the worker result is
 accepted. A revise on the last round, or a rejected write on the last round,
@@ -795,7 +818,7 @@ key in a stored object is replaced entirely.
 | `routing.retries:` (and other field paths) | The JSON Schema rejected that field. The text after the path says what is wrong. |
 | `config key '...' is not allowed` | The key looks like a secret. |
 | `provider config version must be 1` | `version` is not the integer `1`. |
-| `unknown provider` | The name is not `fixture`, `claude`, `codex`, `grok`, `gemini`, `cursor`, or `opencode`. |
+| `unknown provider` | The name is not `fixture`, `fixture-b`, `claude`, `codex`, `grok`, `gemini`, `cursor`, or `opencode`. |
 | `provider '...' is disabled` | `--provider` names an entry with `enabled` false. |
 | `does not satisfy capabilities` | The provider lacks a required capability. |
 | `no enabled provider satisfies capabilities` | Nothing enabled matches. |

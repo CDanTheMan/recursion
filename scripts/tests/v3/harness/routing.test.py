@@ -253,6 +253,8 @@ class RoutingTests(unittest.TestCase):
             )
             by_name = {row["name"]: row for row in rows}
             self.assertTrue(by_name["fixture"]["cli_found"])
+            self.assertTrue(by_name["fixture-b"]["cli_found"])
+            self.assertEqual(by_name["fixture-b"]["command"], "fixture-b-provider")
             self.assertTrue(by_name["claude"]["cli_found"])
             self.assertFalse(by_name["codex"]["cli_found"])
             self.assertEqual(by_name["claude"]["cooldown"]["reason"], "auth-expired")

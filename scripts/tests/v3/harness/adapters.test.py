@@ -27,6 +27,7 @@ from scripts.v3.harness.providers import (  # noqa: E402
     ClaudeHeadlessProvider,
     CodexExecProvider,
     CursorHeadlessProvider,
+    FixtureBProvider,
     FixtureProvider,
     GeminiHeadlessProvider,
     GrokHeadlessProvider,
@@ -63,15 +64,27 @@ class AdapterTests(unittest.TestCase):
             (CursorHeadlessProvider(), ("cursor-agent", "-p", "--output-format", "stream-json", "hello")),
             (OpenCodeHeadlessProvider(), ("opencode", "run", "--format", "json", "hello")),
             (FixtureProvider(), ("fixture-provider", "--output-format", "json")),
+            (FixtureBProvider(), ("fixture-b-provider", "--output-format", "json")),
         )
         for adapter, argv in cases:
             with self.subTest(adapter=adapter.name):
                 self.assertEqual(adapter.argv(REQUEST), argv)
                 with patch("scripts.v3.harness.providers.run_command") as spawned:
-                    if adapter.name == "fixture":
+                    if getattr(type(adapter), "OFFLINE", False):
                         result = adapter.execute(REQUEST)
                         self.assertFalse(result.live)
                         self.assertIn("hello", result.text)
+                        self.assertIn(adapter.name, result.text)
+                        review = adapter.execute(
+                            ProviderRequest(
+                                task="review me",
+                                packet_id="PACKET-TEST",
+                                route_id="route-a",
+                                kind="review",
+                            )
+                        )
+                        self.assertFalse(review.live)
+                        self.assertTrue(review.text.startswith("VERDICT approve"))
                     else:
                         with self.assertRaises(LiveProviderDisabled):
                             adapter.execute(REQUEST)
@@ -125,7 +138,7 @@ class AdapterTests(unittest.TestCase):
         by_name = {item["name"]: item for item in config["providers"]}
         self.assertEqual(
             list(by_name),
-            ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
+            ["fixture", "fixture-b", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
         )
         self.assertEqual(by_name["codex"]["argv"], ["codex", "exec", "--json"])
         self.assertEqual(by_name["grok"]["argv"], ["grok", "-p", "--output-format", "streaming-json"])
@@ -135,6 +148,10 @@ class AdapterTests(unittest.TestCase):
         self.assertFalse(by_name["gemini"]["enabled"])
         self.assertFalse(by_name["cursor"]["enabled"])
         self.assertFalse(by_name["opencode"]["enabled"])
+        self.assertTrue(by_name["fixture"]["enabled"])
+        self.assertTrue(by_name["fixture-b"]["enabled"])
+        self.assertEqual(by_name["fixture-b"]["argv"], ["fixture-b-provider", "--output-format", "json"])
+        self.assertEqual(by_name["fixture"]["capabilities"], by_name["fixture-b"]["capabilities"])
         self.assertEqual(config["routing"]["retries"], 1)
         raw = json.loads((ROOT / "config" / "harness.json").read_text(encoding="utf-8"))
         raw["api_key"] = "nope"
@@ -157,8 +174,12 @@ class AdapterTests(unittest.TestCase):
             select_candidates(config, provider="grok", extra_capabilities=["subscription"], fallback=True),
             ["grok", "claude", "codex"],
         )
+        self.assertEqual(
+            select_candidates(config),
+            ["fixture", "fixture-b", "claude", "codex", "grok"],
+        )
         for item in config["providers"]:
-            if item["name"] == "fixture":
+            if item["name"] in {"fixture", "fixture-b"}:
                 item["enabled"] = False
         self.assertEqual(select_candidates(config), ["claude", "codex", "grok"])
         with self.assertRaises(HarnessError):
@@ -235,7 +256,9 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(code, 0)
         status = json.loads(stdout.getvalue())
         names = [item["name"] for item in status["providers"]]
-        self.assertEqual(names, ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"])
+        self.assertEqual(
+            names, ["fixture", "fixture-b", "claude", "codex", "grok", "gemini", "cursor", "opencode"]
+        )
         self.assertEqual(status["log"]["events"], 0)
 
     def test_cli_run_uses_fixture_then_falls_back_without_a_process(self) -> None:
@@ -245,11 +268,16 @@ class AdapterTests(unittest.TestCase):
         ) as spawned:
             code = main(["run", "--task", "Run the fixture."])
         spawned.assert_not_called()
-        self.assertEqual(code, 2)
+        self.assertEqual(code, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["status"], "unreviewed")
+        self.assertEqual(payload["status"], "completed")
         self.assertEqual(payload["execution"]["provider"], "fixture")
-        self.assertEqual(payload["candidates"], ["fixture", "claude", "codex", "grok"])
+        self.assertEqual(
+            payload["candidates"],
+            ["fixture", "fixture-b", "claude", "codex", "grok"],
+        )
+        self.assertEqual(payload["reviews"][0]["verdict"], "approve")
+        self.assertEqual(payload["reviews"][0]["reviewer"], "fixture-b")
         self.assertFalse(payload["execution"]["live"])
         self.assertEqual(payload["route"]["selected_route_id"], "route-a")
         _drop_run_branches(payload["run_id"])
@@ -302,7 +330,7 @@ class AdapterTests(unittest.TestCase):
         status = json.loads(completed.stdout)
         self.assertEqual(
             status["routing"]["preference"],
-            ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
+            ["fixture", "fixture-b", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
         )
 
 
