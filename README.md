@@ -21,7 +21,9 @@ python -m pip install -r requirements.txt
 ```
 
 `requirements.txt` pins the test dependencies, including `jsonschema` 4.23.0
-(Draft 2020-12) and pytest.
+(Draft 2020-12) and pytest. `bash scripts/install.sh` on Linux, or
+`powershell -ExecutionPolicy Bypass -File scripts/install.ps1` on Windows,
+creates a virtualenv, installs this checkout, and runs `recursion doctor`.
 
 ## Run tests
 
