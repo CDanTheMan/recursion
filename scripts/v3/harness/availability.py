@@ -6,6 +6,7 @@ exception text never includes the process output.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 
@@ -24,8 +25,11 @@ _TRY_AGAIN = re.compile(r"try again in\s+(\d+)\s*(second|minute)s?", re.IGNORECA
 _AUTH = (
     "auth expired",
     "authentication expired",
+    "authentication required",
+    "authentication_failed",
     "login expired",
     "not logged in",
+    "not signed in",
     "please log in",
     "please login",
     "invalid api key",
@@ -36,6 +40,7 @@ _AUTH = (
     "re-authenticate",
     "run /login",
     "codex login",
+    "set an auth method",
 )
 _QUOTA = (
     "insufficient_quota",
@@ -45,11 +50,13 @@ _QUOTA = (
     "credit balance",
     "out of credits",
     "billing",
+    "billing_error",
     "resource_exhausted",
     "spend limit",
 )
 _RATE = (
     "rate limit",
+    "rate_limit",
     "too many requests",
     "overloaded",
 )
@@ -61,26 +68,87 @@ _TRANSIENT = (
 )
 
 
-def classify_failure(name: str, returncode: int, stderr: str) -> HarnessError | None:
-    """Return a classified error, or None when the process succeeded."""
+def classify_failure(
+    name: str,
+    returncode: int,
+    stderr: str,
+    stdout: str = "",
+) -> HarnessError | None:
+    """Return a classified error, or None when the process succeeded.
 
-    if returncode == 0:
+    Stderr is scanned for the failure phrases. Stdout is not scanned as a
+    whole: only JSON fields that a CLI uses to report a failure (an ``error``
+    event, an error string, or a result with ``is_error``). A task that
+    mentions those words stays out of the classification.
+    """
+
+    signals = _failure_signals(stdout)
+    if returncode == 0 and not signals:
         return None
-    text = (stderr or "").lower()
-    until, retry_after = _reset(stderr or "")
-    if returncode == 401 or _contains(text, _AUTH):
+    text = "\n".join(part for part in ((stderr or ""), signals) if part).lower()
+    code = returncode if returncode else 1
+    until, retry_after = _reset("\n".join(part for part in ((stderr or ""), signals) if part))
+    if code == 401 or _contains(text, _AUTH):
         return ProviderAuthExpired(
             f"{name} authentication expired", until=until, retry_after=retry_after
         )
-    if returncode == 402 or _contains(text, _QUOTA):
+    if code == 402 or _contains(text, _QUOTA):
         return ProviderQuotaExhausted(
             f"{name} quota is exhausted", until=until, retry_after=retry_after
         )
-    if returncode == 429 or _contains(text, _RATE):
+    if code == 429 or _contains(text, _RATE):
         return ProviderRateLimited(f"{name} was rate-limited", until=until, retry_after=retry_after)
-    if returncode in {500, 502, 503, 504} or _contains(text, _TRANSIENT):
+    if code in {500, 502, 503, 504} or _contains(text, _TRANSIENT):
         return ProviderTransient(f"{name} hit a transient error")
-    return HarnessError(f"{name} exited {returncode}")
+    return HarnessError(f"{name} exited {code}")
+
+
+def _failure_signals(stdout: str) -> str:
+    """Join failure fields from a JSON line stream. Empty when none are present."""
+
+    pieces: list[str] = []
+    failed = False
+    for line in (stdout or "").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("type") == "error" and isinstance(payload.get("message"), str):
+            pieces.append(payload["message"])
+            failed = True
+        error = payload.get("error")
+        if isinstance(error, str) and error:
+            pieces.append(error)
+            failed = True
+        elif isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and message:
+                pieces.append(message)
+                failed = True
+        item = payload.get("item")
+        if (
+            isinstance(item, dict)
+            and item.get("type") == "error"
+            and isinstance(item.get("message"), str)
+        ):
+            pieces.append(item["message"])
+            failed = True
+        if payload.get("type") == "result" and payload.get("is_error") is True:
+            failed = True
+            result = payload.get("result")
+            if isinstance(result, str) and result:
+                pieces.append(result)
+            reason = payload.get("terminal_reason")
+            if isinstance(reason, str) and reason:
+                pieces.append(reason)
+    if failed and not pieces:
+        pieces.append("is_error")
+    return "\n".join(pieces) if failed else ""
 
 
 def order_candidates(

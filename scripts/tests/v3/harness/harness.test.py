@@ -90,7 +90,7 @@ class HarnessSliceTests(unittest.TestCase):
     def test_claude_argv_is_print_mode_and_does_not_spawn(self) -> None:
         request = ProviderRequest(task="hello", packet_id="PACKET-TEST", route_id="route-a")
         adapter = ClaudeHeadlessProvider()
-        self.assertEqual(adapter.argv(request), ("claude", "-p", "--output-format", "stream-json"))
+        self.assertEqual(adapter.argv(request), ClaudeHeadlessProvider.STATIC_ARGV)
         with patch("scripts.v3.harness.providers.run_command") as spawned:
             with self.assertRaises(LiveProviderDisabled):
                 adapter.execute(request)
@@ -128,6 +128,7 @@ class HarnessSliceTests(unittest.TestCase):
                 "scripts/tests/v3/harness/recovery.test.py",
                 "scripts/tests/v3/harness/review.test.py",
                 "scripts/tests/v3/harness/routing.test.py",
+                "scripts/tests/v3/harness/smoke.test.py",
                 "scripts/tests/v3/harness/streams.test.py",
             ],
         )

@@ -52,6 +52,10 @@ class DoctorTests(unittest.TestCase):
             self.assertEqual(cursor.name, "cursor-agent.EXE")
             self.assertIsNotNone(opencode)
             self.assertEqual(opencode.name.casefold(), "opencode.cmd")
+            _touch(root, "grok.ps1")
+            grok = resolve_executable("grok", path=search, platform="win32", pathext=".EXE")
+            self.assertIsNotNone(grok)
+            self.assertEqual(grok.name, "grok.ps1")
             self.assertIsNone(resolve_executable("gemini", path=search, platform="linux"))
 
     def test_posix_uses_the_bare_name(self) -> None:
@@ -91,7 +95,7 @@ class DoctorTests(unittest.TestCase):
                     return _completed(argv, 0, f"logged in {SECRET}\n")
                 if argv[1:] == ["status", "--format", "json"]:
                     return _completed(argv, 0, json.dumps({"loggedIn": True, "token": SECRET}))
-                if argv[1:] == ["auth", "list", "--format", "json", "--standalone"]:
+                if argv[1:] == ["auth", "list"]:
                     return _completed(argv, 0, json.dumps([{"id": "openai", "token": SECRET}]))
                 raise AssertionError(argv)
 
@@ -146,7 +150,13 @@ class DoctorTests(unittest.TestCase):
                 if argv[1:] == ["--version"]:
                     return _completed(argv, 0, "cursor-agent 2026.10.12\n")
                 if argv[1:] == ["status", "--format", "json"]:
-                    return _completed(argv, 1, f"Not logged in {SECRET}\n")
+                    return _completed(
+                        argv,
+                        0,
+                        '{"status":"unauthenticated","isAuthenticated":false,"message":"Not logged in '
+                        + SECRET
+                        + '"}\n',
+                    )
                 raise AssertionError(argv)
 
             config = starter_config({"cursor"})
@@ -172,7 +182,7 @@ class DoctorTests(unittest.TestCase):
                 del timeout
                 if argv[1:] == ["--version"]:
                     return _completed(argv, 0, "opencode 1.0.0\n")
-                if argv[1:] == ["auth", "list", "--format", "json", "--standalone"]:
+                if argv[1:] == ["auth", "list"]:
                     return _completed(argv, 0, "[]\n")
                 raise AssertionError(argv)
 
@@ -193,8 +203,12 @@ class DoctorTests(unittest.TestCase):
                 del timeout
                 if argv[1:] == ["--version"]:
                     return _completed(argv, 0, "opencode 1.0.0\n")
-                if argv[1:] == ["auth", "list", "--format", "json", "--standalone"]:
-                    return _completed(argv, 0, "No authenticated integrations\n")
+                if argv[1:] == ["auth", "list"]:
+                    return _completed(
+                        argv,
+                        0,
+                        "\u250c  Credentials \x1b[90m~/.local/share/opencode/auth.json\n\u2502\n\u2514  0 credentials\n",
+                    )
                 raise AssertionError(argv)
 
             text_report = diagnose(
@@ -297,7 +311,10 @@ class DoctorTests(unittest.TestCase):
             enabled = [item["name"] for item in loaded["providers"] if item["enabled"]]
             self.assertEqual(enabled, ["fixture", "fixture-b", "gemini", "cursor"])
             gemini = next(item for item in payload["providers"] if item["name"] == "gemini")
-            self.assertEqual(gemini["argv"], ["gemini", "-p", "--output-format", "stream-json"])
+            self.assertEqual(
+                gemini["argv"],
+                ["gemini", "-p", "--output-format", "stream-json", "--approval-mode", "yolo", "--skip-trust"],
+            )
             target.write_text('{"keep": true}\n', encoding="utf-8")
             with self.assertRaises(HarnessError) as caught:
                 write_starter(target, set(found))
@@ -338,7 +355,7 @@ class DoctorTests(unittest.TestCase):
             self.assertEqual(enabled, ["fixture", "opencode"])
             self.assertEqual(
                 [item["argv"] for item in loaded["providers"] if item["name"] == "opencode"],
-                [["opencode", "run", "--format", "json"]],
+                [["opencode", "run", "--format", "json", "--auto"]],
             )
 
 

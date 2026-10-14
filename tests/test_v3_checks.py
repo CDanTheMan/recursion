@@ -42,7 +42,10 @@ def _run(program: tuple[str, ...]) -> None:
         encoding="utf-8",
         errors="replace",
         check=False,
-        timeout=180,
+        # The orientation runner bounds each program at 180s. Pytest traces the
+        # child for coverage, and that tracing can push the planning red-fixture
+        # program past 180s on Windows. The program must still exit 0.
+        timeout=600,
     )
     if result.returncode:
         output = (result.stdout + result.stderr).strip()

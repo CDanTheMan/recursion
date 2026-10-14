@@ -471,7 +471,7 @@ def test_every_live_adapter_runs_under_the_supervisor(monkeypatch: pytest.Monkey
     assert all(call["timeout_seconds"] == 9 for call in calls)
     assert all(callable(call["should_stop"]) for call in calls)
     for name, call in zip(live, calls, strict=True):
-        if name == "claude":
+        if name in {"claude", "codex"}:
             assert call["stdin_text"] == "task text"
         else:
             assert call["stdin_text"] is None

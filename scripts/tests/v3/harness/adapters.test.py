@@ -24,6 +24,8 @@ from scripts.v3.harness.dispatch import execute_with_policy  # noqa: E402
 from scripts.v3.harness.errors import HarnessError, LiveProviderDisabled  # noqa: E402
 from scripts.v3.harness.log import JsonLog, read_events  # noqa: E402
 from scripts.v3.harness.providers import (  # noqa: E402
+    OPENCODE_LONG_PROMPT,
+    PROMPT_ARGV_LIMIT,
     ClaudeHeadlessProvider,
     CodexExecProvider,
     CursorHeadlessProvider,
@@ -34,6 +36,9 @@ from scripts.v3.harness.providers import (  # noqa: E402
     OpenCodeHeadlessProvider,
     ProviderRequest,
     ProviderResult,
+    grok_prompt_path,
+    opencode_prompt_path,
+    windows_command,
 )
 
 
@@ -57,12 +62,48 @@ class ScriptedProvider:
 class AdapterTests(unittest.TestCase):
     def test_each_adapter_argv_and_refuses_to_spawn(self) -> None:
         cases = (
-            (ClaudeHeadlessProvider(), ("claude", "-p", "--output-format", "stream-json")),
-            (CodexExecProvider(), ("codex", "exec", "--json", "hello")),
-            (GrokHeadlessProvider(), ("grok", "-p", "hello", "--output-format", "streaming-json")),
-            (GeminiHeadlessProvider(), ("gemini", "-p", "hello", "--output-format", "stream-json")),
-            (CursorHeadlessProvider(), ("cursor-agent", "-p", "--output-format", "stream-json", "hello")),
-            (OpenCodeHeadlessProvider(), ("opencode", "run", "--format", "json", "hello")),
+            (
+                ClaudeHeadlessProvider(),
+                (
+                    "claude",
+                    "-p",
+                    "--output-format",
+                    "stream-json",
+                    "--verbose",
+                    "--dangerously-skip-permissions",
+                ),
+            ),
+            (CodexExecProvider(), ("codex", "exec", "--json", "--approve-for-me", "-")),
+            (
+                GrokHeadlessProvider(),
+                (
+                    "grok",
+                    "--output-format",
+                    "streaming-json",
+                    "--always-approve",
+                    "--no-auto-update",
+                    "--prompt-file",
+                    str(_grok_path("PACKET-TEST")),
+                ),
+            ),
+            (
+                GeminiHeadlessProvider(),
+                (
+                    "gemini",
+                    "-p",
+                    "hello",
+                    "--output-format",
+                    "stream-json",
+                    "--approval-mode",
+                    "yolo",
+                    "--skip-trust",
+                ),
+            ),
+            (
+                CursorHeadlessProvider(),
+                ("cursor-agent", "-p", "--output-format", "stream-json", "--force", "--trust", "--", "hello"),
+            ),
+            (OpenCodeHeadlessProvider(), ("opencode", "run", "--format", "json", "--auto", "hello")),
             (FixtureProvider(), ("fixture-provider", "--output-format", "json")),
             (FixtureBProvider(), ("fixture-b-provider", "--output-format", "json")),
         )
@@ -90,14 +131,48 @@ class AdapterTests(unittest.TestCase):
                             adapter.execute(REQUEST)
                 spawned.assert_not_called()
 
-    def test_live_argv_uses_stdin_only_for_claude(self) -> None:
+    def test_live_argv_passes_prompts_off_the_windows_limit(self) -> None:
+        grok_file = str(_grok_path("PACKET-TEST"))
         cases = (
-            (ClaudeHeadlessProvider(), ["claude", "-p", "--output-format", "stream-json"], "hello"),
-            (CodexExecProvider(), ["codex", "exec", "--json", "hello"], None),
-            (GrokHeadlessProvider(), ["grok", "-p", "hello", "--output-format", "streaming-json"], None),
-            (GeminiHeadlessProvider(), ["gemini", "-p", "hello", "--output-format", "stream-json"], None),
-            (CursorHeadlessProvider(), ["cursor-agent", "-p", "--output-format", "stream-json", "hello"], None),
-            (OpenCodeHeadlessProvider(), ["opencode", "run", "--format", "json", "hello"], None),
+            (
+                ClaudeHeadlessProvider(),
+                ["claude", "-p", "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"],
+                "hello",
+            ),
+            (CodexExecProvider(), ["codex", "exec", "--json", "--approve-for-me", "-"], "hello"),
+            (
+                GrokHeadlessProvider(),
+                [
+                    "grok",
+                    "--output-format",
+                    "streaming-json",
+                    "--always-approve",
+                    "--no-auto-update",
+                    "--prompt-file",
+                    grok_file,
+                ],
+                None,
+            ),
+            (
+                GeminiHeadlessProvider(),
+                [
+                    "gemini",
+                    "-p",
+                    "hello",
+                    "--output-format",
+                    "stream-json",
+                    "--approval-mode",
+                    "yolo",
+                    "--skip-trust",
+                ],
+                None,
+            ),
+            (
+                CursorHeadlessProvider(),
+                ["cursor-agent", "-p", "--output-format", "stream-json", "--force", "--trust", "--", "hello"],
+                None,
+            ),
+            (OpenCodeHeadlessProvider(), ["opencode", "run", "--format", "json", "--auto", "hello"], None),
         )
         for adapter, argv, stdin_text in cases:
             with self.subTest(adapter=adapter.name):
@@ -114,6 +189,8 @@ class AdapterTests(unittest.TestCase):
                     self.assertIsNone(spawned.call_args.kwargs["stdin_text"])
                 else:
                     self.assertEqual(spawned.call_args.kwargs["stdin_text"], stdin_text)
+                if adapter.name == "grok":
+                    self.assertFalse(Path(grok_file).exists())
 
     def test_live_failure_omits_stderr(self) -> None:
         for adapter in (
@@ -133,6 +210,96 @@ class AdapterTests(unittest.TestCase):
                 self.assertIn("exited 7", message)
                 self.assertNotIn("SECRET-TOKEN", message)
 
+    def test_long_prompts_leave_argv_and_use_stdin_or_a_file(self) -> None:
+        task = "y" * (PROMPT_ARGV_LIMIT + 1)
+        with tempfile.TemporaryDirectory() as directory:
+            request = ProviderRequest(task=task, packet_id="PACKET-LONG", route_id="route-a", cwd=directory)
+            completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok\n", stderr="")
+            cases = (
+                (ClaudeHeadlessProvider(), task),
+                (CodexExecProvider(), task),
+                (GeminiHeadlessProvider(), task),
+                (CursorHeadlessProvider(), task),
+            )
+            for adapter, stdin_text in cases:
+                with self.subTest(adapter=adapter.name):
+                    with patch("scripts.v3.harness.providers.run_command", return_value=completed) as spawned:
+                        adapter.execute(request, allow_live=True)
+                    argv = spawned.call_args.args[0]
+                    self.assertNotIn(task, argv)
+                    self.assertEqual(spawned.call_args.kwargs["stdin_text"], stdin_text)
+                    self.assertEqual(spawned.call_args.kwargs["cwd"], directory)
+            gemini = GeminiHeadlessProvider().argv(request)
+            self.assertEqual(gemini[gemini.index("-p") + 1], " ")
+            cursor = CursorHeadlessProvider().argv(request)
+            self.assertNotIn("--", cursor)
+            self.assertIn("--workspace", cursor)
+            self.assertIn("--cd", CodexExecProvider().argv(request))
+
+            grok = GrokHeadlessProvider()
+            seen: dict[str, str] = {}
+
+            def capture(argv, **kwargs):
+                del kwargs
+                path = argv[argv.index("--prompt-file") + 1]
+                seen["text"] = Path(path).read_text(encoding="utf-8")
+                seen["cwd"] = argv[argv.index("--cwd") + 1]
+                return completed
+
+            with patch("scripts.v3.harness.providers.run_command", side_effect=capture):
+                grok.execute(request, allow_live=True)
+            self.assertEqual(seen["text"], task)
+            self.assertEqual(seen["cwd"], directory)
+            self.assertFalse(grok_prompt_path(request.packet_id).exists())
+
+            opencode = OpenCodeHeadlessProvider()
+            attached: dict[str, str] = {}
+
+            def capture_file(argv, **kwargs):
+                del kwargs
+                path = argv[argv.index("--file") + 1]
+                attached["text"] = Path(path).read_text(encoding="utf-8")
+                return completed
+
+            with patch("scripts.v3.harness.providers.run_command", side_effect=capture_file):
+                opencode.execute(request, allow_live=True)
+            self.assertEqual(attached["text"], task)
+            self.assertIn(OPENCODE_LONG_PROMPT, opencode.argv(request))
+            self.assertIn("--dir", opencode.argv(request))
+            self.assertFalse(opencode_prompt_path(request).exists())
+
+    def test_windows_shims_use_cmd_powershell_or_the_exe(self) -> None:
+        cmd = windows_command(
+            ("claude", "-p", "hello"),
+            Path(r"C:\Tools\claude.cmd"),
+            comspec=r"C:\Windows\System32\cmd.exe",
+        )
+        self.assertEqual(
+            cmd,
+            [r"C:\Windows\System32\cmd.exe", "/d", "/c", r"C:\Tools\claude.cmd", "-p", "hello"],
+        )
+        ps1 = windows_command(
+            ("grok", "--output-format", "streaming-json"),
+            Path(r"C:\Tools\grok.ps1"),
+            powershell="pwsh",
+        )
+        self.assertEqual(
+            ps1,
+            [
+                "pwsh",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                r"C:\Tools\grok.ps1",
+                "--output-format",
+                "streaming-json",
+            ],
+        )
+        exe = windows_command(("codex", "exec", "--json"), Path(r"C:\Tools\codex.exe"))
+        self.assertEqual(exe, [r"C:\Tools\codex.exe", "exec", "--json"])
+
     def test_config_matches_adapter_classes_and_rejects_secrets(self) -> None:
         config = load_config()
         by_name = {item["name"]: item for item in config["providers"]}
@@ -140,11 +307,12 @@ class AdapterTests(unittest.TestCase):
             list(by_name),
             ["fixture", "fixture-b", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
         )
-        self.assertEqual(by_name["codex"]["argv"], ["codex", "exec", "--json"])
-        self.assertEqual(by_name["grok"]["argv"], ["grok", "-p", "--output-format", "streaming-json"])
-        self.assertEqual(by_name["gemini"]["argv"], ["gemini", "-p", "--output-format", "stream-json"])
-        self.assertEqual(by_name["cursor"]["argv"], ["cursor-agent", "-p", "--output-format", "stream-json"])
-        self.assertEqual(by_name["opencode"]["argv"], ["opencode", "run", "--format", "json"])
+        self.assertEqual(by_name["claude"]["argv"], list(ClaudeHeadlessProvider.STATIC_ARGV))
+        self.assertEqual(by_name["codex"]["argv"], list(CodexExecProvider.STATIC_ARGV))
+        self.assertEqual(by_name["grok"]["argv"], list(GrokHeadlessProvider.STATIC_ARGV))
+        self.assertEqual(by_name["gemini"]["argv"], list(GeminiHeadlessProvider.STATIC_ARGV))
+        self.assertEqual(by_name["cursor"]["argv"], list(CursorHeadlessProvider.STATIC_ARGV))
+        self.assertEqual(by_name["opencode"]["argv"], list(OpenCodeHeadlessProvider.STATIC_ARGV))
         self.assertFalse(by_name["gemini"]["enabled"])
         self.assertFalse(by_name["cursor"]["enabled"])
         self.assertFalse(by_name["opencode"]["enabled"])
@@ -332,6 +500,10 @@ class AdapterTests(unittest.TestCase):
             status["routing"]["preference"],
             ["fixture", "fixture-b", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
         )
+
+
+def _grok_path(packet_id: str) -> Path:
+    return grok_prompt_path(packet_id)
 
 
 def _drop_run_branches(run_id: str) -> None:
