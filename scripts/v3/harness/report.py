@@ -44,6 +44,7 @@ def build_report(record: dict) -> dict:
         "duration_seconds": wall,
         "base_ref": record.get("base_ref"),
         "goal": record.get("goal"),
+        "land": record.get("land"),
         "plan_fallback": record.get("plan_fallback"),
         "plan_source": record.get("plan_source"),
         "run_branch": record.get("run_branch"),
@@ -72,10 +73,22 @@ def render_markdown(report: dict) -> str:
         "",
         f"Status: {report['status']}",
         f"Run branch: {report.get('run_branch') or 'none'}",
-        f"Duration: {_seconds(report['duration_seconds'])}",
-        f"Usage: {_usage(report['usage'])}",
-        "",
     ]
+    land = report.get("land")
+    if isinstance(land, dict):
+        lines.append(f"Land: {land.get('status')} into {land.get('branch') or 'none'}")
+        lines.append(f"Land commit: {land.get('commit') or 'none'}")
+        if land.get("error"):
+            lines.append(f"Land error: {land['error']}")
+        if land.get("paths"):
+            lines.append("Land conflict: " + ", ".join(land["paths"]))
+    lines.extend(
+        [
+            f"Duration: {_seconds(report['duration_seconds'])}",
+            f"Usage: {_usage(report['usage'])}",
+            "",
+        ]
+    )
     if report.get("stop_reason"):
         lines.append(f"Stop reason: {report['stop_reason']}")
         lines.append("")

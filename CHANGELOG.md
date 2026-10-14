@@ -75,6 +75,14 @@ after that cut.
   stderr is a terminal, or when `--progress` is set, those commands print
   plain progress lines on stderr. JSONL stays on `--log`, and on stderr when
   progress lines are off.
+- A dependent task's prompt includes a size-capped summary, commit, and diff
+  for each dependency. The planner prompt includes a size-capped repository
+  map of tracked files and key docs.
+- `recursion land <run-id>` merges a finished run branch into the current
+  branch, or `--into`, with a normal non-fast-forward merge. A dirty tree or
+  a conflict is refused and recorded in the report. `recursion clean` prunes
+  old run state, worktrees, and task branches, with `--older-than` and
+  `--dry-run`.
 - `docs/ARCHITECTURE.md` diagrams plan, schedule, worktree, provider,
   review, landing, and report. The README and user guide cover the landed
   providers and commands, with Linux and Windows troubleshooting. The docs
