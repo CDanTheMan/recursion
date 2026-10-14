@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Headless adapters match the CLIs checked on 2026-10-14. Claude Code 2.1.299
+  needs `--verbose` with `--output-format stream-json`, and the prompt stays
+  on stdin. Codex CLI 0.162.1 uses `exec --json --approve-for-me` and reads
+  the prompt from stdin (`-`). Grok 1.0.52 reads `--prompt-file` and
+  `--always-approve` (`--no-auto-update` included). Gemini CLI 0.64.0 uses
+  `--approval-mode yolo` and `--skip-trust`. Cursor Agent `2026.10.14-0f9edde`
+  uses `--force` and `--trust`. OpenCode 1.19.0 uses `run --format json --auto`,
+  and `doctor` probes `opencode auth list` with no extra flags. Prompts longer
+  than 7000 characters go through stdin or a file. Windows `.ps1` shims are
+  resolved and started with PowerShell `-File`. `recursion doctor --live`
+  sends one tiny prompt to each enabled, signed-in provider and stays off
+  unless that flag is passed, including in CI.
 - `recursion cancel` stops a live provider process that is still running, and a
   provider `timeout_seconds` stops it the same way. Children started by that
   process are stopped too: a process group on Linux and a job object on

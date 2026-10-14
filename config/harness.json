@@ -43,42 +43,42 @@
       "name": "claude",
       "enabled": true,
       "capabilities": ["execute", "stream-json", "subscription"],
-      "argv": ["claude", "-p", "--output-format", "stream-json"],
+      "argv": ["claude", "-p", "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"],
       "timeout_seconds": 120
     },
     {
       "name": "codex",
       "enabled": true,
       "capabilities": ["execute", "jsonl", "subscription"],
-      "argv": ["codex", "exec", "--json"],
+      "argv": ["codex", "exec", "--json", "--approve-for-me"],
       "timeout_seconds": 120
     },
     {
       "name": "grok",
       "enabled": true,
       "capabilities": ["execute", "streaming-json", "subscription"],
-      "argv": ["grok", "-p", "--output-format", "streaming-json"],
+      "argv": ["grok", "--output-format", "streaming-json", "--always-approve", "--no-auto-update"],
       "timeout_seconds": 120
     },
     {
       "name": "gemini",
       "enabled": false,
       "capabilities": ["execute", "stream-json", "subscription"],
-      "argv": ["gemini", "-p", "--output-format", "stream-json"],
+      "argv": ["gemini", "-p", "--output-format", "stream-json", "--approval-mode", "yolo", "--skip-trust"],
       "timeout_seconds": 120
     },
     {
       "name": "cursor",
       "enabled": false,
       "capabilities": ["execute", "stream-json", "subscription"],
-      "argv": ["cursor-agent", "-p", "--output-format", "stream-json"],
+      "argv": ["cursor-agent", "-p", "--output-format", "stream-json", "--force", "--trust"],
       "timeout_seconds": 120
     },
     {
       "name": "opencode",
       "enabled": false,
       "capabilities": ["execute", "json"],
-      "argv": ["opencode", "run", "--format", "json"],
+      "argv": ["opencode", "run", "--format", "json", "--auto"],
       "timeout_seconds": 120
     }
   ]

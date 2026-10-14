@@ -27,6 +27,7 @@ _ENV_NAMES = {
 _CLAUDE_METHODS = {"none", "claude.ai", "oauth_token", "api_key", "api_key_helper", "third_party"}
 _SECRET_ENV = re.compile(r"(?i)(api[_-]?key|token|secret|password|authorization|credential)")
 _TOKEN_RE = re.compile(r"(?i)(?:sk-[A-Za-z0-9]{8,}|xai-[A-Za-z0-9]{8,}|bearer\s+[A-Za-z0-9._\-]{12,})")
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _SIGNED_IN_WORDS = {"authenticated", "logged-in", "logged_in", "ok", "success"}
 _SIGNED_OUT_WORDS = {"logged-out", "logged_out", "none", "not_logged_in", "signed_out", "unauthenticated"}
 
@@ -41,7 +42,8 @@ def resolve_executable(
     """Return the first PATH match for ``name``, including Windows shims.
 
     On Windows the search also tries ``PATHEXT`` and always tries ``.exe``,
-    ``.cmd``, and ``.bat``, ignoring case. An absolute path is used as itself.
+    ``.cmd``, ``.bat``, and ``.ps1``, ignoring case. An absolute path is used
+    as itself.
     """
 
     if not name:
@@ -251,7 +253,7 @@ def _cursor_auth(run, resolved: Path) -> tuple[str, str | None]:
 def _cursor_state(stdout: str) -> str:
     payload = _json_object(stdout)
     if isinstance(payload, dict):
-        for key in ("authenticated", "loggedIn", "logged_in", "isLoggedIn"):
+        for key in ("authenticated", "isAuthenticated", "loggedIn", "logged_in", "isLoggedIn"):
             value = payload.get(key)
             if isinstance(value, bool):
                 return "signed-in" if value else "signed-out"
@@ -273,7 +275,7 @@ def _cursor_state(stdout: str) -> str:
 
 
 def _opencode_auth(run, resolved: Path) -> tuple[str, str | None]:
-    completed = _capture(run, [str(resolved), "auth", "list", "--format", "json", "--standalone"])
+    completed = _capture(run, [str(resolved), "auth", "list"])
     if completed is None or completed.returncode != 0:
         return "unknown", None
     state = _opencode_state(completed.stdout or "")
@@ -285,12 +287,13 @@ def _opencode_auth(run, resolved: Path) -> tuple[str, str | None]:
 def _opencode_state(stdout: str) -> str:
     """Read ``opencode auth list`` without keeping credential names or secrets.
 
-    ``--format json`` writes an array of integrations. An empty array is
-    signed out. The default text is ``No authenticated integrations`` or a
-    table whose rows end in ``stored`` or ``environment``.
+    A JSON array of integrations is accepted when the body is JSON. An empty
+    array is signed out. The text form is a credentials count, ``No
+    authenticated integrations``, or a table whose rows end in ``stored`` or
+    ``environment``. ANSI color codes are removed before that read.
     """
 
-    stripped = stdout.strip()
+    stripped = _ANSI.sub("", stdout).strip()
     if not stripped:
         return "unknown"
     try:
@@ -385,7 +388,7 @@ def _candidate_names(name: str, *, win32: bool, pathext: str | None) -> list[str
         if not piece.startswith("."):
             piece = "." + piece
         suffixes.append(piece)
-    for required in (".exe", ".cmd", ".bat"):
+    for required in (".exe", ".cmd", ".bat", ".ps1"):
         if required.casefold() not in {item.casefold() for item in suffixes}:
             suffixes.append(required)
     seen = {name.casefold()}

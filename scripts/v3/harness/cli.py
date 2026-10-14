@@ -99,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = commands.add_parser("doctor", help="check git and each configured provider executable")
     doctor.add_argument("--config", type=Path, help="provider config JSON (default: config/harness.json)")
+    doctor.add_argument(
+        "--live",
+        action="store_true",
+        help="send one tiny prompt to each enabled, signed-in provider",
+    )
 
     init = commands.add_parser("init", help="write a starter config that enables providers doctor can see")
     init.add_argument("path", type=Path, help="config path to create")
@@ -174,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     json.dump(redact(payload), sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
     print()
-    if args.command == "doctor" and not payload.get("ok"):
+    if args.command == "doctor" and (not payload.get("ok") or payload.get("live_ok") is False):
         return 1
     if args.command in {"run", "resume"} and payload.get("status") in {
         "budget-exceeded",
@@ -351,7 +356,12 @@ def providers_command(args: argparse.Namespace) -> dict:
 
 
 def doctor_command(args: argparse.Namespace) -> dict:
-    return diagnose(load_config(args.config))
+    config = load_config(args.config)
+    if args.live:
+        from scripts.v3.harness.smoke import smoke_live
+
+        return smoke_live(config)
+    return diagnose(config)
 
 
 def init_command(args: argparse.Namespace) -> dict:
