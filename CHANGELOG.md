@@ -43,3 +43,9 @@ after that cut.
 - Sample goal and config in `examples/`, and a console end-to-end test that
   installs `recursion` and drives `plan`, `run`, `status`, `cancel`, `resume`,
   and the report through fake `claude`, `codex`, and `grok` executables.
+- `run` and `resume` accept `--concurrency N` (integer `>= 1`) to override
+  `orchestration.concurrency` for that invocation. The effective value is
+  stored on the run. Resume without the flag keeps the stored value. When
+  stderr is a terminal, or when `--progress` is set, those commands print
+  plain progress lines on stderr. JSONL stays on `--log`, and on stderr when
+  progress lines are off.

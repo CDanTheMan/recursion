@@ -70,9 +70,12 @@ Windows PowerShell:
 recursion run --task "Say hello" --provider fixture
 ```
 
-Stdout is one JSON object. Stderr is JSONL events (`plan.admitted`,
-`route.selected`, `provider.candidates`, `task.started`, `provider.attempt`,
-`provider.result`, `task.completed`). A successful single task includes
+Stdout is one JSON object. When stderr is not a terminal, it is JSONL
+events (`plan.admitted`, `route.selected`, `provider.candidates`,
+`task.started`, `provider.attempt`, `provider.result`, `task.completed`).
+When stderr is a terminal, or when `run` or `resume` is passed `--progress`,
+stderr is short plain lines for those events instead. `--log` keeps the
+JSONL stream in a file either way. A successful single task includes
 `status` `completed`, `run_id`, `execution.text`, and `report` paths. The
 fixture text is:
 
@@ -128,7 +131,7 @@ Help: admit tasks and the M1B route; do not start a provider.
 |---|---|
 | `--task TASK` | one task admitted through M1A |
 | `--goal GOAL` | plan a task graph, or one task per line when planning falls back |
-| `--log LOG` | append JSONL events to this file as well as stderr |
+| `--log LOG` | append JSONL events to this file, and to stderr when progress lines are off |
 
 Pass exactly one of `--task` or `--goal`. `--task` returns `planning`,
 `route`, and `task`. `--goal` asks a provider for a task graph and returns
@@ -144,7 +147,8 @@ and does not start a live CLI.
 usage: recursion run [-h] [--config CONFIG] [--state-dir STATE_DIR]
                      [--task TASK] [--goal GOAL] [--provider PROVIDER]
                      [--capability CAPABILITY] [--fallback] [--allow-live]
-                     [--base-ref BASE_REF] [--keep-worktrees] [--log LOG]
+                     [--base-ref BASE_REF] [--keep-worktrees]
+                     [--concurrency CONCURRENCY] [--progress] [--log LOG]
 ```
 
 Help: plan, admit a route, and execute capable providers.
@@ -159,13 +163,24 @@ Help: plan, admit a route, and execute capable providers.
 | `--allow-live` | start a headless CLI; omitted in tests and CI |
 | `--base-ref BASE_REF` | git ref the run branch is cut from (default: config landing.base_ref) |
 | `--keep-worktrees` | keep worktrees and branches for failed tasks |
-| `--log LOG` | append JSONL events to this file as well as stderr |
+| `--concurrency CONCURRENCY` | override orchestration.concurrency for this invocation |
+| `--progress` | print plain progress lines on stderr instead of JSONL |
+| `--log LOG` | append JSONL events to this file, and to stderr when progress lines are off |
 
 Pass exactly one of `--task` or `--goal`. `--capability` may be repeated.
 `--fallback` is refused unless `--provider` is set. `--task` prints one task
 result when the status is `completed` or `unreviewed`. `--goal` prints the
 saved run record. A single task that fails prints the error on stderr and
 does not print the JSON result.
+
+`--concurrency N` overrides `orchestration.concurrency` for this invocation.
+`N` is an integer `>= 1`. The run record stores that value, and the scheduler
+uses the stored value. Omit the flag to use the config value.
+
+`--progress` prints plain progress lines on stderr instead of JSONL. A
+terminal does the same without the flag. `--log` still receives JSONL.
+Lines name the outcome (`task 0 started`, `provider fixture attempt 0`,
+`task 0 completed provider=fixture`) and do not include error text.
 
 ### status
 
@@ -191,7 +206,8 @@ Help: show providers, log summary, and saved runs.
 ```text
 usage: recursion resume [-h] [--config CONFIG] [--state-dir STATE_DIR] --run
                         RUN [--allow-live] [--base-ref BASE_REF]
-                        [--keep-worktrees] [--log LOG]
+                        [--keep-worktrees] [--concurrency CONCURRENCY]
+                        [--progress] [--log LOG]
 ```
 
 Help: continue unfinished tasks from a saved run.
@@ -202,7 +218,9 @@ Help: continue unfinished tasks from a saved run.
 | `--allow-live` | `--help` prints no description |
 | `--base-ref BASE_REF` | git ref used when the run branch does not exist yet |
 | `--keep-worktrees` | keep worktrees and branches for failed tasks |
-| `--log LOG` | append JSONL events to this file as well as stderr |
+| `--concurrency CONCURRENCY` | override orchestration.concurrency for this invocation |
+| `--progress` | print plain progress lines on stderr instead of JSONL |
+| `--log LOG` | append JSONL events to this file, and to stderr when progress lines are off |
 
 `--allow-live` has the same effect as on `run`: a headless CLI starts only
 when it is set. Resume clears a stored cancel, marks the run `running`, and
@@ -210,6 +228,8 @@ sets tasks in `failed`, `cancelled`, `running`, `budget-exceeded`,
 `review-rejected`, `skipped`, `conflict`, or `unreviewed` back to `pending`.
 Tasks already `completed` stay completed. The saved `depends_on` list is kept,
 so a retried dependency can unblock the tasks that were waiting on it.
+`--concurrency` replaces the stored concurrency before the run continues.
+Omit it to keep the value already on the record. `--progress` matches `run`.
 
 ### cancel
 
@@ -367,7 +387,7 @@ count as zero. `null` means no ceiling.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `concurrency` | `2` | Integer `>= 1`. How many ready tasks run at once. |
+| `concurrency` | `2` | Integer `>= 1`. How many ready tasks run at once. `--concurrency` on `run` and `resume` overrides it for that invocation and stores the effective value. Resume without the flag keeps the stored value. |
 
 ### routing
 
@@ -609,6 +629,7 @@ notices the cancel before the next attempt.
 | `pass one of --task or --goal` | `plan` and `run` need exactly one of those flags. |
 | `--fallback applies to an explicit --provider` | `--fallback` was set alone. |
 | `unrecognized arguments` | The flag is not on that subcommand. Exit code 2. |
+| `concurrency must be an integer >= 1` | `--concurrency` was `0` or not an integer. Exit code 2. |
 | `missing provider config` | `--config` or `config/harness.json` is not a file. |
 | `provider config is not JSON` | The file does not parse. |
 | `config keys mismatch` | A required key is missing or an unknown key is present. |
@@ -641,8 +662,9 @@ notices the cancel before the next attempt.
 | `no provider has the required capabilities` | The task's `required_capabilities` matched no candidate. |
 | `planner returned invalid JSON` | The planner's text was not the required object, so the goal fell back to lines. |
 
-`plan`, `run`, and `resume` also emit a `run.refused` JSONL event when they
-raise one of these errors.
+`plan`, `run`, and `resume` also emit a `run.refused` event when they
+raise one of these errors. It is a JSONL line on stderr unless progress
+lines are on, in which case stderr shows `run refused` and the error class.
 
 ## Windows
 

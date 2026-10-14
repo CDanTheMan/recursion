@@ -38,7 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(plan)
     plan.add_argument("--task", help="one task admitted through M1A")
     plan.add_argument("--goal", help="plan a task graph, or one task per line when planning falls back")
-    plan.add_argument("--log", help="append JSONL events to this file as well as stderr")
+    plan.add_argument(
+        "--log",
+        help="append JSONL events to this file, and to stderr when progress lines are off",
+    )
 
     run = commands.add_parser("run", help="plan, admit a route, and execute capable providers")
     _add_common(run)
@@ -50,7 +53,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--allow-live", action="store_true", help="start a headless CLI; omitted in tests and CI")
     run.add_argument("--base-ref", help="git ref the run branch is cut from (default: config landing.base_ref)")
     run.add_argument("--keep-worktrees", action="store_true", help="keep worktrees and branches for failed tasks")
-    run.add_argument("--log", help="append JSONL events to this file as well as stderr")
+    run.add_argument(
+        "--concurrency",
+        type=_concurrency_arg,
+        help="override orchestration.concurrency for this invocation",
+    )
+    run.add_argument("--progress", action="store_true", help="print plain progress lines on stderr instead of JSONL")
+    run.add_argument(
+        "--log",
+        help="append JSONL events to this file, and to stderr when progress lines are off",
+    )
 
     status = commands.add_parser("status", help="show providers, log summary, and saved runs")
     _add_common(status)
@@ -63,7 +75,16 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--allow-live", action="store_true")
     resume.add_argument("--base-ref", help="git ref used when the run branch does not exist yet")
     resume.add_argument("--keep-worktrees", action="store_true", help="keep worktrees and branches for failed tasks")
-    resume.add_argument("--log", help="append JSONL events to this file as well as stderr")
+    resume.add_argument(
+        "--concurrency",
+        type=_concurrency_arg,
+        help="override orchestration.concurrency for this invocation",
+    )
+    resume.add_argument("--progress", action="store_true", help="print plain progress lines on stderr instead of JSONL")
+    resume.add_argument(
+        "--log",
+        help="append JSONL events to this file, and to stderr when progress lines are off",
+    )
 
     cancel = commands.add_parser("cancel", help="cancel unfinished tasks in a saved run")
     _add_common(cancel)
@@ -96,7 +117,10 @@ def main(argv: list[str] | None = None) -> int:
     handle = None
     try:
         if args.command in {"plan", "run", "resume"}:
-            log, handle = _open_log(getattr(args, "log", None))
+            log, handle = _open_log(
+                getattr(args, "log", None),
+                progress=bool(getattr(args, "progress", False)),
+            )
         if args.command == "plan":
             payload = plan_command(args, log)
         elif args.command == "run":
@@ -254,6 +278,13 @@ def resume_command(args: argparse.Namespace, log: JsonLog) -> dict:
     config = load_config(args.config)
     store = _store(args)
     record = reopen_run(store, args.run)
+    override = getattr(args, "concurrency", None)
+    if override is not None:
+
+        def apply_concurrency(current: dict) -> None:
+            current["concurrency"] = override
+
+        store.update(record["run_id"], apply_concurrency)
     route_id = record["route"]["selected_route_id"]
     log.event("run.resume", run_id=record["run_id"], status=record["status"])
     return _drive_existing(args, log, config, store, record["run_id"], route_id)
@@ -324,13 +355,15 @@ def _drive_new_run(
     plan_fallback: str | None,
 ) -> dict:
     store = _store(args)
+    override = getattr(args, "concurrency", None)
+    concurrency = config["orchestration"]["concurrency"] if override is None else override
     record = create_run(
         store,
         goal=goal,
         planned=planned,
         candidates=candidates,
         route=route,
-        concurrency=config["orchestration"]["concurrency"],
+        concurrency=concurrency,
         plan_source=plan_source,
         plan_fallback=plan_fallback,
     )
@@ -420,13 +453,37 @@ def _route_view(route: dict, route_id: str) -> dict:
     }
 
 
-def _open_log(path: str | None) -> tuple[JsonLog, object | None]:
-    streams: list = [sys.stderr]
+def _concurrency_arg(text: str) -> int:
+    if not text.isdigit():
+        raise argparse.ArgumentTypeError("concurrency must be an integer >= 1")
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("concurrency must be an integer >= 1")
+    return value
+
+
+def _stderr_is_tty() -> bool:
+    isatty = getattr(sys.stderr, "isatty", None)
+    if isatty is None:
+        return False
+    try:
+        return bool(isatty())
+    except Exception:
+        return False
+
+
+def _open_log(path: str | None, *, progress: bool) -> tuple[JsonLog, object | None]:
+    json_streams: list = []
+    progress_stream = None
     handle = None
+    if progress or _stderr_is_tty():
+        progress_stream = sys.stderr
+    else:
+        json_streams.append(sys.stderr)
     if path:
         handle = open(path, "a", encoding="utf-8")
-        streams.append(handle)
-    return JsonLog(streams), handle
+        json_streams.append(handle)
+    return JsonLog(json_streams, progress=progress_stream), handle
 
 
 if __name__ == "__main__":
