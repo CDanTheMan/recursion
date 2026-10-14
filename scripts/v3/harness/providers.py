@@ -9,8 +9,12 @@ and the children it started.
 from __future__ import annotations
 
 import json
+import os
+import re
+import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 from scripts.v3.harness.errors import (
     HarnessError,
@@ -142,6 +146,44 @@ def _rate_limited(completed: subprocess.CompletedProcess[str]) -> bool:
     return "rate limit" in stderr or "too many requests" in stderr
 
 
+_STUB_PROVIDER = re.compile(r"(?im)^set\s+RECURSION_STUB_PROVIDER=([A-Za-z0-9_-]+)\s*$")
+_STUB_LAUNCH = re.compile(r'(?im)^"([^"]+)"\s+-X\s+utf8\s+"([^"]+)"\s+%\*\s*$')
+
+
+def _spawn_plan(argv: tuple[str, ...]) -> tuple[list[str], dict[str, str] | None]:
+    """Return the process argv and an optional environment overlay.
+
+    ``CreateProcess`` does not execute a ``.cmd`` or ``.bat`` named without an
+    extension. A generated provider stub is started with Python directly so a
+    multiline prompt is not parsed again by ``cmd.exe``. Any other batch shim
+    goes through ``cmd.exe``. Real ``.exe`` commands stay unchanged.
+    """
+
+    if os.name != "nt":
+        return list(argv), None
+    found = shutil.which(argv[0])
+    if not found or not found.lower().endswith((".cmd", ".bat")):
+        return list(argv), None
+    direct = _stub_launch(found)
+    if direct is not None:
+        return direct
+    comspec = os.environ.get("ComSpec") or "cmd.exe"
+    return [comspec, "/d", "/c", found, *argv[1:]], None
+
+
+def _stub_launch(launcher: str) -> tuple[list[str], dict[str, str]] | None:
+    try:
+        text = Path(launcher).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    provider = _STUB_PROVIDER.search(text)
+    launch = _STUB_LAUNCH.search(text)
+    if provider is None or launch is None:
+        return None
+    executable, stub = launch.groups()
+    return [executable, "-X", "utf8", stub], {"RECURSION_STUB_PROVIDER": provider.group(1)}
+
+
 def _run_cli(
     adapter: ProviderAdapter,
     request: ProviderRequest,
@@ -151,13 +193,16 @@ def _run_cli(
     should_stop=None,
 ) -> ProviderResult:
     argv = adapter.argv(request)
+    command, overlay = _spawn_plan(argv)
+    env = None if not overlay else {**os.environ, **overlay}
     try:
         completed = run_command(
-            list(argv),
+            command,
             cwd=request.cwd,
             stdin_text=stdin_text,
             timeout_seconds=timeout_seconds,
             should_stop=should_stop,
+            env=env,
         )
     except FileNotFoundError as exc:
         raise ProviderCLIMissing(

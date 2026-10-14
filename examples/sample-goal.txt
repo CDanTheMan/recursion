@@ -1,0 +1,3 @@
+Summarize the repository layout
+Name the providers the harness can call
+Write a one-line status note

@@ -286,6 +286,15 @@ def test_live_call_round_trips_utf8_and_reports_a_missing_cli() -> None:
     assert captured.stderr == "café"
 
 
+def test_environment_overlay_reaches_the_child() -> None:
+    result = run_command(
+        [sys.executable, "-X", "utf8", "-B", "-c", "import os; print(os.environ.get('RECURSION_STUB_PROVIDER', ''))"],
+        env={**os.environ, "RECURSION_STUB_PROVIDER": "claude"},
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "claude"
+
+
 def test_finished_commands_release_pipes_and_keep_utf8() -> None:
     def once() -> None:
         result = run_command(
@@ -318,7 +327,7 @@ def test_live_tree_belongs_to_the_supervisor_container() -> None:
 
     with tempfile.TemporaryDirectory() as directory:
         command, ready, grandchild, parent = _paths(Path(directory))
-        child = lifecycle._spawn(list(command), None, None)
+        child = lifecycle._spawn(list(command), None, None, None)
         parent_pid = 0
         child_pid = 0
         group = 0

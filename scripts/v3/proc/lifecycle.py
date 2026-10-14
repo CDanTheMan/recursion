@@ -44,6 +44,7 @@ def run_command(
     timeout_seconds: float | None = None,
     should_stop: Callable[[], bool] | None = None,
     poll_seconds: float = POLL_SECONDS,
+    env: dict[str, str] | None = None,
 ) -> CommandResult:
     """Run ``argv`` and return its UTF-8 output.
 
@@ -60,7 +61,7 @@ def run_command(
         timeout_seconds = 0
     if should_stop is not None and should_stop():
         raise ProcessCancelled("run cancelled")
-    child = _spawn(argv, cwd, stdin_text)
+    child = _spawn(argv, cwd, stdin_text, env)
     try:
         reason = _supervise(child, timeout_seconds=timeout_seconds, should_stop=should_stop, poll_seconds=poll_seconds)
         decoding = "strict" if reason == "ok" else "replace"
@@ -76,10 +77,10 @@ def run_command(
         child.close()
 
 
-def _spawn(argv: list[str], cwd: str | None, stdin_text: str | None) -> _Child:
+def _spawn(argv: list[str], cwd: str | None, stdin_text: str | None, env: dict[str, str] | None) -> _Child:
     if os.name == "nt":
-        return _spawn_windows(argv, cwd, stdin_text)
-    return _spawn_posix(argv, cwd, stdin_text)
+        return _spawn_windows(argv, cwd, stdin_text, env)
+    return _spawn_posix(argv, cwd, stdin_text, env)
 
 
 def _supervise(
@@ -248,10 +249,11 @@ class _PopenChild(_Child):
         self.returncode = self.proc.returncode
 
 
-def _spawn_posix(argv: list[str], cwd: str | None, stdin_text: str | None) -> _PopenChild:
+def _spawn_posix(argv: list[str], cwd: str | None, stdin_text: str | None, env: dict[str, str] | None) -> _PopenChild:
     proc = subprocess.Popen(
         argv,
         cwd=cwd,
+        env=env,
         stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -311,31 +313,48 @@ def _kill_posix_group(proc: subprocess.Popen, pgid: int | None = None) -> None:
             pass
 
 
-def _spawn_windows(argv: list[str], cwd: str | None, stdin_text: str | None) -> _Child:
+def _spawn_windows(argv: list[str], cwd: str | None, stdin_text: str | None, env: dict[str, str] | None) -> _Child:
     kernel = _kernel32()
     job = _create_kill_job(kernel)
     try:
-        return _spawn_windows_in_job(kernel, job, argv, cwd, stdin_text)
+        return _spawn_windows_in_job(kernel, job, argv, cwd, stdin_text, env)
     except Exception:
         _close_handle(kernel, job)
         raise
 
 
-def _spawn_windows_in_job(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None) -> _Child:
+def _spawn_windows_in_job(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None, env: dict[str, str] | None) -> _Child:
     try:
-        return _spawn_windows_at_creation(kernel, job, argv, cwd, stdin_text)
+        return _spawn_windows_at_creation(kernel, job, argv, cwd, stdin_text, env)
     except FileNotFoundError:
         raise
     except OSError as first:
         try:
-            return _spawn_windows_suspended(kernel, job, argv, cwd, stdin_text)
+            return _spawn_windows_suspended(kernel, job, argv, cwd, stdin_text, env)
         except FileNotFoundError:
             raise
         except OSError as second:
             raise second from first
 
 
-def _spawn_windows_suspended(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None) -> _WindowsPipeChild:
+def _windows_environment(flags: int, env: dict[str, str] | None):
+    """Return creation flags and a Unicode environment block.
+
+    ``None`` inherits the parent environment. A block is sorted and kept
+    alive by the caller until ``CreateProcessW`` returns.
+    """
+
+    if not env:
+        return flags, None, None
+    import ctypes
+
+    items = [f"{key}={value}" for key, value in env.items()]
+    items.sort(key=lambda item: item.split("=", 1)[0].upper())
+    block = ctypes.create_unicode_buffer("\0".join(items) + "\0\0")
+    return flags | 0x00000400, block, ctypes.cast(block, ctypes.c_void_p)
+
+
+def _spawn_windows_suspended(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None, env: dict[str, str] | None) -> _WindowsPipeChild:
     """Start suspended, assign the job, then resume.
 
     The process cannot spawn a grandchild until ``AssignProcessToJobObject``
@@ -352,18 +371,20 @@ def _spawn_windows_suspended(kernel, job, argv: list[str], cwd: str | None, stdi
         command = ctypes.create_unicode_buffer(subprocess.list2cmdline(argv))
         application = argv[0] if os.path.isfile(argv[0]) else None
         process_info = _process_information()
+        flags, environment, environment_ptr = _windows_environment(0x00000004, env)
         created = kernel.CreateProcessW(
             application,
             command,
             None,
             None,
             True,
-            0x00000004,  # CREATE_SUSPENDED
-            None,
+            flags,  # CREATE_SUSPENDED, plus a Unicode environment when one is set
+            environment_ptr,
             cwd,
             ctypes.byref(startup),
             ctypes.byref(process_info),
         )
+        del environment
         if not created:
             raise _windows_spawn_error(argv[0])
         if not kernel.AssignProcessToJobObject(job, process_info.hProcess):
@@ -595,7 +616,7 @@ class _WindowsSpawnFailed(OSError):
     """CreateProcess did not start a process. Another launch path may run."""
 
 
-def _spawn_windows_at_creation(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None) -> _WindowsPipeChild:
+def _spawn_windows_at_creation(kernel, job, argv: list[str], cwd: str | None, stdin_text: str | None, env: dict[str, str] | None) -> _WindowsPipeChild:
     import ctypes
     import msvcrt
 
@@ -609,18 +630,20 @@ def _spawn_windows_at_creation(kernel, job, argv: list[str], cwd: str | None, st
         command = ctypes.create_unicode_buffer(subprocess.list2cmdline(argv))
         application = argv[0] if os.path.isfile(argv[0]) else None
         process_info = _process_information()
+        flags, environment, environment_ptr = _windows_environment(0x00080000, env)
         created = kernel.CreateProcessW(
             application,
             command,
             None,
             None,
             True,
-            0x00080000,  # EXTENDED_STARTUPINFO_PRESENT
-            None,
+            flags,  # EXTENDED_STARTUPINFO_PRESENT, plus a Unicode environment when one is set
+            environment_ptr,
             cwd,
             ctypes.byref(startup),
             ctypes.byref(process_info),
         )
+        del environment
         if not created:
             raise _windows_spawn_error(argv[0])
         # Keep the handle arrays alive until CreateProcess returns.
