@@ -206,16 +206,22 @@ class OrchestrationTests(unittest.TestCase):
             ) as spawned:
                 code = main(["run", "--goal", "Alpha task.\nBeta task.", "--state-dir", str(root)])
             spawned.assert_not_called()
-            self.assertEqual(code, 2)
+            self.assertEqual(code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["status"], "unreviewed")
+            self.assertEqual(payload["status"], "completed")
             self.assertEqual(payload["plan_source"], "provider")
             self.assertEqual([task["id"] for task in payload["tasks"]], ["task-1", "task-2"])
+            self.assertEqual([task["provider"] for task in payload["tasks"]], ["fixture", "fixture-b"])
+            self.assertEqual(
+                [task["reviews"][0]["reviewer"] for task in payload["tasks"]],
+                ["fixture-b", "fixture"],
+            )
+            self.assertTrue(all(task["reviews"][0]["verdict"] == "approve" for task in payload["tasks"]))
             run_records = [path for path in root.glob("RUN-*.json") if path.stem.count(".") == 0]
             self.assertEqual(len(run_records), 1)
             self.assertTrue((root / f"{payload['run_id']}.report.json").is_file())
             self.assertTrue((root / f"{payload['run_id']}.report.md").is_file())
-            self.assertEqual({task["status"] for task in payload["tasks"]}, {"unreviewed"})
+            self.assertEqual({task["status"] for task in payload["tasks"]}, {"completed"})
             report = json.loads((root / f"{payload['run_id']}.report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["run_branch"], f"recursion/run/{payload['run_id']}")
             _drop_run_branches(payload["run_id"])

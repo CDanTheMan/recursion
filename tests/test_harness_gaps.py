@@ -469,7 +469,8 @@ def test_doctor_parses_sign_in_without_starting_a_cli(tmp_path: Path, monkeypatc
     assert doctor.resolve_executable("foo/bar", platform="linux") is None
     assert doctor.live_requested("claude", environ={"CI": "1", "RECURSION_LIVE": "1"}, platform="linux") is False
     assert doctor.live_requested("claude", environ={"RECURSION_LIVE": "0"}, platform="linux") is False
-    assert "fixture" in doctor.discover_installed(path="", platform="linux")
+    discovered = doctor.discover_installed(path="", platform="linux")
+    assert discovered[:2] == ["fixture", "fixture-b"]
 
     win = tmp_path / "win"
     win.mkdir()

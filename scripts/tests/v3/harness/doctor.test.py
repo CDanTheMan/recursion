@@ -120,6 +120,9 @@ class DoctorTests(unittest.TestCase):
             rows = {item["name"]: item for item in report["providers"]}
             self.assertEqual(rows["fixture"]["signed_in"], "not-applicable")
             self.assertTrue(rows["fixture"]["usable"])
+            self.assertEqual(rows["fixture-b"]["signed_in"], "not-applicable")
+            self.assertTrue(rows["fixture-b"]["usable"])
+            self.assertIsNone(rows["fixture-b"]["resolved"])
             self.assertEqual(rows["claude"]["signed_in"], "signed-in")
             self.assertEqual(rows["claude"]["auth_method"], "claude.ai")
             self.assertEqual(rows["claude"]["version"], "claude 1.2.3 [redacted]")
@@ -301,14 +304,15 @@ class DoctorTests(unittest.TestCase):
             _touch(bindir, "gemini.cmd")
             _touch(bindir, "cursor-agent.exe")
             found = discover_installed(environ={}, platform="win32", path=str(bindir))
-            self.assertEqual(found, ["fixture", "gemini", "cursor"])
+            self.assertEqual(found, ["fixture", "fixture-b", "gemini", "cursor"])
             target = root / "nested" / "harness.json"
             payload = write_starter(target, set(found))
             loaded = load_config(target)
             enabled = [item["name"] for item in loaded["providers"] if item["enabled"]]
-            self.assertEqual(enabled, ["fixture", "gemini", "cursor"])
+            self.assertEqual(enabled, ["fixture", "fixture-b", "gemini", "cursor"])
+            gemini = next(item for item in payload["providers"] if item["name"] == "gemini")
             self.assertEqual(
-                payload["providers"][4]["argv"],
+                gemini["argv"],
                 ["gemini", "-p", "--output-format", "stream-json", "--approval-mode", "yolo", "--skip-trust"],
             )
             target.write_text('{"keep": true}\n', encoding="utf-8")

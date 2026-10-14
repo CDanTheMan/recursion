@@ -21,7 +21,7 @@ from scripts.v3.harness.config import load_config  # noqa: E402
 from scripts.v3.harness.errors import HarnessError  # noqa: E402
 from scripts.v3.harness.isolation import GitWorktreeIsolator, TaskIsolation  # noqa: E402
 from scripts.v3.harness.orchestrate import create_run, drive_run  # noqa: E402
-from scripts.v3.harness.providers import FixtureProvider, ProviderRequest, ProviderResult  # noqa: E402
+from scripts.v3.harness.providers import FixtureBProvider, FixtureProvider, ProviderRequest, ProviderResult  # noqa: E402
 from scripts.v3.harness.report import render_markdown  # noqa: E402
 from scripts.v3.harness.review import parse_verdict  # noqa: E402
 from scripts.v3.harness.state import RunStore  # noqa: E402
@@ -120,9 +120,13 @@ class ReviewTests(unittest.TestCase):
         request = ProviderRequest(task="review me", packet_id="PACKET-1", route_id="route-a", kind="review")
         with patch("scripts.v3.harness.providers.run_command") as spawned:
             result = FixtureProvider().execute(request)
+            other = FixtureBProvider().execute(request)
         spawned.assert_not_called()
-        self.assertTrue(result.text.startswith("VERDICT approve"))
+        self.assertEqual(result.text, "VERDICT approve\nfixture review")
+        self.assertEqual(other.text, "VERDICT approve\nfixture-b review")
         self.assertFalse(result.live)
+        self.assertFalse(other.live)
+        self.assertEqual(other.provider, "fixture-b")
 
     def test_review_loop_sends_notes_back_then_approves(self) -> None:
         author = Author()

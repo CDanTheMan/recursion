@@ -457,8 +457,10 @@ def test_every_live_adapter_runs_under_the_supervisor(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(providers, "run_command", fake_run)
     request = ProviderRequest(task="task text", packet_id="PACKET-TEST", route_id="route-a")
-    live = [name for name in providers.adapters() if name != "fixture"]
+    live = [name for name, cls in providers.adapters().items() if not getattr(cls, "OFFLINE", False)]
     assert {"claude", "codex", "grok"} <= set(live)
+    assert "fixture" not in live
+    assert "fixture-b" not in live
     for name in live:
         adapter = providers.adapters()[name]()
         result = adapter.execute(request, allow_live=True, timeout_seconds=9, should_stop=lambda: False)
@@ -474,9 +476,11 @@ def test_every_live_adapter_runs_under_the_supervisor(monkeypatch: pytest.Monkey
         else:
             assert call["stdin_text"] is None
     before = len(calls)
-    providers.adapters()["fixture"]().execute(
-        request, allow_live=True, timeout_seconds=9, should_stop=lambda: False
-    )
+    for name, cls in providers.adapters().items():
+        if not getattr(cls, "OFFLINE", False):
+            continue
+        cls().execute(request, allow_live=True, timeout_seconds=9, should_stop=lambda: False)
+        assert name in {"fixture", "fixture-b"}
     assert len(calls) == before
 
 

@@ -28,14 +28,13 @@ The Quickstart is the fixture path through `land` and `clean`.
 
 ## Quickstart
 
-From the repository root, with the fixture provider. The script checks out
-`recursion-quickstart` so `land` has a branch and does not merge into
-`master`. The starter config and the run JSON are written outside this
-checkout: a new file inside it makes the worktree dirty, and `land` then
-refuses. `init` leaves `review.accept_unreviewed` false. The fixture has no
-second provider, so that default makes `run` exit `2` with status
-`unreviewed`, and `land` refuses because the run is not finished. The script
-sets `accept_unreviewed` to true before `run`.
+From the repository root. The script checks out `recursion-quickstart` so
+`land` has a branch and does not merge into `master`. The starter config and
+the run JSON are written outside this checkout: a new file inside it makes
+the worktree dirty, and `land` then refuses. `init` enables `fixture` and
+`fixture-b` and leaves `review.accept_unreviewed` false. The run does not
+pin one provider, so `fixture` works and `fixture-b` reviews. The task is
+`completed`, the command exits `0`, and `land` and `clean` succeed.
 
 A fixture task that edits no files leaves the run branch at the same commit
 as the target. `land` still exits `0`, stores `land.status` `merged`, and
@@ -56,9 +55,8 @@ mkdir -p "$work"
 export CFG="$work/harness.json"
 export OUT="$work"
 recursion init "$CFG"
-python -c "import json, os, pathlib; p = pathlib.Path(os.environ['CFG']); data = json.loads(p.read_text(encoding='utf-8')); data['review']['accept_unreviewed'] = True; p.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')"
 recursion plan --task "Say hello" --config "$CFG"
-recursion run --task "Say hello" --provider fixture --config "$CFG" > "$OUT/run.json"
+recursion run --task "Say hello" --config "$CFG" > "$OUT/run.json"
 rid="$(python -c "import json, os, pathlib; print(json.loads(pathlib.Path(os.environ['OUT'], 'run.json').read_text(encoding='utf-8'))['run_id'])")"
 recursion status --run "$rid" --config "$CFG"
 recursion logs "$rid"
@@ -104,22 +102,23 @@ Linux:
 
 ```bash
 python -m pip install -e .
-recursion run --task "Say hello" --provider fixture
+recursion run --task "Say hello"
 ```
 
 Windows PowerShell:
 
 ```powershell
 python -m pip install -e .
-recursion run --task "Say hello" --provider fixture
+recursion run --task "Say hello"
 ```
 
 The command prints a JSON result on stdout. When stderr is not a terminal,
 events are JSONL there. When stderr is a terminal, or when `--progress` is
-set, those events are short plain lines. With only `fixture` as a candidate,
-review has no second provider, so the
-task is `unreviewed` and the command exits `2` unless
-`review.accept_unreviewed` is true.
+set, those events are short plain lines. The shipped config enables `fixture`
+and `fixture-b`. Neither starts a CLI. A run that does not pin one provider
+is reviewed by the other fixture and can finish without setting
+`review.accept_unreviewed`. Pinning one provider with `--provider` leaves no
+distinct reviewer, so that run is `unreviewed` and exits `2`.
 
 ### Commands
 
@@ -138,7 +137,7 @@ finished run into a branch. `clean` prunes old run state.
 
 ### Providers
 
-`fixture` is enabled and starts no process. Live adapters, started only with
+`fixture` and `fixture-b` are enabled and start no process. Live adapters, started only with
 `--allow-live`, are `claude`, `codex`, `grok`, `gemini`, `cursor`
 (`cursor-agent`), and `opencode`. The shipped config leaves `gemini`,
 `cursor`, and `opencode` disabled. The harness does not store API keys.

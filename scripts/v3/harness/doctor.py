@@ -73,13 +73,15 @@ def discover_installed(
     platform: str | None = None,
     path: str | None = None,
 ) -> list[str]:
-    """Return fixture plus every provider whose command resolves."""
+    """Return each offline fixture plus every provider whose command resolves."""
 
     env = os.environ if environ is None else environ
     search = env.get("PATH", "") if path is None else path
     found = []
     for name, cls in adapters().items():
-        if name == "fixture" or resolve_executable(cls.STATIC_ARGV[0], path=search, platform=platform) is not None:
+        if getattr(cls, "OFFLINE", False) or resolve_executable(
+            cls.STATIC_ARGV[0], path=search, platform=platform
+        ) is not None:
             found.append(name)
     return found
 
@@ -112,9 +114,9 @@ def diagnose(
 ) -> dict:
     """Report git, Windows long paths, and one row per configured provider.
 
-    ``ok`` is true when at least one enabled provider is usable. Fixture is
-    usable whenever it is enabled. Another provider is usable when it is
-    enabled and its executable resolves.
+    ``ok`` is true when at least one enabled provider is usable. An offline
+    fixture is usable whenever it is enabled. Another provider is usable when
+    it is enabled and its executable resolves.
     """
 
     env = os.environ if environ is None else environ
@@ -139,7 +141,8 @@ def _provider_row(item: dict, *, environ, platform: str, home: Path, path: str, 
     name = item["name"]
     command = item["argv"][0]
     enabled = bool(item["enabled"])
-    if name == "fixture":
+    cls = adapters().get(name)
+    if cls is not None and getattr(cls, "OFFLINE", False):
         return _row(
             name=name,
             command=command,
