@@ -31,8 +31,9 @@ ALLOWED = {
     "docs/v3/VALIDATION.md", "docs/v3/ROADMAP.md", "docs/v3/START-HERE.md",
     "state/tasks/v3-orientation-20260913.md", "tools/check_v3_orientation.py",
     "tools/test_check_v3_orientation_scope.py",
-    ".gitattributes", ".github/workflows/ci.yml", "requirements.txt",
-    "pyproject.toml", "tests/conftest.py", "tests/test_v3_checks.py", "tests/.gitignore",
+    ".gitattributes", ".github/workflows/ci.yml", ".github/workflows/release.yml",
+    "requirements.txt", "pyproject.toml", "tests/conftest.py", "tests/test_v3_checks.py",
+    "tests/test_docs_drift.py", "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
 }
 PRODUCT_SLICE = {
     ".gitignore",

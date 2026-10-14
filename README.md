@@ -40,7 +40,9 @@ same gate CI runs on pull requests and on pushes to `master`.
 
 | Path | What it is |
 |---|---|
+| `docs/USER-GUIDE.md` | How to install and run the harness |
 | `docs/v3/` | Product specifications, research, and evidence |
+| `CHANGELOG.md` | What has landed on this fork |
 | `experiments/v3/` | Provider-free experiments and checks |
 | `schemas/control-plane/v3/` | Planning, execution, and integrity schemas |
 | `scripts/v3/` | Planning replay and validation |
@@ -51,7 +53,26 @@ same gate CI runs on pull requests and on pushes to `master`.
 
 ## Harness
 
-Harness usage is recorded in [docs/v3/HARNESS-SLICE.md](docs/v3/HARNESS-SLICE.md).
+Install the checkout and run one task on the fixture provider. That provider
+starts no CLI and needs no account.
+
+Linux:
+
+```bash
+python -m pip install -e .
+recursion run --task "Say hello" --provider fixture
+```
+
+Windows PowerShell:
+
+```powershell
+python -m pip install -e .
+recursion run --task "Say hello" --provider fixture
+```
+
+The command prints a JSON result on stdout. Events are JSONL on stderr.
+Commands, flags, config, providers, and recovery are in
+[docs/USER-GUIDE.md](docs/USER-GUIDE.md).
 
 ## Retired
 
