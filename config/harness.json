@@ -13,7 +13,7 @@
   },
   "routing": {
     "required_capabilities": ["execute"],
-    "preference": ["fixture", "claude", "codex", "grok"],
+    "preference": ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
     "retries": 1,
     "backoff_seconds": 1
   },
@@ -44,6 +44,27 @@
       "enabled": true,
       "capabilities": ["execute", "streaming-json", "subscription"],
       "argv": ["grok", "-p", "--output-format", "streaming-json"],
+      "timeout_seconds": 120
+    },
+    {
+      "name": "gemini",
+      "enabled": false,
+      "capabilities": ["execute", "stream-json", "subscription"],
+      "argv": ["gemini", "-p", "--output-format", "stream-json"],
+      "timeout_seconds": 120
+    },
+    {
+      "name": "cursor",
+      "enabled": false,
+      "capabilities": ["execute", "stream-json", "subscription"],
+      "argv": ["cursor-agent", "-p", "--output-format", "stream-json"],
+      "timeout_seconds": 120
+    },
+    {
+      "name": "opencode",
+      "enabled": false,
+      "capabilities": ["execute", "json"],
+      "argv": ["opencode", "run", "--format", "json"],
       "timeout_seconds": 120
     }
   ]

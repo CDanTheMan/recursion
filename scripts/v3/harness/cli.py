@@ -1,4 +1,4 @@
-"""``recursion`` command: plan, run, status, resume, and cancel."""
+"""``recursion`` command: plan, run, status, resume, cancel, doctor, and init."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ import sys
 from pathlib import Path
 
 from scripts.v3.harness.capabilities import select_candidates
-from scripts.v3.harness.config import ROOT, load_config
+from scripts.v3.harness.config import ROOT, load_config, write_starter
+from scripts.v3.harness.doctor import diagnose, discover_installed
 from scripts.v3.harness.errors import HarnessError
 from scripts.v3.harness.isolation import GitWorktreeIsolator
 from scripts.v3.harness.log import JsonLog, read_events
@@ -60,6 +61,13 @@ def build_parser() -> argparse.ArgumentParser:
     cancel = commands.add_parser("cancel", help="cancel unfinished tasks in a saved run")
     _add_common(cancel)
     cancel.add_argument("--run", required=True)
+
+    doctor = commands.add_parser("doctor", help="check git and each configured provider executable")
+    doctor.add_argument("--config", type=Path, help="provider config JSON (default: config/harness.json)")
+
+    init = commands.add_parser("init", help="write a starter config that enables providers doctor can see")
+    init.add_argument("path", type=Path, help="config path to create")
+    init.add_argument("--force", action="store_true", help="overwrite an existing file")
     return parser
 
 
@@ -86,6 +94,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = resume_command(args, log)
         elif args.command == "cancel":
             payload = cancel_command(args)
+        elif args.command == "doctor":
+            payload = doctor_command(args)
+        elif args.command == "init":
+            payload = init_command(args)
         else:
             raise HarnessError(f"unknown command {args.command}")
     except HarnessError as exc:
@@ -98,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
             handle.close()
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
     print()
+    if args.command == "doctor" and not payload.get("ok"):
+        return 1
     if args.command in {"run", "resume"} and payload.get("status") in {
         "budget-exceeded",
         "cancelled",
@@ -224,6 +238,21 @@ def resume_command(args: argparse.Namespace, log: JsonLog) -> dict:
 
 def cancel_command(args: argparse.Namespace) -> dict:
     return cancel_run(_store(args), args.run)
+
+
+def doctor_command(args: argparse.Namespace) -> dict:
+    return diagnose(load_config(args.config))
+
+
+def init_command(args: argparse.Namespace) -> dict:
+    target = Path(args.path)
+    if target.is_dir():
+        raise HarnessError(f"{target} is a directory")
+    if target.exists() and not args.force:
+        raise HarnessError(f"refusing to overwrite {target}; pass --force")
+    enabled = discover_installed()
+    write_starter(target, set(enabled), force=args.force)
+    return {"enabled": enabled, "path": str(target)}
 
 
 def status_command(args: argparse.Namespace) -> dict:
