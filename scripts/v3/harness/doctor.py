@@ -177,6 +177,10 @@ def _signed_in(name: str, resolved: Path | None, *, environ, home: Path, run) ->
         return _file_auth(home / ".gemini" / "oauth_creds.json")
     if name == "grok":
         return _file_auth(home / ".grok" / "auth.json")
+    if name == "opencode":
+        cached = _file_auth(home / ".local" / "share" / "opencode" / "auth.json")
+        if cached[0] == "signed-in":
+            return cached
     if resolved is None:
         return "unknown", None
     if name == "claude":
@@ -269,7 +273,7 @@ def _cursor_state(stdout: str) -> str:
 
 
 def _opencode_auth(run, resolved: Path) -> tuple[str, str | None]:
-    completed = _capture(run, [str(resolved), "auth", "list", "--format", "json"])
+    completed = _capture(run, [str(resolved), "auth", "list", "--format", "json", "--standalone"])
     if completed is None or completed.returncode != 0:
         return "unknown", None
     state = _opencode_state(completed.stdout or "")

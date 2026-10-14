@@ -91,7 +91,7 @@ class DoctorTests(unittest.TestCase):
                     return _completed(argv, 0, f"logged in {SECRET}\n")
                 if argv[1:] == ["status", "--format", "json"]:
                     return _completed(argv, 0, json.dumps({"loggedIn": True, "token": SECRET}))
-                if argv[1:] == ["auth", "list", "--format", "json"]:
+                if argv[1:] == ["auth", "list", "--format", "json", "--standalone"]:
                     return _completed(argv, 0, json.dumps([{"id": "openai", "token": SECRET}]))
                 raise AssertionError(argv)
 
@@ -169,7 +169,7 @@ class DoctorTests(unittest.TestCase):
                 del timeout
                 if argv[1:] == ["--version"]:
                     return _completed(argv, 0, "opencode 1.0.0\n")
-                if argv[1:] == ["auth", "list", "--format", "json"]:
+                if argv[1:] == ["auth", "list", "--format", "json", "--standalone"]:
                     return _completed(argv, 0, "[]\n")
                 raise AssertionError(argv)
 
@@ -190,7 +190,7 @@ class DoctorTests(unittest.TestCase):
                 del timeout
                 if argv[1:] == ["--version"]:
                     return _completed(argv, 0, "opencode 1.0.0\n")
-                if argv[1:] == ["auth", "list", "--format", "json"]:
+                if argv[1:] == ["auth", "list", "--format", "json", "--standalone"]:
                     return _completed(argv, 0, "No authenticated integrations\n")
                 raise AssertionError(argv)
 
@@ -205,6 +205,33 @@ class DoctorTests(unittest.TestCase):
             )
             text_row = {item["name"]: item for item in text_report["providers"]}["opencode"]
             self.assertEqual(text_row["signed_in"], "signed-out")
+
+            creds = bindir / "home" / ".local" / "share" / "opencode"
+            creds.mkdir(parents=True)
+            (creds / "auth.json").write_text(SECRET, encoding="utf-8")
+            calls: list[list[str]] = []
+
+            def run_cached(argv, timeout):
+                del timeout
+                calls.append(list(argv))
+                if argv[1:] == ["--version"]:
+                    return _completed(argv, 0, "opencode 1.0.0\n")
+                raise AssertionError(argv)
+
+            cached = diagnose(
+                starter_config({"opencode"}),
+                environ={},
+                platform="linux",
+                home=bindir / "home",
+                path=str(bindir),
+                run=run_cached,
+                git_run=lambda argv, timeout: _completed(argv, 0, "git version 2.45.0\n"),
+            )
+            cached_row = {item["name"]: item for item in cached["providers"]}["opencode"]
+            self.assertEqual(cached_row["signed_in"], "signed-in")
+            self.assertEqual(cached_row["auth_method"], "cached")
+            self.assertNotIn(SECRET, json.dumps(cached))
+            self.assertTrue(all(call[1:] == ["--version"] for call in calls))
 
     def test_windows_longpaths_and_missing_git(self) -> None:
         config = starter_config({"fixture"})
