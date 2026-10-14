@@ -7,9 +7,12 @@ schema checks, three fixture checks, or seventeen M1 test programs.
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -29,6 +32,8 @@ class GitRepo:
         self._git("config", "commit.gpgsign", "false")
         self._git("config", "core.autocrlf", "false")
         self._git("config", "core.eol", "lf")
+        self._git("config", "gc.auto", "0")
+        self._git("config", "maintenance.auto", "false")
 
     def _git(self, *args: str) -> str:
         return subprocess.check_output(
@@ -63,6 +68,24 @@ class GitRepo:
         return gate.out_of_scope(changed, untracked, gate.ALLOWED)
 
 
+def _remove_tree(path: str) -> None:
+    """Retry a temp git repo delete. Python 3.11 rmtree can raise ENOTEMPTY on .git."""
+
+    last: OSError | None = None
+    for _ in range(10):
+        if not os.path.exists(path):
+            return
+        try:
+            shutil.rmtree(path)
+        except OSError as exc:
+            last = exc
+            time.sleep(0.05)
+        else:
+            return
+    if last is not None:
+        raise last
+
+
 class ScopeCheckTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -72,7 +95,12 @@ class ScopeCheckTests(unittest.TestCase):
         self.repo.commit("base")
 
     def tearDown(self) -> None:
-        self.tmp.cleanup()
+        # Python 3.11 shutil.rmtree can raise ENOTEMPTY on .git. 3.12 retries.
+        name = self.tmp.name
+        try:
+            self.tmp.cleanup()
+        except OSError:
+            _remove_tree(name)
 
     def test_historical_pin_is_unchanged(self) -> None:
         self.assertEqual(gate.HISTORICAL_BASELINE, HISTORICAL)

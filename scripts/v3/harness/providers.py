@@ -106,10 +106,11 @@ class FixtureProvider(ProviderAdapter):
     ) -> ProviderResult:
         del allow_live, timeout_seconds, should_stop
         if request.kind == "review":
-            text = f"VERDICT approve\n{self.name} review"
+            text = _fixture_verdict(self.name, request.task)
         elif request.kind == "plan":
             text = _fixture_plan(request.task)
         else:
+            _write_fixture_mark(request.cwd, self.name)
             text = "\n".join(
                 (
                     f"provider={self.name}",
@@ -126,6 +127,29 @@ class FixtureBProvider(FixtureProvider):
 
     name = "fixture-b"
     STATIC_ARGV = ("fixture-b-provider", "--output-format", "json")
+
+
+def _fixture_verdict(name: str, task: str) -> str:
+    """Approve a review. One explicit marker asks for a single revise first.
+
+    The marker is the line ``fixture: revise once`` in the task. The next
+    review sees the worker's notes and approves. A task without the marker
+    still approves on the first review.
+    """
+
+    if "fixture: revise once" in task and "Review notes:" not in task:
+        return f"VERDICT revise\n{name} asked for one revise"
+    return f"VERDICT approve\n{name} review"
+
+
+def _write_fixture_mark(cwd: str | None, name: str) -> None:
+    """Leave one deterministic file so an execute commit advances the run branch."""
+
+    if not cwd:
+        return
+    path = Path(cwd) / ".recursion-fixture" / "hello.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"hello\nprovider={name}\n", encoding="utf-8")
 
 
 def _fixture_plan(task: str) -> str:

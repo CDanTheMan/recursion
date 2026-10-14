@@ -115,7 +115,9 @@ recursion run --task "Say hello"
 The command prints a JSON result on stdout. When stderr is not a terminal,
 events are JSONL there. When stderr is a terminal, or when `--progress` is
 set, those events are short plain lines. The shipped config enables `fixture`
-and `fixture-b`. Neither starts a CLI. A run that does not pin one provider
+and `fixture-b`. Neither starts a CLI. An execute writes
+`.recursion-fixture/hello.txt` in the task worktree, so `land` merges a real
+commit. A run that does not pin one provider
 is reviewed by the other fixture and can finish without setting
 `review.accept_unreviewed`. Pinning one provider with `--provider` leaves no
 distinct reviewer, so that run is `unreviewed` and exits `2`.
