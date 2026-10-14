@@ -32,6 +32,7 @@ ALLOWED = {
     "state/tasks/v3-orientation-20260913.md", "tools/check_v3_orientation.py",
     "tools/test_check_v3_orientation_scope.py",
     ".gitattributes", ".github/workflows/ci.yml", "requirements.txt",
+    "pyproject.toml", "tests/conftest.py", "tests/test_v3_checks.py", "tests/.gitignore",
 }
 PRODUCT_SLICE = {
     "config/harness.json",

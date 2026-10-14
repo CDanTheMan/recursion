@@ -1,0 +1,19 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+parallel = true
+branch = true
+source = [
+    "tests",
+    "tools/check_v3_orientation.py",
+    "tools/test_check_v3_orientation_scope.py",
+    "schemas/control-plane/v3",
+    "scripts/tests/v3",
+    "scripts/v3",
+]
+data_file = "tests/.coverage"
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false
