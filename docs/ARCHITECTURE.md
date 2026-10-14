@@ -74,9 +74,13 @@ or the task stays `unreviewed`.
 Accepted edits are committed on the task branch when the provider left a
 dirty tree. A commit the provider already made is kept. The task branch is
 merged with `--no-ff` into the run branch, not into the checkout you started
-from. A conflict aborts that merge and records the paths. Unreviewed branches
-are kept and are not merged. Failed branches are deleted unless
-`--keep-worktrees` is set.
+from. A conflict aborts that merge and records the paths. When
+`landing.conflict_retries` is greater than zero, the harness asks a provider
+to reconcile the task on a fresh worktree cut from the run branch, reviews
+that result, and merges again. The default is one try. Zero leaves the
+conflict in place. A failed recovery keeps the conflicted task branch and
+skips dependents. Unreviewed branches are kept and are not merged. Failed
+branches are deleted unless `--keep-worktrees` is set.
 
 ## report
 

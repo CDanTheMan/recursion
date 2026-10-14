@@ -96,3 +96,11 @@ after that cut. No tag and no GitHub release accompany this section.
   configured, and the recursion identity otherwise. A run branch that is
   already contained in the target records `land.status` `merged` and leaves
   HEAD where it was.
+- `landing.conflict_retries` (default `1`, `0` disables it) lets a provider
+  reconcile a task after its merge into the run branch conflicts. The retry
+  runs on a fresh worktree cut from the run branch, then through review, and
+  is recorded on the run, in the log, in progress lines, and in the report.
+  An interrupted recovery can be resumed. Cancel stops it. The starting
+  checkout is left alone. On Windows the run-record lock waits when another
+  process already holds it, so that cancel is not rejected with a permission
+  error while a provider is still running.

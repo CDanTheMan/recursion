@@ -154,6 +154,14 @@ def progress_line(name: str, fields: dict) -> str:
         return f"task {index} unreviewed"
     if name == "task.conflict" and _is_index(index):
         return f"task {index} conflict"
+    if name == "task.conflict_recovery" and _is_index(index):
+        attempt = fields.get("attempt")
+        status = fields.get("status")
+        if status:
+            return f"task {index} conflict recovery {attempt} {status}"
+        return f"task {index} recovering conflict {attempt}"
+    if name == "task.conflict_recovered" and _is_index(index):
+        return f"task {index} conflict recovered"
     if name == "task.review_rejected" and _is_index(index):
         return f"task {index} review-rejected"
     if name == "provider.attempt":

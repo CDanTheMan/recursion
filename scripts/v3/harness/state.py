@@ -6,6 +6,7 @@ import json
 import os
 import re
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -93,13 +94,24 @@ class RunStore:
             if os.name == "nt":
                 import msvcrt
 
-                handle.seek(0)
-                if handle.read(1) != b"\0":
-                    handle.seek(0)
-                    handle.write(b"\0")
-                    handle.flush()
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                # Another handle may already have byte 0 locked. Windows
+                # refuses to read that byte (PermissionError) instead of
+                # waiting, so retry until LK_LOCK can run.
+                deadline = time.monotonic() + 30
+                while True:
+                    try:
+                        handle.seek(0)
+                        if handle.read(1) != b"\0":
+                            handle.seek(0)
+                            handle.write(b"\0")
+                            handle.flush()
+                        handle.seek(0)
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                        break
+                    except PermissionError:
+                        if time.monotonic() > deadline:
+                            raise
+                        time.sleep(0.05)
             else:
                 import fcntl
 

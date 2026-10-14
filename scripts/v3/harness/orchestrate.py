@@ -7,7 +7,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from scripts.v3.harness.context import task_prompt
+from scripts.v3.harness.context import recovery_prompt, task_prompt
 from scripts.v3.harness.dag import line_nodes
 from scripts.v3.harness.errors import HarnessError, RunCancelled
 from scripts.v3.harness.isolation import NullIsolator
@@ -16,7 +16,7 @@ from scripts.v3.harness.planning import plan_task
 from scripts.v3.harness.report import write_reports
 from scripts.v3.harness.review import execute_and_review
 from scripts.v3.harness.state import RunStore
-from scripts.v3.harness.usage import BudgetGuard, empty_usage
+from scripts.v3.harness.usage import BudgetGuard, add_usage, empty_usage
 
 
 _REOPEN = {"budget-exceeded", "cancelled", "conflict", "failed", "review-rejected", "running", "skipped", "unreviewed"}
@@ -109,6 +109,7 @@ def create_run(
                 "index": index,
                 "merge_conflict": [],
                 "merge_status": None,
+                "recovery": None,
                 "packet_id": item["packet_id"],
                 "projection_digest": item["projection_digest"],
                 "provider": None,
@@ -153,6 +154,7 @@ def drive_run(
     cooldowns=None,
     cooldown_seconds: float = 60,
     now=None,
+    conflict_retries: int = 1,
 ) -> dict:
     """Execute pending tasks whose dependencies have landed."""
 
@@ -160,6 +162,8 @@ def drive_run(
     concurrency = record["concurrency"]
     if isinstance(concurrency, bool) or not isinstance(concurrency, int) or concurrency < 1:
         raise HarnessError("run concurrency must be an integer >= 1")
+    if isinstance(conflict_retries, bool) or not isinstance(conflict_retries, int) or conflict_retries < 0:
+        raise HarnessError("landing.conflict_retries must be an integer >= 0")
     sink = log if log is not None else NullLog()
     pause = time.sleep if sleep is None else sleep
     checkout = isolator if isolator is not None else NullIsolator()
@@ -176,6 +180,7 @@ def drive_run(
 
     def remember(current: dict) -> None:
         current["base_ref"] = base_ref
+        current["conflict_retries"] = conflict_retries
         current["run_branch"] = run_branch
 
     store.update(run_id, remember)
@@ -206,6 +211,48 @@ def drive_run(
 
     def work(index: int) -> None:
         task = store.load(run_id)["tasks"][index]
+        if _recovery_active(task):
+            if store.load(run_id).get("cancel_requested"):
+                def cancel_recovery(current: dict) -> None:
+                    _cancel_task(current, index)
+                    recovery = current["tasks"][index].get("recovery")
+                    if isinstance(recovery, dict):
+                        recovery["active"] = False
+                    _skip_blocked(current["tasks"])
+
+                store.update(run_id, cancel_recovery)
+                sink.event("task.cancelled", index=index, run_id=run_id)
+                return
+            sink.event("task.started", index=index, packet_id=task["packet_id"], run_id=run_id)
+            _recover_landing(
+                store=store,
+                run_id=run_id,
+                index=index,
+                checkout=checkout,
+                sink=sink,
+                limit=int(task["recovery"]["limit"]),
+                paths=list(task["recovery"].get("paths") or []),
+                source_branch=task["recovery"].get("branch") or task.get("branch"),
+                source_commit=task.get("commit"),
+                source_diff=task.get("diff") or "",
+                outcome=None,
+                allow_live=allow_live,
+                retries=retries,
+                backoff_seconds=backoff_seconds,
+                timeout_seconds=timeout_seconds,
+                max_rounds=max_rounds,
+                route_id=route_id,
+                open_adapter=open_adapter,
+                sleep=pause,
+                should_stop=stopped,
+                accept_unreviewed=accept_unreviewed,
+                cooldowns=cooldowns,
+                cooldown_seconds=cooldown_seconds,
+                now=now,
+                guard=guard,
+                begun=time.monotonic(),
+            )
+            return
         if store.load(run_id).get("cancel_requested"):
             def cancel_early(current: dict) -> None:
                 _cancel_task(current, index)
@@ -314,6 +361,51 @@ def drive_run(
         elif disposition == "completed":
             merge = {"commit": None, "paths": [], "status": "landed"}
         tripped = guard.add(outcome["usage"])
+        if disposition == "conflict" and conflict_retries > 0 and not tripped and not stopped():
+            _recover_landing(
+                store=store,
+                run_id=run_id,
+                index=index,
+                checkout=checkout,
+                sink=sink,
+                limit=conflict_retries,
+                paths=list(merge["paths"]),
+                source_branch=iso.branch if iso is not None else None,
+                source_commit=commit,
+                source_diff=diff,
+                outcome=outcome,
+                allow_live=allow_live,
+                retries=retries,
+                backoff_seconds=backoff_seconds,
+                timeout_seconds=timeout_seconds,
+                max_rounds=max_rounds,
+                route_id=route_id,
+                open_adapter=open_adapter,
+                sleep=pause,
+                should_stop=stopped,
+                accept_unreviewed=accept_unreviewed,
+                cooldowns=cooldowns,
+                cooldown_seconds=cooldown_seconds,
+                now=now,
+                guard=guard,
+                begun=begun,
+            )
+            return
+        if disposition == "conflict" and stopped():
+            def cancel_during_merge(current: dict) -> None:
+                item = current["tasks"][index]
+                item["branch"] = iso.branch if iso is not None else None
+                item["commit"] = commit
+                item["diff"] = diff
+                item["duration_seconds"] = round(time.monotonic() - begun, 3)
+                item["merge_conflict"] = list(merge["paths"])
+                item["merge_status"] = "conflict"
+                _cancel_task(current, index)
+                _skip_blocked(current["tasks"])
+
+            store.update(run_id, cancel_during_merge)
+            sink.event("task.cancelled", index=index, run_id=run_id)
+            return
         if tripped:
             def mark_budget(current: dict) -> None:
                 current["cancel_requested"] = True
@@ -361,6 +453,11 @@ def drive_run(
     def wrapped(index: int) -> None:
         try:
             work(index)
+        except Exception:
+            raise
+        except BaseException:
+            # A provider interrupt leaves the task running. finish() records it.
+            pass
         finally:
             with condition:
                 progress["inflight"] -= 1
@@ -389,7 +486,10 @@ def drive_run(
         current["duration_seconds"] = round(time.monotonic() - started, 3)
         for task in current["tasks"]:
             if task["status"] == "running":
-                task["error"] = "task failed"
+                if _recovery_active(task):
+                    task["error"] = "recovery interrupted"
+                else:
+                    task["error"] = "task failed"
                 task["status"] = "failed"
         _skip_blocked(current["tasks"])
         if current.get("stop_reason") == "budget":
@@ -423,6 +523,10 @@ def reopen_run(store: RunStore, run_id: str) -> dict:
         current["stop_reason"] = None
         for task in current["tasks"]:
             if task["status"] in _REOPEN:
+                if _recovery_active(task):
+                    task["error"] = None
+                    task["status"] = "pending"
+                    continue
                 task["error"] = None
                 task["merge_conflict"] = []
                 task["merge_status"] = None
@@ -521,6 +625,386 @@ def _keeps_run_branch(task: dict) -> bool:
 def _land_message(task: dict) -> str:
     label = str(task.get("id") or task["index"])
     return f"recursion: land {label}"[:72]
+
+
+def _recovery_active(task: dict) -> bool:
+    recovery = task.get("recovery")
+    return isinstance(recovery, dict) and recovery.get("active") is True
+
+
+def _recover_landing(
+    *,
+    store: RunStore,
+    run_id: str,
+    index: int,
+    checkout,
+    sink,
+    limit: int,
+    paths: list[str],
+    source_branch: str | None,
+    source_commit: str | None,
+    source_diff: str,
+    outcome: dict | None,
+    allow_live: bool,
+    retries: int,
+    backoff_seconds: float,
+    timeout_seconds: dict[str, int],
+    max_rounds: int,
+    route_id: str,
+    open_adapter,
+    sleep,
+    should_stop,
+    accept_unreviewed: bool,
+    cooldowns,
+    cooldown_seconds: float,
+    now,
+    guard: BudgetGuard,
+    begun: float,
+) -> None:
+    """Reconcile one conflicted task on a fresh worktree cut from the run branch."""
+
+    if outcome is not None:
+        def begin(current: dict) -> None:
+            item = current["tasks"][index]
+            item["attempts"] = outcome["attempts"]
+            item["branch"] = source_branch
+            item["commit"] = source_commit
+            item["diff"] = source_diff
+            item["execution"] = outcome["result"].to_dict()
+            item["merge_conflict"] = list(paths)
+            item["merge_status"] = "conflict"
+            item["provider"] = outcome["result"].provider
+            item["reviews"] = outcome["reviews"]
+            item["status"] = "running"
+            item["text"] = outcome["result"].text
+            item["usage"] = outcome["usage"]
+            item["recovery"] = {
+                "active": True,
+                "attempts": [],
+                "branch": source_branch,
+                "limit": limit,
+                "paths": list(paths),
+            }
+
+        store.update(run_id, begin)
+
+    def load_task() -> dict:
+        return store.load(run_id)["tasks"][index]
+
+    task = load_task()
+    recovery = task.get("recovery") if isinstance(task.get("recovery"), dict) else {}
+    attempts = list(recovery.get("attempts") or [])
+    stored_limit = recovery.get("limit")
+    if isinstance(stored_limit, int) and not isinstance(stored_limit, bool):
+        limit = stored_limit
+    source_branch = recovery.get("branch") or source_branch
+    conflict_paths = list(recovery.get("paths") or paths)
+
+    def remember_attempts(latest_paths: list[str]) -> None:
+        def save(current: dict) -> None:
+            item = current["tasks"][index]
+            item_recovery = item.get("recovery")
+            if not isinstance(item_recovery, dict):
+                return
+            item_recovery["attempts"] = list(attempts)
+            item_recovery["paths"] = list(latest_paths)
+            item["merge_conflict"] = list(latest_paths)
+
+        store.update(run_id, save)
+
+    landed = None
+    while len(attempts) < limit:
+        if should_stop is not None and should_stop():
+            _cancel_open_recovery(store, run_id, index, source_branch, begun)
+            sink.event("task.cancelled", index=index, run_id=run_id)
+            return
+        if guard.tripped:
+            break
+        attempt_no = len(attempts) + 1
+        sink.event(
+            "task.conflict_recovery",
+            attempt=attempt_no,
+            index=index,
+            paths=list(conflict_paths),
+            run_id=run_id,
+        )
+        attempt = _one_recovery_attempt(
+            store=store,
+            run_id=run_id,
+            index=index,
+            attempt_no=attempt_no,
+            checkout=checkout,
+            sink=sink,
+            paths=conflict_paths,
+            allow_live=allow_live,
+            retries=retries,
+            backoff_seconds=backoff_seconds,
+            timeout_seconds=timeout_seconds,
+            max_rounds=max_rounds,
+            route_id=route_id,
+            open_adapter=open_adapter,
+            sleep=sleep,
+            should_stop=should_stop,
+            accept_unreviewed=accept_unreviewed,
+            cooldowns=cooldowns,
+            cooldown_seconds=cooldown_seconds,
+            now=now,
+            guard=guard,
+            begun=begun,
+        )
+        if attempt.get("status") == "cancelled":
+            return
+        attempts.append(attempt)
+        if attempt.get("merge_conflict"):
+            conflict_paths = list(attempt["merge_conflict"])
+        remember_attempts(conflict_paths)
+        sink.event(
+            "task.conflict_recovery",
+            attempt=attempt_no,
+            index=index,
+            provider=attempt.get("provider"),
+            run_id=run_id,
+            status=attempt.get("status"),
+        )
+        if attempt.get("status") == "completed" and attempt.get("merge_status") == "landed":
+            landed = attempt
+            break
+
+    _close_recovery(
+        store=store,
+        run_id=run_id,
+        index=index,
+        checkout=checkout,
+        sink=sink,
+        attempts=attempts,
+        landed=landed,
+        paths=conflict_paths,
+        source_branch=source_branch,
+        begun=begun,
+    )
+
+
+def _one_recovery_attempt(
+    *,
+    store: RunStore,
+    run_id: str,
+    index: int,
+    attempt_no: int,
+    checkout,
+    sink,
+    paths: list[str],
+    allow_live: bool,
+    retries: int,
+    backoff_seconds: float,
+    timeout_seconds: dict[str, int],
+    max_rounds: int,
+    route_id: str,
+    open_adapter,
+    sleep,
+    should_stop,
+    accept_unreviewed: bool,
+    cooldowns,
+    cooldown_seconds: float,
+    now,
+    guard: BudgetGuard,
+    begun: float,
+) -> dict:
+    task = store.load(run_id)["tasks"][index]
+    iso = None
+    keep_branch = False
+    try:
+        if not task["candidates"]:
+            raise HarnessError("no provider has the required capabilities")
+        start_ref = store.load(run_id).get("run_branch")
+        iso = checkout.acquire_recovery(run_id, index, attempt_no, start_ref)
+        prompt = recovery_prompt(task, store.load(run_id)["tasks"], paths)
+        outcome = execute_and_review(
+            task=prompt,
+            packet_id=task["packet_id"],
+            route_id=route_id,
+            candidates=list(task["candidates"]),
+            allow_live=allow_live,
+            retries=retries,
+            backoff_seconds=backoff_seconds,
+            timeout_seconds=timeout_seconds,
+            max_rounds=max_rounds,
+            cwd=None if iso.path is None else str(iso.path),
+            diff_of=lambda: checkout.diff(iso),
+            log=BoundLog(sink, index=index, packet_id=task["packet_id"], run_id=run_id),
+            open_adapter=open_adapter,
+            sleep=sleep,
+            should_stop=should_stop,
+            accept_unreviewed=accept_unreviewed,
+            seal=lambda: checkout.commit_pending(iso, _land_message(task)),
+            snapshot=lambda: checkout.snapshot(iso),
+            restore=lambda head: checkout.restore(iso, head),
+            cooldowns=cooldowns,
+            cooldown_seconds=cooldown_seconds,
+            now=now,
+        )
+        guard.add(outcome["usage"])
+        diff = checkout.diff(iso)
+        commit = None
+        if outcome["disposition"] == "completed":
+            commit = checkout.commit_pending(iso, _land_message(task))
+        merge = {"commit": None, "paths": [], "status": "not-landed"}
+        status = outcome["disposition"]
+        error = None
+        if outcome["disposition"] == "completed" and commit is not None:
+            try:
+                merge = checkout.merge_into_run(store.load(run_id).get("run_branch"), iso.branch)
+            except HarnessError:
+                merge = {"commit": None, "paths": [], "status": "conflict"}
+            if merge["status"] == "conflict":
+                status = "conflict"
+                error = _conflict_error(merge["paths"])
+            else:
+                status = "completed"
+        elif outcome["disposition"] == "completed":
+            status = "failed"
+            error = "recovery produced no commit"
+        elif outcome["disposition"] == "review-rejected":
+            error = "review rejected"
+        elif outcome["disposition"] == "unreviewed":
+            error = "review did not complete"
+        keep_branch = status in {"completed", "conflict"} and bool(iso.branch)
+        return {
+            "attempt": attempt_no,
+            "branch": iso.branch,
+            "commit": commit,
+            "diff": diff,
+            "error": error,
+            "execution": outcome["result"].to_dict(),
+            "merge_conflict": list(merge["paths"]),
+            "merge_status": merge["status"] if status == "completed" else merge["status"],
+            "provider": outcome["result"].provider,
+            "reviews": outcome["reviews"],
+            "status": status,
+            "text": outcome["result"].text,
+            "usage": outcome["usage"],
+            "worker_attempts": outcome["attempts"],
+        }
+    except RunCancelled:
+        if iso is not None:
+            checkout.release(iso, keep_branch=False, keep_worktree=False)
+            iso = None
+        _cancel_open_recovery(store, run_id, index, task.get("branch"), begun)
+        sink.event("task.cancelled", index=index, run_id=run_id)
+        return {"attempt": attempt_no, "branch": None, "error": "run cancelled", "status": "cancelled"}
+    except HarnessError as exc:
+        return {
+            "attempt": attempt_no,
+            "branch": None if iso is None else iso.branch,
+            "commit": None,
+            "diff": "",
+            "error": str(exc),
+            "execution": None,
+            "merge_conflict": [],
+            "merge_status": "not-landed",
+            "provider": None,
+            "reviews": [],
+            "status": "failed",
+            "text": None,
+            "usage": empty_usage(),
+            "worker_attempts": list(getattr(exc, "attempts", []) or []),
+        }
+    finally:
+        if iso is not None:
+            checkout.release(iso, keep_branch=keep_branch, keep_worktree=False)
+
+
+def _cancel_open_recovery(store: RunStore, run_id: str, index: int, branch: str | None, begun: float) -> None:
+    def cancel(current: dict) -> None:
+        item = current["tasks"][index]
+        recovery = item.get("recovery")
+        if isinstance(recovery, dict):
+            recovery["active"] = False
+        if branch:
+            item["branch"] = branch
+        item["duration_seconds"] = round(time.monotonic() - begun, 3)
+        _cancel_task(current, index)
+        _skip_blocked(current["tasks"])
+
+    store.update(run_id, cancel)
+
+
+def _close_recovery(
+    *,
+    store: RunStore,
+    run_id: str,
+    index: int,
+    checkout,
+    sink,
+    attempts: list[dict],
+    landed: dict | None,
+    paths: list[str],
+    source_branch: str | None,
+    begun: float,
+) -> None:
+    if landed is not None:
+        for previous in attempts:
+            branch = previous.get("branch")
+            if branch and branch != landed.get("branch"):
+                checkout.delete_branch(branch)
+        if source_branch and source_branch != landed.get("branch"):
+            checkout.delete_branch(source_branch)
+
+    def close(current: dict) -> None:
+        item = current["tasks"][index]
+        recovery = item.get("recovery")
+        if not isinstance(recovery, dict):
+            recovery = {"attempts": [], "branch": source_branch, "limit": 0, "paths": list(paths)}
+            item["recovery"] = recovery
+        recovery["active"] = False
+        recovery["attempts"] = [
+            {key: value for key, value in attempt.items() if key not in {"diff", "execution", "worker_attempts"}}
+            for attempt in attempts
+        ]
+        previous = item.get("duration_seconds")
+        extra = time.monotonic() - begun
+        base = float(previous) if isinstance(previous, (int, float)) and not isinstance(previous, bool) else 0.0
+        item["duration_seconds"] = round(base + extra, 3)
+        if not isinstance(item.get("usage"), dict):
+            item["usage"] = empty_usage()
+        extra_attempts = []
+        extra_reviews = []
+        for attempt in attempts:
+            add_usage(item["usage"], attempt.get("usage") or empty_usage())
+            extra_attempts.extend(attempt.get("worker_attempts") or [])
+            extra_reviews.extend(attempt.get("reviews") or [])
+        item["attempts"] = list(item.get("attempts") or []) + extra_attempts
+        item["reviews"] = list(item.get("reviews") or []) + extra_reviews
+        if landed is not None:
+            item["branch"] = landed.get("branch")
+            item["commit"] = landed.get("commit")
+            item["diff"] = landed.get("diff") or ""
+            item["error"] = None
+            item["execution"] = landed.get("execution")
+            item["merge_conflict"] = []
+            item["merge_status"] = "landed"
+            item["provider"] = landed.get("provider")
+            item["status"] = "completed"
+            item["text"] = landed.get("text")
+        else:
+            item["branch"] = source_branch or item.get("branch")
+            item["error"] = _conflict_error(paths)
+            item["merge_conflict"] = list(paths)
+            item["merge_status"] = "conflict"
+            item["status"] = "conflict"
+        _skip_blocked(current["tasks"])
+
+    store.update(run_id, close)
+    if landed is not None:
+        sink.event(
+            "task.conflict_recovered",
+            attempt=landed.get("attempt"),
+            index=index,
+            provider=landed.get("provider"),
+            run_id=run_id,
+        )
+        sink.event("task.completed", index=index, provider=landed.get("provider"), run_id=run_id)
+        return
+    sink.event("task.conflict", index=index, provider=store.load(run_id)["tasks"][index].get("provider"), run_id=run_id)
 
 
 def _conflict_error(paths: list[str]) -> str:
