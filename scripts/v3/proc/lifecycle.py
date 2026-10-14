@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 POLL_SECONDS = 0.05
+_SIGKILL = getattr(signal, "SIGKILL", 9)
 _KERNEL32 = None
 _KERNEL32_LOCK = threading.Lock()
 
@@ -297,7 +298,7 @@ def _kill_posix_group(proc: subprocess.Popen, pgid: int | None = None) -> None:
             pass
         return
     try:
-        os.killpg(pgid, signal.SIGKILL)
+        os.killpg(pgid, _SIGKILL)
     except ProcessLookupError:
         try:
             proc.kill()

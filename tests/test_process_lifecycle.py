@@ -417,7 +417,7 @@ def test_group_kill_refuses_the_harness_process_group(monkeypatch: pytest.Monkey
     assert events == [("kill", 99)]
     events.clear()
     lifecycle._kill_posix_group(Proc(), 777)  # type: ignore[arg-type]
-    assert events == [("killpg", 777, signal.SIGKILL)]
+    assert events == [("killpg", 777, getattr(signal, "SIGKILL", 9))]
 
 
 def test_every_live_adapter_runs_under_the_supervisor(monkeypatch: pytest.MonkeyPatch) -> None:
