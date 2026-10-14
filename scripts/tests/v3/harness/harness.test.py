@@ -34,7 +34,7 @@ def _load_checker():
 class HarnessSliceTests(unittest.TestCase):
     def test_fixture_provider_plans_and_executes(self) -> None:
         task = "Summarize the harness slice."
-        with patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+        with patch("scripts.v3.harness.providers.run_command") as spawned:
             first = run_task(task, provider="fixture")
             second = run_task(task, provider="fixture")
         spawned.assert_not_called()
@@ -91,7 +91,7 @@ class HarnessSliceTests(unittest.TestCase):
         request = ProviderRequest(task="hello", packet_id="PACKET-TEST", route_id="route-a")
         adapter = ClaudeHeadlessProvider()
         self.assertEqual(adapter.argv(request), ("claude", "-p", "--output-format", "stream-json"))
-        with patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+        with patch("scripts.v3.harness.providers.run_command") as spawned:
             with self.assertRaises(LiveProviderDisabled):
                 adapter.execute(request)
         spawned.assert_not_called()
@@ -100,7 +100,7 @@ class HarnessSliceTests(unittest.TestCase):
         from io import StringIO
 
         stdout = StringIO()
-        with patch("sys.stdout", stdout), patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+        with patch("sys.stdout", stdout), patch("scripts.v3.harness.providers.run_command") as spawned:
             code = main(["--task", "Count the commands.", "--provider", "fixture"])
         spawned.assert_not_called()
         self.assertEqual(code, 0)

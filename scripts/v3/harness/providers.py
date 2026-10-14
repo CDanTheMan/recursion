@@ -2,7 +2,8 @@
 
 Each adapter builds argv and starts a process only when ``allow_live`` is set.
 The harness does not read credentials. Retries and fallback live in
-``dispatch.py``, not inside an adapter.
+``dispatch.py``, not inside an adapter. Cancel and timeout stop the process
+and the children it started.
 """
 
 from __future__ import annotations
@@ -16,7 +17,9 @@ from scripts.v3.harness.errors import (
     ProviderCLIMissing,
     ProviderRateLimited,
     ProviderTimeout,
+    RunCancelled,
 )
+from scripts.v3.proc.lifecycle import ProcessCancelled, run_command
 
 
 @dataclass(frozen=True)
@@ -83,8 +86,9 @@ class FixtureProvider(ProviderAdapter):
         *,
         allow_live: bool = False,
         timeout_seconds: int | None = None,
+        should_stop=None,
     ) -> ProviderResult:
-        del allow_live, timeout_seconds
+        del allow_live, timeout_seconds, should_stop
         if request.kind == "review":
             text = "VERDICT approve\nfixture review"
         else:
@@ -123,24 +127,17 @@ def _run_cli(
     *,
     stdin_text: str | None,
     timeout_seconds: int | None,
+    should_stop=None,
 ) -> ProviderResult:
     argv = adapter.argv(request)
-    kwargs: dict = {
-        "text": True,
-        "encoding": "utf-8",
-        "capture_output": True,
-        "check": False,
-    }
-    if timeout_seconds is not None:
-        kwargs["timeout"] = timeout_seconds
-    if request.cwd:
-        kwargs["cwd"] = request.cwd
-    if stdin_text is None:
-        kwargs["stdin"] = subprocess.DEVNULL
-    else:
-        kwargs["input"] = stdin_text
     try:
-        completed = subprocess.run(list(argv), **kwargs)
+        completed = run_command(
+            list(argv),
+            cwd=request.cwd,
+            stdin_text=stdin_text,
+            timeout_seconds=timeout_seconds,
+            should_stop=should_stop,
+        )
     except FileNotFoundError as exc:
         raise ProviderCLIMissing(
             f"{adapter.name} CLI was not found on PATH ({argv[0]}). "
@@ -148,6 +145,8 @@ def _run_cli(
         ) from exc
     except subprocess.TimeoutExpired as exc:
         raise ProviderTimeout(f"{adapter.name} timed out after {timeout_seconds} seconds") from exc
+    except ProcessCancelled as exc:
+        raise RunCancelled("run cancelled") from exc
     if _rate_limited(completed):
         raise ProviderRateLimited(f"{adapter.name} was rate-limited")
     if completed.returncode != 0:
@@ -176,9 +175,16 @@ class ClaudeHeadlessProvider(ProviderAdapter):
         *,
         allow_live: bool = False,
         timeout_seconds: int | None = None,
+        should_stop=None,
     ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=request.task, timeout_seconds=timeout_seconds)
+        return _run_cli(
+            self,
+            request,
+            stdin_text=request.task,
+            timeout_seconds=timeout_seconds,
+            should_stop=should_stop,
+        )
 
 
 class CodexExecProvider(ProviderAdapter):
@@ -201,9 +207,16 @@ class CodexExecProvider(ProviderAdapter):
         *,
         allow_live: bool = False,
         timeout_seconds: int | None = None,
+        should_stop=None,
     ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+        return _run_cli(
+            self,
+            request,
+            stdin_text=None,
+            timeout_seconds=timeout_seconds,
+            should_stop=should_stop,
+        )
 
 
 class GrokHeadlessProvider(ProviderAdapter):
@@ -226,9 +239,16 @@ class GrokHeadlessProvider(ProviderAdapter):
         *,
         allow_live: bool = False,
         timeout_seconds: int | None = None,
+        should_stop=None,
     ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+        return _run_cli(
+            self,
+            request,
+            stdin_text=None,
+            timeout_seconds=timeout_seconds,
+            should_stop=should_stop,
+        )
 
 
 def adapters() -> dict[str, type[ProviderAdapter]]:

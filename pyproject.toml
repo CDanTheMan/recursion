@@ -18,6 +18,7 @@ packages = [
     "scripts.v3",
     "scripts.v3.harness",
     "scripts.v3.planning",
+    "scripts.v3.proc",
     "scripts.v3.planning.replay",
     "scripts.v3.planning.validation",
 ]

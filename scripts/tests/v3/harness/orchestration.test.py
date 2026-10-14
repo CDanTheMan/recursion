@@ -181,7 +181,7 @@ class OrchestrationTests(unittest.TestCase):
             root = Path(directory)
             stdout = _String()
             with patch("sys.stdout", stdout), patch("sys.stderr", _String()), patch(
-                "scripts.v3.harness.providers.subprocess.run"
+                "scripts.v3.harness.providers.run_command"
             ) as spawned:
                 code = main(["plan", "--goal", "Alpha task.\nBeta task.", "--state-dir", str(root)])
             spawned.assert_not_called()
@@ -192,7 +192,7 @@ class OrchestrationTests(unittest.TestCase):
 
             stdout = _String()
             with patch("sys.stdout", stdout), patch("sys.stderr", _String()), patch(
-                "scripts.v3.harness.providers.subprocess.run"
+                "scripts.v3.harness.providers.run_command"
             ) as spawned:
                 code = main(["run", "--goal", "Alpha task.\nBeta task.", "--state-dir", str(root)])
             spawned.assert_not_called()
@@ -213,7 +213,7 @@ class OrchestrationTests(unittest.TestCase):
 
         adapter = ClaudeHeadlessProvider()
         with patch(
-            "scripts.v3.harness.providers.subprocess.run",
+            "scripts.v3.harness.providers.run_command",
             side_effect=FileNotFoundError(2, "No such file"),
         ):
             with self.assertRaises(ProviderCLIMissing) as missing:
@@ -221,7 +221,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertIn("claude CLI was not found on PATH (claude)", str(missing.exception))
 
         with patch(
-            "scripts.v3.harness.providers.subprocess.run",
+            "scripts.v3.harness.providers.run_command",
             side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=5),
         ):
             with self.assertRaises(ProviderTimeout) as timed:
@@ -229,7 +229,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertIn("timed out after 5 seconds", str(timed.exception))
 
         completed = subprocess.CompletedProcess(args=[], returncode=429, stdout="", stderr="SECRET rate limit")
-        with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed):
+        with patch("scripts.v3.harness.providers.run_command", return_value=completed):
             with self.assertRaises(ProviderRateLimited) as limited:
                 adapter.execute(REQUEST, allow_live=True, timeout_seconds=5)
         self.assertNotIn("SECRET", str(limited.exception))
