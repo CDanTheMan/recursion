@@ -28,9 +28,33 @@ Start here:
 | `experiments/v3/` | v3 research experiments and provider-free evidence checks |
 | `schemas/control-plane/v3/` | v3 contract schemas (planning, execution, integrity) |
 | `scripts/v3/` | v3 planning replay and validation |
+| `scripts/v3/harness/` | harness slice: plan a task, admit one route, run one provider |
 | `scripts/tests/v3/` | v3 M1 test programs and fixtures |
 | `tools/check_v3_orientation.py` | 2026-09-13 orientation-repair gate; scope vs merge-base with master |
 | `state/` | decision log and v3 goal/task records |
+
+## Run the harness
+
+The harness plans one task with the M1A kernel, admits a route with the M1B reference checker, and runs one provider adapter. The default provider is a local fixture. It does not call a live CLI and does not read credentials.
+
+From the repository root, with Python 3.11 or newer. Route admission uses the M1B schema checker, which imports `jsonschema` 4.23.0:
+
+```text
+python -m pip install "jsonschema==4.23.0"
+python -X utf8 -B -m scripts.v3.harness --task "Summarize the harness slice" --provider fixture
+```
+
+On Windows, if `python` is not the 3.11+ launcher, use `py -3` with the same flags. Paths in this repository exceed 260 characters. Prefix git commands with `git -c core.longpaths=true` for clone, checkout, status, and diff. That flag is per command. The Python command above does not change.
+
+`--provider claude` is the headless CLI adapter. Its argv is `claude -p --output-format stream-json`, and the task is written to that process's stdin. The process is not started unless you also pass `--allow-live`. Leave that flag off in tests and CI.
+
+The contracts gate runs the existing M1 checks and the harness test:
+
+```text
+python -X utf8 -B tools/check_v3_orientation.py --contracts
+```
+
+The shape of this slice is recorded in [docs/v3/HARNESS-SLICE.md](docs/v3/HARNESS-SLICE.md).
 
 ## Retired
 
