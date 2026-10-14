@@ -34,7 +34,7 @@ ALLOWED = {
     ".gitattributes", ".github/workflows/ci.yml", ".github/workflows/release.yml",
     "requirements.txt", "pyproject.toml", "tests/conftest.py", "tests/test_v3_checks.py",
     "tests/test_docs_drift.py", "tests/test_adapter_streams.py", "tests/test_e2e_console.py",
-    "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
+    "tests/test_process_lifecycle.py", "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
     "examples/sample-goal.txt", "examples/harness.json", "examples/stubs/provider_stub.py",
     "tests/test_config_logs.py",
 }
@@ -88,6 +88,8 @@ PRODUCT_SLICE = {
     "scripts/v3/harness/streams.py",
     "scripts/v3/harness/usage.py",
     "scripts/v3/planning/__init__.py",
+    "scripts/v3/proc/__init__.py",
+    "scripts/v3/proc/lifecycle.py",
     "scripts/v3/planning/replay/__init__.py",
     "scripts/v3/planning/validation/__init__.py",
 }

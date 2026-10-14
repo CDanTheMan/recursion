@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `recursion cancel` stops a live provider process that is still running, and a
+  provider `timeout_seconds` stops it the same way. Children started by that
+  process are stopped too: a process group on Linux and a job object on
+  Windows. Resume still continues tasks that were cancelled.
+
 ## 0.2.0 — 2026-10-14
 
 This is the standalone fork [CDanTheMan/recursion](https://github.com/CDanTheMan/recursion).

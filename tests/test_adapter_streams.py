@@ -1,8 +1,9 @@
 """Stream contracts for the claude, codex, and grok adapters.
 
-The process runner is replaced. These tests never start the real CLIs.
-``allow_live=True`` only reaches that runner. Without it, the adapter refuses
-before PATH is consulted.
+The supervisor is replaced. These tests never start the real CLIs.
+``allow_live=True`` only reaches that supervisor. Without it, the adapter
+refuses before PATH is consulted. Captured text is the supervisor's UTF-8
+stdout, including the task passed on stdin for claude.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def _completed(argv: list[str], *, stdout: str, stderr: str = "", returncode: in
 def _execute(adapter, completed: subprocess.CompletedProcess[str]):
     result = None
     spawned = None
-    with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed) as spawned:
+    with patch("scripts.v3.harness.providers.run_command", return_value=completed) as spawned:
         result = adapter.execute(REQUEST, allow_live=True, timeout_seconds=15)
     return result, spawned
 
@@ -93,14 +94,12 @@ def _assert_runner_contract(adapter, spawned) -> None:
     argv = list(adapter.argv(REQUEST))
     assert spawned.call_args.args[0] == argv
     kwargs = spawned.call_args.kwargs
-    assert kwargs["encoding"] == "utf-8"
-    assert kwargs["text"] is True
-    assert kwargs["timeout"] == 15
+    assert kwargs["timeout_seconds"] == 15
+    assert kwargs["cwd"] is None
     if adapter.name == "claude":
-        assert kwargs["input"] == TASK
+        assert kwargs["stdin_text"] == TASK
     else:
-        assert kwargs["stdin"] is subprocess.DEVNULL
-        assert "input" not in kwargs
+        assert kwargs["stdin_text"] is None
 
 
 @pytest.mark.parametrize("adapter_cls,stdout,usage", STREAMS)
@@ -146,7 +145,7 @@ def test_only_malformed_stdout_does_not_invent_usage(adapter_cls) -> None:
 def test_rate_limit_failure_omits_stderr(adapter_cls, returncode: int, stderr: str) -> None:
     adapter = adapter_cls()
     completed = _completed([], stdout="partial", stderr=stderr, returncode=returncode)
-    with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed):
+    with patch("scripts.v3.harness.providers.run_command", return_value=completed):
         with pytest.raises(ProviderRateLimited) as caught:
             adapter.execute(REQUEST, allow_live=True)
     message = str(caught.value)
@@ -160,7 +159,7 @@ def test_missing_executable_fails_cleanly(adapter_cls) -> None:
     adapter = adapter_cls()
     binary = adapter.argv(REQUEST)[0]
 
-    with patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+    with patch("scripts.v3.harness.providers.run_command") as spawned:
         with pytest.raises(LiveProviderDisabled) as refused:
             adapter.execute(REQUEST, allow_live=False)
     spawned.assert_not_called()
@@ -170,7 +169,7 @@ def test_missing_executable_fails_cleanly(adapter_cls) -> None:
     def missing(*_args, **_kwargs):
         raise FileNotFoundError(2, "No such file or directory", binary)
 
-    with patch("scripts.v3.harness.providers.subprocess.run", side_effect=missing):
+    with patch("scripts.v3.harness.providers.run_command", side_effect=missing):
         with pytest.raises(ProviderCLIMissing) as caught:
             adapter.execute(REQUEST, allow_live=True)
     message = str(caught.value)
@@ -188,10 +187,7 @@ def test_rate_limit_falls_back_without_retrying(tmp_path) -> None:
     ok = _completed(list(codex.argv(REQUEST)), stdout=CODEX_SUCCESS)
     pauses: list[float] = []
     store = CooldownStore(tmp_path / "cooldowns.json")
-    with patch(
-        "scripts.v3.harness.providers.subprocess.run",
-        side_effect=[limited, ok],
-    ):
+    with patch("scripts.v3.harness.providers.run_command", side_effect=[limited, ok]):
         result, attempts = execute_with_policy(
             REQUEST,
             ["claude", "codex"],

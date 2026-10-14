@@ -172,6 +172,7 @@ class ScopeCheckTests(unittest.TestCase):
         self.assertIn("tests/test_docs_drift.py", gate.ALLOWED)
         self.assertIn("tests/test_adapter_streams.py", gate.ALLOWED)
         self.assertIn("tests/test_e2e_console.py", gate.ALLOWED)
+        self.assertIn("tests/test_process_lifecycle.py", gate.ALLOWED)
         self.assertIn("examples/sample-goal.txt", gate.ALLOWED)
         self.assertIn("examples/harness.json", gate.ALLOWED)
         self.assertIn("examples/stubs/provider_stub.py", gate.ALLOWED)
