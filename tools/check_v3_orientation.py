@@ -33,7 +33,8 @@ ALLOWED = {
     "tools/test_check_v3_orientation_scope.py",
     ".gitattributes", ".github/workflows/ci.yml", ".github/workflows/release.yml",
     "requirements.txt", "pyproject.toml", "tests/conftest.py", "tests/test_v3_checks.py",
-    "tests/test_docs_drift.py", "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
+    "tests/test_docs_drift.py", "tests/test_adapter_streams.py", "tests/.gitignore",
+    "docs/USER-GUIDE.md", "CHANGELOG.md",
 }
 PRODUCT_SLICE = {
     ".gitignore",
