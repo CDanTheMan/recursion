@@ -1,4 +1,4 @@
-"""``recursion`` command: plan, run, and status."""
+"""``recursion`` command: plan, run, status, resume, and cancel."""
 
 from __future__ import annotations
 
@@ -9,34 +9,62 @@ from pathlib import Path
 
 from scripts.v3.harness.capabilities import select_candidates
 from scripts.v3.harness.config import load_config
-from scripts.v3.harness.dispatch import execute_with_policy
 from scripts.v3.harness.errors import HarnessError
 from scripts.v3.harness.log import JsonLog, read_events
+from scripts.v3.harness.orchestrate import (
+    cancel_run,
+    create_run,
+    drive_run,
+    plan_goal,
+    reopen_run,
+    rotate_candidates,
+    split_goal,
+)
 from scripts.v3.harness.planning import plan_task
-from scripts.v3.harness.providers import ProviderRequest
 from scripts.v3.harness.routing import require_selected, select_route
+from scripts.v3.harness.state import RunStore, default_state_dir
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="recursion", description="Plan a task and run it through a provider adapter.")
-    parser.add_argument("--config", type=Path, help="provider config JSON (default: config/harness.json)")
+    parser = argparse.ArgumentParser(prog="recursion", description="Plan tasks and run them through provider adapters.")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    plan = commands.add_parser("plan", help="admit the task and the M1B route; do not start a provider")
-    plan.add_argument("--task", required=True)
+    plan = commands.add_parser("plan", help="admit tasks and the M1B route; do not start a provider")
+    _add_common(plan)
+    plan.add_argument("--task", help="one task admitted through M1A")
+    plan.add_argument("--goal", help="one M1A task per non-empty line")
     plan.add_argument("--log", help="append JSONL events to this file as well as stderr")
 
-    run = commands.add_parser("run", help="plan, admit a route, and execute a capable provider")
-    run.add_argument("--task", required=True)
+    run = commands.add_parser("run", help="plan, admit a route, and execute capable providers")
+    _add_common(run)
+    run.add_argument("--task", help="one task admitted through M1A")
+    run.add_argument("--goal", help="one M1A task per non-empty line, run in parallel")
     run.add_argument("--provider", help="use this provider instead of capability order")
     run.add_argument("--capability", action="append", default=None, help="extra capability the provider must have")
     run.add_argument("--fallback", action="store_true", help="after an explicit provider fails, try the next capable provider")
     run.add_argument("--allow-live", action="store_true", help="start a headless CLI; omitted in tests and CI")
     run.add_argument("--log", help="append JSONL events to this file as well as stderr")
 
-    status = commands.add_parser("status", help="show configured providers and a log summary")
+    status = commands.add_parser("status", help="show providers, log summary, and saved runs")
+    _add_common(status)
     status.add_argument("--log", help="JSONL file to summarize")
+    status.add_argument("--run", help="print one saved run")
+
+    resume = commands.add_parser("resume", help="continue unfinished tasks from a saved run")
+    _add_common(resume)
+    resume.add_argument("--run", required=True)
+    resume.add_argument("--allow-live", action="store_true")
+    resume.add_argument("--log", help="append JSONL events to this file as well as stderr")
+
+    cancel = commands.add_parser("cancel", help="cancel unfinished tasks in a saved run")
+    _add_common(cancel)
+    cancel.add_argument("--run", required=True)
     return parser
+
+
+def _add_common(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--config", type=Path, help="provider config JSON (default: config/harness.json)")
+    parser.add_argument("--state-dir", type=Path, help="directory for resumable run records")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     log: JsonLog | None = None
     handle = None
     try:
-        if args.command in {"plan", "run"}:
+        if args.command in {"plan", "run", "resume"}:
             log, handle = _open_log(getattr(args, "log", None))
         if args.command == "plan":
             payload = plan_command(args, log)
@@ -53,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = run_command(args, log)
         elif args.command == "status":
             payload = status_command(args)
+        elif args.command == "resume":
+            payload = resume_command(args, log)
+        elif args.command == "cancel":
+            payload = cancel_command(args)
         else:
             raise HarnessError(f"unknown command {args.command}")
     except HarnessError as exc:
@@ -65,41 +97,72 @@ def main(argv: list[str] | None = None) -> int:
             handle.close()
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
     print()
+    if args.command in {"run", "resume"} and payload.get("status") in {"failed", "cancelled"}:
+        return 2
     return 0
 
 
 def plan_command(args: argparse.Namespace, log: JsonLog) -> dict:
-    planned = plan_task(args.task)
+    goal, single = _goal_text(args)
     route = select_route()
     route_id = require_selected(route["decision"])
-    log.event(
-        "plan.admitted",
-        accepted=planned["accepted"],
-        packet_id=planned["packet_id"],
-        projection_digest=planned["projection_digest"],
-    )
+    if single:
+        planned = plan_task(goal)
+        log.event(
+            "plan.admitted",
+            accepted=planned["accepted"],
+            packet_id=planned["packet_id"],
+            projection_digest=planned["projection_digest"],
+        )
+        log.event(
+            "route.selected",
+            fixture_id=route["fixture_id"],
+            selected_route_id=route_id,
+            status=route["status"],
+        )
+        return {"planning": planned, "route": _route_view(route, route_id), "task": planned["intent_text"]}
+    planned_goal = plan_goal(goal)
+    for item in planned_goal["tasks"]:
+        log.event(
+            "plan.admitted",
+            accepted=item["accepted"],
+            packet_id=item["packet_id"],
+            projection_digest=item["projection_digest"],
+        )
     log.event(
         "route.selected",
         fixture_id=route["fixture_id"],
         selected_route_id=route_id,
         status=route["status"],
     )
-    return {"planning": planned, "route": _route_view(route, route_id), "task": planned["intent_text"]}
+    return {
+        "goal": planned_goal["goal"],
+        "route": _route_view(route, route_id),
+        "tasks": planned_goal["tasks"],
+    }
 
 
 def run_command(args: argparse.Namespace, log: JsonLog) -> dict:
     if args.fallback and not args.provider:
         raise HarnessError("--fallback applies to an explicit --provider")
+    goal, single = _goal_text(args)
     config = load_config(args.config)
-    planned = plan_task(args.task)
     route = select_route()
     route_id = require_selected(route["decision"])
-    log.event(
-        "plan.admitted",
-        accepted=planned["accepted"],
-        packet_id=planned["packet_id"],
-        projection_digest=planned["projection_digest"],
-    )
+    if single:
+        planned = [plan_task(goal)]
+        shown_goal = planned[0]["intent_text"]
+    else:
+        planned_goal = plan_goal(goal)
+        planned = planned_goal["tasks"]
+        shown_goal = planned_goal["goal"]
+    for item in planned:
+        log.event(
+            "plan.admitted",
+            accepted=item["accepted"],
+            packet_id=item["packet_id"],
+            projection_digest=item["projection_digest"],
+        )
     log.event(
         "route.selected",
         fixture_id=route["fixture_id"],
@@ -113,23 +176,53 @@ def run_command(args: argparse.Namespace, log: JsonLog) -> dict:
         fallback=args.fallback,
     )
     log.event("provider.candidates", candidates=candidates)
-    request = ProviderRequest(task=planned["intent_text"], packet_id=planned["packet_id"], route_id=route_id)
-    result, attempts = execute_with_policy(
-        request,
-        candidates,
+    record = _drive_new_run(
+        args,
+        log,
+        config=config,
+        goal=shown_goal,
+        planned=planned,
+        candidates=rotate_candidates(candidates, len(planned)),
+        route=_route_view(route, route_id),
+        route_id=route_id,
+    )
+    if single:
+        task = record["tasks"][0]
+        if record["status"] != "completed":
+            raise HarnessError(task["error"] or "no provider completed the task")
+        return {
+            "attempts": task["attempts"],
+            "candidates": task["candidates"],
+            "execution": task["execution"],
+            "planning": planned[0],
+            "route": record["route"],
+            "run_id": record["run_id"],
+            "status": record["status"],
+            "task": task["task"],
+        }
+    return record
+
+
+def resume_command(args: argparse.Namespace, log: JsonLog) -> dict:
+    config = load_config(args.config)
+    store = _store(args)
+    record = reopen_run(store, args.run)
+    route_id = record["route"]["selected_route_id"]
+    log.event("run.resume", run_id=record["run_id"], status=record["status"])
+    return drive_run(
+        store,
+        record["run_id"],
         allow_live=args.allow_live,
         retries=config["routing"]["retries"],
+        backoff_seconds=config["routing"]["backoff_seconds"],
+        timeout_seconds=_timeouts(config),
+        route_id=route_id,
         log=log,
     )
-    log.event("run.completed", live=result.live, provider=result.provider)
-    return {
-        "attempts": attempts,
-        "candidates": candidates,
-        "execution": result.to_dict(),
-        "planning": planned,
-        "route": _route_view(route, route_id),
-        "task": planned["intent_text"],
-    }
+
+
+def cancel_command(args: argparse.Namespace) -> dict:
+    return cancel_run(_store(args), args.run)
 
 
 def status_command(args: argparse.Namespace) -> dict:
@@ -137,7 +230,8 @@ def status_command(args: argparse.Namespace) -> dict:
     log_path = args.log
     events = read_events(Path(log_path)) if log_path else []
     last = events[-1]["event"] if events else None
-    return {
+    store = _store(args)
+    payload = {
         "config_version": config["version"],
         "log": {"events": len(events), "last_event": last, "path": log_path},
         "providers": [
@@ -146,11 +240,58 @@ def status_command(args: argparse.Namespace) -> dict:
                 "capabilities": item["capabilities"],
                 "enabled": item["enabled"],
                 "name": item["name"],
+                "timeout_seconds": item["timeout_seconds"],
             }
             for item in config["providers"]
         ],
         "routing": config["routing"],
+        "runs": store.list_runs(),
     }
+    if args.run:
+        payload["run"] = store.load(args.run)
+    return payload
+
+
+def _drive_new_run(args, log, *, config, goal, planned, candidates, route, route_id) -> dict:
+    store = _store(args)
+    record = create_run(
+        store,
+        goal=goal,
+        planned=planned,
+        candidates=candidates,
+        route=route,
+        concurrency=config["orchestration"]["concurrency"],
+    )
+    return drive_run(
+        store,
+        record["run_id"],
+        allow_live=args.allow_live,
+        retries=config["routing"]["retries"],
+        backoff_seconds=config["routing"]["backoff_seconds"],
+        timeout_seconds=_timeouts(config),
+        route_id=route_id,
+        log=log,
+    )
+
+
+def _goal_text(args: argparse.Namespace) -> tuple[str, bool]:
+    has_task = bool(getattr(args, "task", None))
+    has_goal = bool(getattr(args, "goal", None))
+    if has_task == has_goal:
+        raise HarnessError("pass one of --task or --goal")
+    if has_task:
+        return args.task, True
+    split_goal(args.goal)
+    return args.goal, False
+
+
+def _timeouts(config: dict) -> dict[str, int]:
+    return {item["name"]: item["timeout_seconds"] for item in config["providers"]}
+
+
+def _store(args: argparse.Namespace) -> RunStore:
+    root = args.state_dir if args.state_dir is not None else default_state_dir()
+    return RunStore(root)
 
 
 def _route_view(route: dict, route_id: str) -> dict:
