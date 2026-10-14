@@ -15,13 +15,17 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.v3.harness.availability import classify_failure
 from scripts.v3.harness.errors import (
     HarnessError,
     LiveProviderDisabled,
     ProviderCLIMissing,
-    ProviderRateLimited,
     ProviderTimeout,
 )
+
+
+_GRAPH_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+_GRAPH_CAPABILITY = re.compile(r"^[a-z0-9][a-z0-9+-]{0,63}$")
 
 
 @dataclass(frozen=True)
@@ -107,11 +111,17 @@ class FixtureProvider(ProviderAdapter):
 
 
 def _fixture_plan(task: str) -> str:
-    """Turn the goal section of a plan prompt into a line-shaped task list."""
+    """Turn the goal section of a plan prompt into tasks.
+
+    A goal whose first line is ``graph`` is a dependency list. Any other goal
+    stays one independent task per line.
+    """
 
     marker = "Goal:\n"
     goal = task.split(marker, 1)[1] if marker in task else ""
     lines = [line.strip() for line in goal.splitlines() if line.strip()]
+    if lines and lines[0] == "graph":
+        return json.dumps({"tasks": _fixture_graph(lines[1:])})
     tasks = [
         {
             "depends_on": [],
@@ -124,22 +134,52 @@ def _fixture_plan(task: str) -> str:
     return json.dumps({"tasks": tasks})
 
 
+def _fixture_graph(lines: list[str]) -> list[dict]:
+    tasks = []
+    for line in lines:
+        parsed = _graph_line(line)
+        if parsed is None:
+            return []
+        tasks.append(parsed)
+    return tasks
+
+
+def _graph_line(line: str) -> dict | None:
+    """Parse ``id: description``, then optional ``requires`` and ``depends``."""
+
+    body = line
+    depends: list[str] = []
+    requires: list[str] = []
+    if " depends " in body:
+        body, raw = body.rsplit(" depends ", 1)
+        depends = [part.strip() for part in raw.split(",") if part.strip()]
+        if not depends or any(_GRAPH_ID.fullmatch(item) is None for item in depends):
+            return None
+    if " requires " in body:
+        body, raw = body.rsplit(" requires ", 1)
+        requires = [part.strip() for part in raw.split(",") if part.strip()]
+        if not requires or any(_GRAPH_CAPABILITY.fullmatch(item) is None for item in requires):
+            return None
+    if ":" not in body:
+        return None
+    task_id, description = body.split(":", 1)
+    task_id = task_id.strip()
+    description = description.strip()
+    if _GRAPH_ID.fullmatch(task_id) is None or description == "":
+        return None
+    return {
+        "depends_on": depends,
+        "description": description,
+        "id": task_id,
+        "required_capabilities": requires,
+    }
+
+
 def _refuse_unless_live(adapter: ProviderAdapter, allow_live: bool) -> None:
     if not allow_live:
         raise LiveProviderDisabled(
             f"{adapter.name} headless CLI is not started unless --allow-live is set"
         )
-
-
-def _rate_limited(completed: subprocess.CompletedProcess[str]) -> bool:
-    """Classify a failed process as rate-limited without copying its output."""
-
-    if completed.returncode == 0:
-        return False
-    if completed.returncode == 429:
-        return True
-    stderr = (completed.stderr or "").lower()
-    return "rate limit" in stderr or "too many requests" in stderr
 
 
 _STUB_PROVIDER = re.compile(r"(?im)^set\s+RECURSION_STUB_PROVIDER=([A-Za-z0-9_-]+)\s*$")
@@ -214,10 +254,9 @@ def _run_cli(
         ) from exc
     except subprocess.TimeoutExpired as exc:
         raise ProviderTimeout(f"{adapter.name} timed out after {timeout_seconds} seconds") from exc
-    if _rate_limited(completed):
-        raise ProviderRateLimited(f"{adapter.name} was rate-limited")
-    if completed.returncode != 0:
-        raise HarnessError(f"{adapter.name} exited {completed.returncode}")
+    failure = classify_failure(adapter.name, completed.returncode, completed.stderr or "")
+    if failure is not None:
+        raise failure
     return ProviderResult(provider=adapter.name, argv=argv, text=completed.stdout, live=True)
 
 

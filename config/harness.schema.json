@@ -52,9 +52,10 @@
     "routing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["backoff_seconds", "preference", "required_capabilities", "retries"],
+      "required": ["backoff_seconds", "cooldown_seconds", "preference", "required_capabilities", "retries", "weights"],
       "properties": {
         "backoff_seconds": {"type": "integer", "minimum": 0},
+        "cooldown_seconds": {"type": "integer", "minimum": 0},
         "preference": {
           "type": "array",
           "minItems": 1,
@@ -67,7 +68,13 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_+-]{0,63}$"}
         },
-        "retries": {"type": "integer", "minimum": 0}
+        "retries": {"type": "integer", "minimum": 0},
+        "weights": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+          "additionalProperties": {"type": "integer", "minimum": 1}
+        }
       }
     },
     "providers": {

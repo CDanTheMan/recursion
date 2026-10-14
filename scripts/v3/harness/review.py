@@ -65,6 +65,9 @@ def execute_and_review(
     seal=None,
     snapshot=None,
     restore=None,
+    cooldowns=None,
+    cooldown_seconds: float = 60,
+    now=None,
 ) -> dict:
     """Run the worker, then review with a different provider for up to ``max_rounds``.
 
@@ -88,6 +91,9 @@ def execute_and_review(
         sleep=sleep,
         should_stop=should_stop,
         timeout_seconds=timeout_seconds,
+        cooldowns=cooldowns,
+        cooldown_seconds=cooldown_seconds,
+        now=now,
     )
     attempts.extend(worker_attempts)
     add_usage(usage, parse_usage(result.text))
@@ -132,6 +138,9 @@ def execute_and_review(
                 sleep=sleep,
                 should_stop=should_stop,
                 timeout_seconds=timeout_seconds,
+                cooldowns=cooldowns,
+                cooldown_seconds=cooldown_seconds,
+                now=now,
             )
         except RunCancelled:
             if restore is not None:
@@ -192,6 +201,9 @@ def execute_and_review(
             sleep=sleep,
             should_stop=should_stop,
             timeout_seconds=timeout_seconds,
+            cooldowns=cooldowns,
+            cooldown_seconds=cooldown_seconds,
+            now=now,
         )
         attempts.extend(again)
         add_usage(usage, parse_usage(result.text))

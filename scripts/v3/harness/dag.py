@@ -16,11 +16,20 @@ _TASK_KEYS = {"depends_on", "description", "id", "required_capabilities"}
 
 
 def plan_prompt(goal: str) -> str:
+    example = (
+        '{"tasks":[{"id":"build","description":"Build the note","required_capabilities":[],'
+        '"depends_on":[]},{"id":"test","description":"Test the note","required_capabilities":[],'
+        '"depends_on":["build"]}]}'
+    )
     return "\n".join(
         (
             "Break the goal into tasks.",
             "Reply with one JSON object and no other text.",
+            "Independent tasks use an empty depends_on list.",
+            "A task that needs another task lists that task's id in depends_on.",
             'Keys are exactly {"tasks":[{"id","description","required_capabilities","depends_on"}]}.',
+            "Example:",
+            example,
             "Each id is unique. depends_on lists ids from this object. required_capabilities is a list of strings.",
             "Goal:",
             goal,
@@ -68,6 +77,9 @@ def admit_goal(
     log: object,
     open_adapter,
     sleep=None,
+    cooldowns=None,
+    cooldown_seconds: float = 60,
+    now=None,
 ) -> dict:
     """Ask a provider for a task graph. Invalid output falls back to lines."""
 
@@ -92,6 +104,9 @@ def admit_goal(
             backoff_seconds=backoff_seconds,
             sleep=sleep,
             timeout_seconds=timeout_seconds,
+            cooldowns=cooldowns,
+            cooldown_seconds=cooldown_seconds,
+            now=now,
         )
         nodes = parse_plan(result.text)
         planned = plan_goal(goal, nodes=nodes, source="provider")

@@ -6,6 +6,7 @@ separate namespace: a capability match never aliases ``ROUTE-INCLUDED``.
 
 from __future__ import annotations
 
+from scripts.v3.harness.availability import order_candidates
 from scripts.v3.harness.errors import HarnessError
 
 
@@ -18,9 +19,10 @@ def select_candidates(
 ) -> list[str]:
     """Return enabled providers that hold every required capability.
 
-    Preference order is the config order. An explicit ``provider`` must itself
-    be capable. Without ``fallback`` it is the only candidate. With ``fallback``
-    it runs first and the remaining capable providers follow in preference order.
+    Higher ``routing.weights`` run first. Equal weights keep preference order.
+    An explicit ``provider`` must itself be capable. Without ``fallback`` it is
+    the only candidate. With ``fallback`` it runs first and the remaining
+    capable providers follow weight order.
     """
 
     required = set(config["routing"]["required_capabilities"])
@@ -32,6 +34,11 @@ def select_candidates(
         item = by_name[name]
         if item["enabled"] and required <= set(item["capabilities"]):
             capable.append(name)
+    ordered = order_candidates(
+        capable,
+        preference=list(config["routing"]["preference"]),
+        weights=config["routing"].get("weights") or {},
+    )
     if provider is not None:
         if provider not in by_name:
             known = ", ".join(sorted(by_name))
@@ -46,8 +53,8 @@ def select_candidates(
             )
         if not fallback:
             return [provider]
-        return [provider, *[name for name in capable if name != provider]]
-    if not capable:
+        return [provider, *[name for name in ordered if name != provider]]
+    if not ordered:
         need = ", ".join(sorted(required))
         raise HarnessError(f"no enabled provider satisfies capabilities [{need}]")
-    return capable
+    return ordered
