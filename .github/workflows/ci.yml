@@ -56,6 +56,9 @@ jobs:
       - name: Scope tests
         run: python -X utf8 -B tools/test_check_v3_orientation_scope.py
 
+      - name: Install the package
+        run: python -m pip install -e .
+
       - name: Pytest suites
         run: |
           set -euo pipefail
