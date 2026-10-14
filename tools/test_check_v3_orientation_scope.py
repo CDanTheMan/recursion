@@ -181,6 +181,7 @@ class ScopeCheckTests(unittest.TestCase):
         self.assertIn("scripts/v3/harness/redact.py", gate.PRODUCT_SLICE)
         self.assertIn("pyproject.toml", gate.ALLOWED)
         self.assertIn("docs/USER-GUIDE.md", gate.ALLOWED)
+        self.assertIn("docs/ARCHITECTURE.md", gate.ALLOWED)
         self.assertIn("CHANGELOG.md", gate.ALLOWED)
         self.assertIn(".github/workflows/release.yml", gate.ALLOWED)
         self.assertNotIn("docs/v3/RESEARCH-SCOPE.md", gate.ALLOWED)

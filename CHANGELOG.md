@@ -72,3 +72,8 @@ after that cut.
   a conflict is refused and recorded in the report. `recursion clean` prunes
   old run state, worktrees, and task branches, with `--older-than` and
   `--dry-run`.
+- `docs/ARCHITECTURE.md` diagrams plan, schedule, worktree, provider,
+  review, landing, and report. The README and user guide cover the landed
+  providers and commands, with Linux and Windows troubleshooting. The docs
+  drift test checks subcommands, flags, provider names, config keys, and
+  that diagram.
