@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Parse checked-in headless transcripts. No live provider process.
 
-The lines follow the published event shapes: Gemini stream-json, Cursor
-stream-json, and OpenCode ``run --format json``. A missing usage or cost
-figure stays unknown.
+The lines follow published and captured event shapes: Claude stream-json,
+Codex jsonl, Grok streaming-json, Gemini stream-json, Cursor stream-json,
+and OpenCode ``run --format json``. A missing usage or cost figure stays
+unknown.
 """
 
 from __future__ import annotations
@@ -28,6 +29,41 @@ def _load(name: str) -> str:
 
 
 class StreamTests(unittest.TestCase):
+    def test_claude_result_is_the_assistant_text(self) -> None:
+        parsed = parse_transcript("claude", _load("claude-stream.jsonl"))
+        self.assertEqual(parsed["text"], "pong")
+        self.assertNotIn("read", parsed["text"])
+        self.assertEqual(parsed["usage"]["input_tokens"], 12)
+        self.assertEqual(parsed["usage"]["output_tokens"], 3)
+        self.assertEqual(parsed["usage"]["cost"], 0.01)
+
+    def test_claude_api_error_message_is_not_the_fallback_text(self) -> None:
+        text = "\n".join(
+            (
+                '{"type":"assistant","is_api_error_message":true,"error":"authentication_failed",'
+                '"message":{"content":[{"type":"text","text":"Not logged in"}]}}',
+            )
+        )
+        parsed = parse_transcript("claude", text)
+        self.assertEqual(parsed["text"], "")
+
+    def test_codex_agent_message_skips_command_output(self) -> None:
+        parsed = parse_transcript("codex", _load("codex-stream.jsonl"))
+        self.assertEqual(parsed["text"], "pong")
+        self.assertNotIn("TOOL_OUTPUT_MARKER", parsed["text"])
+        self.assertEqual(parsed["usage"]["input_tokens"], 20)
+        self.assertEqual(parsed["usage"]["output_tokens"], 4)
+        self.assertIsNone(parsed["usage"]["cost"])
+
+    def test_grok_text_events_skip_thoughts_and_tool_output(self) -> None:
+        parsed = parse_transcript("grok", _load("grok-stream.jsonl"))
+        self.assertEqual(parsed["text"], "Here's a summary")
+        self.assertNotIn("Analyzing", parsed["text"])
+        self.assertNotIn("main.rs", parsed["text"])
+        self.assertEqual(parsed["usage"]["input_tokens"], 812)
+        self.assertEqual(parsed["usage"]["output_tokens"], 45)
+        self.assertIsNone(parsed["usage"]["cost"])
+
     def test_gemini_stats_keep_a_known_zero_cache_and_an_unknown_cost(self) -> None:
         parsed = parse_transcript("gemini", _load("gemini-stream.jsonl"))
         self.assertEqual(parsed["text"], "Hello from Gemini.")
@@ -62,6 +98,14 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(parsed["usage"]["input_tokens"], 13174)
         self.assertEqual(parsed["usage"]["output_tokens"], 11)
         self.assertEqual(parsed["usage"]["cost"], 0.0019827)
+
+    def test_captured_opencode_pong_keeps_a_reported_zero_cost(self) -> None:
+        parsed = parse_transcript("opencode", _load("opencode-stream-captured.jsonl"))
+        self.assertEqual(parsed["text"], "pong")
+        self.assertEqual(parsed["usage"]["input_tokens"], 105)
+        self.assertEqual(parsed["usage"]["output_tokens"], 3)
+        self.assertEqual(parsed["usage"]["cost"], 0.0)
+        self.assertIsNotNone(parsed["usage"]["cost"])
 
     def test_opencode_without_step_finish_stays_unknown(self) -> None:
         parsed = parse_transcript("opencode", _load("opencode-stream-no-usage.jsonl"))

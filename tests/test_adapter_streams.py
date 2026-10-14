@@ -51,8 +51,8 @@ CODEX_SUCCESS = "\n".join(
 )
 GROK_SUCCESS = "\n".join(
     (
-        '{"type":"content","content":"café done"}',
-        '{"usage":{"prompt_tokens":8,"completion_tokens":5,"cost":0.02}}',
+        '{"type":"text","data":"café done"}',
+        '{"type":"end","usage":{"input_tokens":8,"output_tokens":5},"total_cost_usd":0.02}',
     )
 )
 
@@ -96,7 +96,7 @@ def _assert_runner_contract(adapter, spawned) -> None:
     kwargs = spawned.call_args.kwargs
     assert kwargs["timeout_seconds"] == 15
     assert kwargs["cwd"] is None
-    if adapter.name == "claude":
+    if adapter.name in {"claude", "codex"}:
         assert kwargs["stdin_text"] == TASK
     else:
         assert kwargs["stdin_text"] is None

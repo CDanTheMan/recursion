@@ -20,11 +20,15 @@ if str(ROOT) not in sys.path:
 
 from scripts.v3.harness.doctor import live_requested  # noqa: E402
 from scripts.v3.harness.providers import (  # noqa: E402
+    ClaudeHeadlessProvider,
+    CodexExecProvider,
     CursorHeadlessProvider,
     GeminiHeadlessProvider,
+    GrokHeadlessProvider,
     OpenCodeHeadlessProvider,
     ProviderRequest,
 )
+from scripts.v3.harness.streams import parse_transcript  # noqa: E402
 from scripts.v3.harness.usage import parse_usage  # noqa: E402
 
 
@@ -46,26 +50,34 @@ class LiveGateTests(unittest.TestCase):
 
 
 class LiveSmokeTests(unittest.TestCase):
+    def test_claude_smoke(self) -> None:
+        self._run("claude", ClaudeHeadlessProvider)
+
+    def test_codex_smoke(self) -> None:
+        self._run("codex", CodexExecProvider)
+
+    def test_grok_smoke(self) -> None:
+        self._run("grok", GrokHeadlessProvider)
+
     def test_gemini_smoke(self) -> None:
-        if not live_requested("gemini"):
-            self.skipTest("set RECURSION_LIVE=1 and install gemini; never runs in CI")
-        result = GeminiHeadlessProvider().execute(REQUEST, allow_live=True, timeout_seconds=180)
-        self._assert_stream(result.text)
+        self._run("gemini", GeminiHeadlessProvider)
 
     def test_cursor_smoke(self) -> None:
-        if not live_requested("cursor-agent"):
-            self.skipTest("set RECURSION_LIVE=1 and install cursor-agent; never runs in CI")
-        result = CursorHeadlessProvider().execute(REQUEST, allow_live=True, timeout_seconds=180)
-        self._assert_stream(result.text)
+        self._run("cursor-agent", CursorHeadlessProvider)
 
     def test_opencode_smoke(self) -> None:
-        if not live_requested("opencode"):
-            self.skipTest("set RECURSION_LIVE=1 and install opencode; never runs in CI")
-        result = OpenCodeHeadlessProvider().execute(REQUEST, allow_live=True, timeout_seconds=180)
-        self._assert_stream(result.text)
+        self._run("opencode", OpenCodeHeadlessProvider)
 
-    def _assert_stream(self, text: str) -> None:
+    def _run(self, command: str, adapter_cls) -> None:
+        if not live_requested(command):
+            self.skipTest(f"set RECURSION_LIVE=1 and install {command}; never runs in CI")
+        result = adapter_cls().execute(REQUEST, allow_live=True, timeout_seconds=180)
+        self._assert_stream(adapter_cls.name, result.text)
+
+    def _assert_stream(self, provider: str, text: str) -> None:
         self.assertTrue(text.strip())
+        parsed = parse_transcript(provider, text)
+        self.assertTrue(parsed["text"].strip())
         usage = parse_usage(text)
         for key in ("cost", "input_tokens", "output_tokens"):
             value = usage[key]

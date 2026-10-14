@@ -34,7 +34,10 @@ def main() -> int:
     elif provider == "codex":
         line = '{"type":"turn.completed","usage":{"input_tokens":6,"output_tokens":2}}\n'
     else:
-        line = '{"usage":{"prompt_tokens":9,"completion_tokens":3,"cost":0.03}}\n'
+        line = (
+            '{"type":"text","data":"stub reply"}\n'
+            '{"type":"end","usage":{"input_tokens":9,"output_tokens":3},"total_cost_usd":0.03}\n'
+        )
     sys.stdout.write(line)
     sys.stdout.flush()
     return 0
