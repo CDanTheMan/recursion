@@ -101,19 +101,22 @@ means the command refused the request or the run ended `budget-exceeded`,
 
 ```text
 usage: recursion [-h]
-                 {plan,run,status,resume,cancel,providers,doctor,init} ...
+                 {plan,run,status,resume,cancel,providers,doctor,init,config,logs}
+                 ...
 ```
 
 `-h` and `--help` show that text and exit. `plan`, `run`, `status`,
 `resume`, `cancel`, and `providers` also accept `--config` and `--state-dir`.
 `doctor` accepts `--config` and does not accept `--state-dir`. `init` accepts
 a path and `--force`, and does not accept `--config` or `--state-dir`.
+`config validate` accepts `--config`. `logs` accepts `--state-dir` and does
+not read the config.
 
 | Flag | Help text | Where |
 |---|---|---|
 | `-h`, `--help` | show this help message and exit | every command |
-| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor` |
-| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers` |
+| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `config validate` |
+| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `logs` |
 
 The default state directory is `.recursion/runs` in the repository root.
 One run is `RUN-` plus 16 hex characters, stored as `<run-id>.json`.
@@ -340,6 +343,53 @@ provider once.
 An existing file is left unchanged unless `--force` is set. A directory is
 refused even with `--force`. Both cases exit `2`. Parent directories are
 created. The file is UTF-8 with LF newlines.
+
+### config validate
+
+```text
+usage: recursion config validate [-h] [--config CONFIG]
+```
+
+Help: check the config against the schema and the adapters.
+
+| Flag | Help text |
+|---|---|
+| `--config CONFIG` | provider config JSON (default: config/harness.json) |
+
+`recursion config validate` reads the file, checks it against
+[config/harness.schema.json](../config/harness.schema.json), then applies the
+same adapter checks as startup. `plan`, `run`, `status`, `resume`, `doctor`,
+and `init` load the config through that same check. A schema failure names
+the field, for example `routing.retries: -1 is less than the minimum of 0`.
+Success prints `ok`, `path`, and `version`. Exit code `0` means the file is
+valid. Exit code `2` means it is not.
+
+### logs
+
+```text
+usage: recursion logs [-h] [--state-dir STATE_DIR] [--task TASK]
+                      [--provider PROVIDER] [--level {info,warning,error}]
+                      [--tail TAIL]
+                      run_id
+```
+
+Help: show JSONL events for one saved run.
+
+| Flag | Help text |
+|---|---|
+| `run_id` | saved run id |
+| `--state-dir STATE_DIR` | directory for resumable run records |
+| `--task TASK` | task index or task id |
+| `--provider PROVIDER` | provider name |
+| `--level {info,warning,error}` | minimum level: info, warning, or error |
+| `--tail TAIL` | print only the last N matching events |
+
+`run` and `resume` append events to `<state-dir>/<run-id>.jsonl` as well as
+stderr. Each object has `event`, `ts`, and `level` (`info`, `warning`, or
+`error`). Task events include `index` and `run_id`. `--task` keeps one task.
+`--provider` keeps one provider. `--level warning` keeps warnings and errors.
+`--level error` keeps errors. `--tail` is applied after those filters. Stdout
+is JSONL, one event per line. A missing run or a missing log exits `2`.
 
 ## Config reference
 
@@ -622,6 +672,11 @@ one record. `recursion resume --run RUN-...` continues tasks that are not
 `pending` or `running`. A driver that is already inside a provider call
 notices the cancel before the next attempt.
 
+`recursion logs RUN-...` prints the JSONL file for that run. Tokens and
+API-key-looking strings are replaced with `[REDACTED]` before they are
+written to the event log, the run record, or the report. A secret-shaped
+key in a stored object is replaced entirely.
+
 ## Troubleshooting
 
 | Message | What it means |
@@ -633,6 +688,7 @@ notices the cancel before the next attempt.
 | `missing provider config` | `--config` or `config/harness.json` is not a file. |
 | `provider config is not JSON` | The file does not parse. |
 | `config keys mismatch` | A required key is missing or an unknown key is present. |
+| `routing.retries:` (and other field paths) | The JSON Schema rejected that field. The text after the path says what is wrong. |
 | `config key '...' is not allowed` | The key looks like a secret. |
 | `provider config version must be 1` | `version` is not the integer `1`. |
 | `unknown provider` | The name is not `fixture`, `claude`, `codex`, `grok`, `gemini`, `cursor`, or `opencode`. |

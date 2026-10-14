@@ -1,4 +1,4 @@
-"""``recursion`` command: plan, run, status, resume, cancel, providers, doctor, and init."""
+"""``recursion`` command: plan, run, status, resume, cancel, providers, doctor, init, config, and logs."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from pathlib import Path
 
 from scripts.v3.harness.availability import default_cli_finder, provider_report
 from scripts.v3.harness.capabilities import select_candidates
-from scripts.v3.harness.config import ROOT, load_config, write_starter
+from scripts.v3.harness.config import ROOT, default_config_path, load_config, write_starter
 from scripts.v3.harness.cooldowns import CooldownStore
 from scripts.v3.harness.dag import admit_goal
 from scripts.v3.harness.doctor import diagnose, discover_installed
 from scripts.v3.harness.errors import HarnessError
 from scripts.v3.harness.isolation import GitWorktreeIsolator
-from scripts.v3.harness.log import JsonLog, read_events
+from scripts.v3.harness.log import JsonLog, read_events, select_events
 from scripts.v3.harness.orchestrate import (
     cancel_run,
     create_run,
@@ -26,6 +26,7 @@ from scripts.v3.harness.orchestrate import (
     split_goal,
 )
 from scripts.v3.harness.planning import plan_task
+from scripts.v3.harness.redact import redact
 from scripts.v3.harness.routing import require_selected, select_route
 from scripts.v3.harness.state import RunStore, default_state_dir
 
@@ -102,6 +103,19 @@ def build_parser() -> argparse.ArgumentParser:
     init = commands.add_parser("init", help="write a starter config that enables providers doctor can see")
     init.add_argument("path", type=Path, help="config path to create")
     init.add_argument("--force", action="store_true", help="overwrite an existing file")
+
+    config = commands.add_parser("config", help="check a provider config")
+    config_commands = config.add_subparsers(dest="config_command", required=True)
+    validate = config_commands.add_parser("validate", help="check the config against the schema and the adapters")
+    validate.add_argument("--config", type=Path, help="provider config JSON (default: config/harness.json)")
+
+    logs = commands.add_parser("logs", help="show JSONL events for one saved run")
+    logs.add_argument("run_id", help="saved run id")
+    logs.add_argument("--state-dir", type=Path, help="directory for resumable run records")
+    logs.add_argument("--task", help="task index or task id")
+    logs.add_argument("--provider", help="provider name")
+    logs.add_argument("--level", choices=("info", "warning", "error"), help="minimum level: info, warning, or error")
+    logs.add_argument("--tail", type=int, help="print only the last N matching events")
     return parser
 
 
@@ -119,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command in {"plan", "run", "resume"}:
             log, handle = _open_log(
                 getattr(args, "log", None),
+                _state_dir(args),
                 progress=bool(getattr(args, "progress", False)),
             )
         if args.command == "plan":
@@ -137,6 +152,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = doctor_command(args)
         elif args.command == "init":
             payload = init_command(args)
+        elif args.command == "config":
+            payload = config_command(args)
+        elif args.command == "logs":
+            payload = logs_command(args)
         else:
             raise HarnessError(f"unknown command {args.command}")
     except HarnessError as exc:
@@ -145,9 +164,15 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
     finally:
+        if log is not None:
+            log.close()
         if handle is not None:
             handle.close()
-    json.dump(payload, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
+    if args.command == "logs":
+        for record in payload:
+            print(json.dumps(redact(record), ensure_ascii=False, sort_keys=True))
+        return 0
+    json.dump(redact(payload), sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
     print()
     if args.command == "doctor" and not payload.get("ok"):
         return 1
@@ -285,9 +310,35 @@ def resume_command(args: argparse.Namespace, log: JsonLog) -> dict:
             current["concurrency"] = override
 
         store.update(record["run_id"], apply_concurrency)
+    log.bind(run_id=record["run_id"])
     route_id = record["route"]["selected_route_id"]
     log.event("run.resume", run_id=record["run_id"], status=record["status"])
     return _drive_existing(args, log, config, store, record["run_id"], route_id)
+
+
+def config_command(args: argparse.Namespace) -> dict:
+    if args.config_command != "validate":
+        raise HarnessError(f"unknown config command {args.config_command}")
+    path = args.config if args.config is not None else default_config_path()
+    loaded = load_config(path)
+    return {"ok": True, "path": str(path), "version": loaded["version"]}
+
+
+def logs_command(args: argparse.Namespace) -> list[dict]:
+    store = _store(args)
+    record = store.load(args.run_id)
+    path = store.root / f"{args.run_id}.jsonl"
+    if not path.is_file():
+        raise HarnessError(f"no log for {args.run_id}")
+    if args.tail is not None and args.tail < 0:
+        raise HarnessError("--tail must be an integer >= 0")
+    return select_events(
+        read_events(path),
+        task_index=_task_index(record, args.task),
+        provider=args.provider,
+        level=args.level,
+        tail=args.tail,
+    )
 
 
 def cancel_command(args: argparse.Namespace) -> dict:
@@ -367,6 +418,7 @@ def _drive_new_run(
         plan_source=plan_source,
         plan_fallback=plan_fallback,
     )
+    log.bind(run_id=record["run_id"])
     return _drive_existing(args, log, config, store, record["run_id"], route_id)
 
 
@@ -436,13 +488,30 @@ def _timeouts(config: dict) -> dict[str, int]:
     return {item["name"]: item["timeout_seconds"] for item in config["providers"]}
 
 
+def _state_dir(args: argparse.Namespace) -> Path:
+    return args.state_dir if getattr(args, "state_dir", None) is not None else default_state_dir()
+
+
 def _cooldowns(args: argparse.Namespace) -> CooldownStore:
     return CooldownStore(_store(args).root / "cooldowns.json")
 
 
 def _store(args: argparse.Namespace) -> RunStore:
-    root = args.state_dir if args.state_dir is not None else default_state_dir()
-    return RunStore(root)
+    return RunStore(_state_dir(args))
+
+
+def _task_index(record: dict, task: str | None) -> int | None:
+    if task is None:
+        return None
+    tasks = record.get("tasks") if isinstance(record.get("tasks"), list) else []
+    if task.isdigit():
+        index = int(task)
+        if any(isinstance(item, dict) and item.get("index") == index for item in tasks):
+            return index
+    for item in tasks:
+        if isinstance(item, dict) and item.get("id") == task and isinstance(item.get("index"), int):
+            return item["index"]
+    raise HarnessError(f"unknown task {task}")
 
 
 def _route_view(route: dict, route_id: str) -> dict:
@@ -472,7 +541,7 @@ def _stderr_is_tty() -> bool:
         return False
 
 
-def _open_log(path: str | None, *, progress: bool) -> tuple[JsonLog, object | None]:
+def _open_log(path: str | None, state_dir: Path, *, progress: bool) -> tuple[JsonLog, object | None]:
     json_streams: list = []
     progress_stream = None
     handle = None
@@ -483,7 +552,7 @@ def _open_log(path: str | None, *, progress: bool) -> tuple[JsonLog, object | No
     if path:
         handle = open(path, "a", encoding="utf-8")
         json_streams.append(handle)
-    return JsonLog(json_streams, progress=progress_stream), handle
+    return JsonLog(json_streams, state_dir=state_dir, progress=progress_stream), handle
 
 
 if __name__ == "__main__":

@@ -12,6 +12,8 @@ from scripts.v3.harness.providers import adapters
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = ROOT / "config" / "harness.json"
+SCHEMA_PATH = ROOT / "config" / "harness.schema.json"
+_VALIDATOR = None
 _SECRET_KEY = re.compile(
     r"(?i)^(api[_-]?key|token|secret|password|authorization|credential|xai_api_key)$"
 )
@@ -38,6 +40,7 @@ def load_config(path: Path | None = None) -> dict:
     _reject_secrets(payload)
     if not isinstance(payload, dict):
         raise HarnessError("provider config must be an object")
+    _check_schema(payload, source)
     _require_exact_keys(
         payload,
         {"budgets", "landing", "orchestration", "providers", "review", "routing", "version"},
@@ -61,6 +64,58 @@ def load_config(path: Path | None = None) -> dict:
         "routing": routing,
         "version": 1,
     }
+
+
+def _validator():
+    global _VALIDATOR
+    if _VALIDATOR is not None:
+        return _VALIDATOR
+    if not SCHEMA_PATH.is_file():
+        raise HarnessError(f"missing config schema {SCHEMA_PATH}")
+    try:
+        import jsonschema
+    except ImportError as exc:
+        raise HarnessError("jsonschema is required to validate the config") from exc
+    try:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HarnessError(f"config schema is not JSON: {SCHEMA_PATH}") from exc
+    validator = jsonschema.Draft202012Validator(schema)
+    validator.check_schema(schema)
+    _VALIDATOR = validator
+    return validator
+
+
+def _check_schema(payload: dict, source: Path) -> None:
+    """Reject a config the schema does not accept. The path names the bad field."""
+
+    from scripts.v3.harness.redact import redact_text
+
+    errors = sorted(_validator().iter_errors(payload), key=lambda error: (list(error.absolute_path), error.message))
+    if not errors:
+        return
+    lines = []
+    for error in errors:
+        location = _schema_location(error.absolute_path)
+        message = redact_text(error.message)
+        if location:
+            lines.append(f"{source}: {location}: {message}")
+        else:
+            lines.append(f"{source}: {message}")
+    raise HarnessError("\n".join(lines))
+
+
+def _schema_location(path) -> str:
+    parts: list[str] = []
+    for item in path:
+        if isinstance(item, int):
+            if not parts:
+                parts.append(f"[{item}]")
+            else:
+                parts[-1] = f"{parts[-1]}[{item}]"
+        else:
+            parts.append(str(item))
+    return ".".join(parts)
 
 
 def _require_exact_keys(value: dict, expected: set[str], where: str) -> None:
