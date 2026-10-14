@@ -83,6 +83,7 @@ def create_run(
         "base_ref": None,
         "cancel_requested": False,
         "concurrency": concurrency,
+        "cooldowns": {},
         "created": utc_now(),
         "goal": goal,
         "plan_fallback": plan_fallback,
@@ -148,6 +149,9 @@ def drive_run(
     accept_unreviewed: bool = False,
     base_ref: str = "HEAD",
     keep_worktrees: bool = False,
+    cooldowns=None,
+    cooldown_seconds: float = 60,
+    now=None,
 ) -> dict:
     """Execute pending tasks whose dependencies have landed."""
 
@@ -242,6 +246,9 @@ def drive_run(
                 seal=lambda: checkout.commit_pending(iso, _land_message(task)),
                 snapshot=lambda: checkout.snapshot(iso),
                 restore=lambda head: checkout.restore(iso, head),
+                cooldowns=cooldowns,
+                cooldown_seconds=cooldown_seconds,
+                now=now,
             )
             diff = checkout.diff(iso)
             keep_branch = keep_worktrees or outcome["disposition"] in {"completed", "unreviewed"}
@@ -399,6 +406,7 @@ def drive_run(
         if not keep_worktrees and not any(_keeps_run_branch(task) for task in current["tasks"]):
             if checkout.delete_run_branch(current.get("run_branch")):
                 current["run_branch"] = None
+        current["cooldowns"] = {} if cooldowns is None else cooldowns.snapshot()
         current["report"] = write_reports(store.root, current)
 
     store.update(run_id, finish)

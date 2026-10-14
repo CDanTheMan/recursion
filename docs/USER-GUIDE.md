@@ -97,7 +97,7 @@ means the command refused the request or the run ended `budget-exceeded`,
 `recursion --help` lists these subcommands and no others:
 
 ```text
-usage: recursion [-h] {plan,run,status,resume,cancel} ...
+usage: recursion [-h] {plan,run,status,resume,cancel,providers} ...
 ```
 
 `-h` and `--help` show that text and exit. Every subcommand also accepts
@@ -226,6 +226,24 @@ and marks `pending` and `running` tasks `cancelled` with error `run cancelled`.
 A run whose tasks are all `completed` stays `completed`. Any other mix is
 `cancelled`. A live driver checks the flag between attempts and stops.
 
+### providers
+
+```text
+usage: recursion providers [-h] [--config CONFIG] [--state-dir STATE_DIR]
+```
+
+Help: show each provider, whether its CLI is found, its capabilities, and cooldown status.
+
+`providers` prints one JSON object. `providers` is a list, in config order.
+Each row has `name`, `enabled`, `command` (the first argv entry),
+`capabilities`, `weight`, `cli_found`, and `cooldown`. `cooldown` is `null`
+or `{reason, until}`. `until` is UTC, `YYYY-MM-DDTHH:MM:SSZ`.
+
+`cli_found` is true for `fixture` without looking it up. For every other
+provider it is true when the command resolves on `PATH`. The command does
+not start the CLI and does not probe sign-in. Active cooldowns come from
+`<state-dir>/cooldowns.json`.
+
 ## Config reference
 
 `config/harness.json` is the default file. The loader requires version `1`
@@ -280,7 +298,9 @@ count as zero. `null` means no ceiling.
 | `required_capabilities` | `["execute"]` | Every selected provider must have each of these. |
 | `preference` | `["fixture", "claude", "codex", "grok"]` | Order of capable providers. Each configured provider once. |
 | `retries` | `1` | Integer `>= 0`. Extra tries of the same provider after the first. |
-| `backoff_seconds` | `1` | Integer `>= 0`. On a rate limit, wait `backoff_seconds * (attempt + 1)` before the next try of that provider. Other failures are not delayed. |
+| `backoff_seconds` | `1` | Integer `>= 0`. On a transient error or a timeout, wait `backoff_seconds * (attempt + 1)` before the next try of that provider. |
+| `cooldown_seconds` | `60` | Integer `>= 0`. How long a provider stays unavailable when the CLI does not report a reset time. |
+| `weights` | `1` for each provider | Object naming each provider once. Integer `>= 1`. Higher weight is tried first. Equal weights keep `preference` order. |
 
 ### providers
 
@@ -313,6 +333,10 @@ not store one.
 No install and no sign-in. `recursion run --provider fixture` is the local
 path. An execute transcript names the provider, the route, the packet, and
 the task. A review transcript is `VERDICT approve` followed by `fixture review`.
+A plan whose goal starts with a line `graph` is a dependency list. Each
+following line is `id: description`, then optional ` requires cap,cap`, then
+optional ` depends id,id`. Any other goal is still one independent task per
+non-empty line. An invalid graph falls back to that line split.
 
 ### Claude Code
 
@@ -338,22 +362,49 @@ stderr. Provider stderr is not written into the run record or the JSONL log.
 ## Capability routing, retries, and fallback
 
 Routing keeps providers that are `enabled` and that hold every required
-capability, in `preference` order. `--capability` adds to that required set.
-This choice is not the M1B route id.
+capability. Higher `weights` run first. Equal weights keep `preference`
+order. `--capability` adds to that required set. This choice is not the M1B
+route id.
 
 `--provider` must be enabled and capable. Without `--fallback` it is the only
 candidate. With `--fallback` it runs first, then the other capable providers
-in preference order.
+in weight order.
 
-Each candidate is tried `retries + 1` times. A rate limit waits before the
-next try of that same provider. `RunCancelled` stops immediately. After the
-tries are used, the next candidate runs. The recorded error is the exception
-class, not the process output.
+A provider already in cooldown is skipped. The attempt is `cooldown` plus
+the stored reason, and the CLI is not started. An explicit `--provider`
+without `--fallback` fails while it is cooling. With `--fallback`, the next
+capable provider runs.
+
+Availability failures are not task failures. Exit code `401` or an auth
+phrase (`auth expired`, `not logged in`, `please log in`, `unauthorized`,
+`invalid api key`, and the same family) is `auth-expired`. Exit code `402`
+or a quota phrase (`quota`, `resource_exhausted`, `out of credits`,
+`billing`, and the same family) is `quota-exhausted`. Exit code `429` or a
+rate phrase (`rate limit`, `too many requests`, `overloaded`) is
+`rate-limited`. The harness records a cooldown and moves to the next
+eligible provider. It does not retry that provider in place. A reset time
+in the output (`retry-after: 30`, `try again in 2 minutes`, or an ISO time
+such as `2026-10-14T08:35:00Z`) sets `until`. Otherwise `until` is now plus
+`cooldown_seconds`. The output itself is not stored.
+
+A timeout, exit `500`/`502`/`503`/`504`, or a transient phrase
+(`temporarily unavailable`, `connection reset`, `connection refused`,
+`timed out`) retries the same provider with backoff, up to `retries`. Any
+other non-zero exit is a task failure: it is retried without waiting, then
+the next candidate runs. `RunCancelled` stops immediately. The recorded
+error is the exception class, not the process output.
+
+Cooldowns live in `<state-dir>/cooldowns.json` (by default
+`.recursion/runs/cooldowns.json`). Later tasks and later runs skip a
+provider until `until`. The same snapshot is copied onto the run record as
+`cooldowns`.
 
 `recursion plan --goal` and `recursion run --goal` ask the first capable
-provider for one JSON object whose only key is `tasks`. Each task has `id`,
-`description`, `required_capabilities`, and `depends_on`. The harness checks
-the shape, unique ids, known dependency ids, and cycles. Invalid output, or
+provider for one JSON object whose only key is `tasks`. The prompt includes
+a `depends_on` example: `test` depends on `build`, and independent tasks use
+`[]`. Each task has `id`, `description`, `required_capabilities`, and
+`depends_on`. The harness checks the shape, unique ids, known dependency
+ids, and cycles. Invalid output, or
 no planning provider, falls back to one task per non-empty line and logs
 `plan.fallback` with a fixed reason. The raw planner body is not stored.
 Each description is still its own M1A admission. A task's

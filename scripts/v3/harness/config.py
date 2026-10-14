@@ -129,7 +129,9 @@ def _routing(value: object, names: list[str]) -> dict:
     if not isinstance(value, dict):
         raise HarnessError("config routing must be an object")
     _require_exact_keys(
-        value, {"backoff_seconds", "preference", "required_capabilities", "retries"}, "routing"
+        value,
+        {"backoff_seconds", "cooldown_seconds", "preference", "required_capabilities", "retries", "weights"},
+        "routing",
     )
     required = _string_tuple(value["required_capabilities"], "routing.required_capabilities")
     preference = _string_tuple(value["preference"], "routing.preference")
@@ -141,12 +143,31 @@ def _routing(value: object, names: list[str]) -> dict:
     backoff = value["backoff_seconds"]
     if isinstance(backoff, bool) or not isinstance(backoff, int) or backoff < 0:
         raise HarnessError("routing.backoff_seconds must be an integer >= 0")
+    cooldown = value["cooldown_seconds"]
+    if isinstance(cooldown, bool) or not isinstance(cooldown, int) or cooldown < 0:
+        raise HarnessError("routing.cooldown_seconds must be an integer >= 0")
     return {
         "backoff_seconds": backoff,
+        "cooldown_seconds": cooldown,
         "preference": list(preference),
         "required_capabilities": list(required),
         "retries": retries,
+        "weights": _weights(value["weights"], names),
     }
+
+
+def _weights(value: object, names: list[str]) -> dict[str, int]:
+    if not isinstance(value, dict):
+        raise HarnessError("routing.weights must be an object")
+    if set(value) != set(names):
+        raise HarnessError("routing.weights must name each provider once")
+    parsed = {}
+    for name in names:
+        weight = value[name]
+        if isinstance(weight, bool) or not isinstance(weight, int) or weight < 1:
+            raise HarnessError(f"routing.weights.{name} must be an integer >= 1")
+        parsed[name] = weight
+    return parsed
 
 
 def _orchestration(value: object) -> dict:

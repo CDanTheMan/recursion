@@ -28,3 +28,9 @@ after that cut.
 - Accepted task branches merge into `recursion/run/<run-id>`. A provider
   plans `--goal` into a dependency graph, and a missing reviewer is
   `unreviewed` unless `review.accept_unreviewed` is true.
+- Capability weights, distinct rate-limit, quota, and auth failures, and
+  automatic fallback to the next eligible provider. Cooldowns persist in
+  the run state directory. `recursion providers` shows CLI presence,
+  capabilities, and cooldown status. The planner prompt asks for
+  `depends_on`, and a fixture goal that starts with `graph` emits a real
+  dependency list.

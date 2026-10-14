@@ -121,6 +121,7 @@ class HarnessSliceTests(unittest.TestCase):
                 "scripts/tests/v3/harness/landing.test.py",
                 "scripts/tests/v3/harness/orchestration.test.py",
                 "scripts/tests/v3/harness/review.test.py",
+                "scripts/tests/v3/harness/routing.test.py",
             ],
         )
         self.assertIn("scripts/v3/harness/run.py", checker.PRODUCT_SLICE)
