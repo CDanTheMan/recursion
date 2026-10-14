@@ -17,6 +17,12 @@
 - `recursion land` refuses a target branch that is checked out in another
   worktree. The merge commit uses the repository's git identity when one is
   configured, and the recursion identity otherwise.
+- `landing.conflict_retries` (default `1`, `0` disables it) lets a provider
+  reconcile a task after its merge into the run branch conflicts. The retry
+  runs on a fresh worktree cut from the run branch, then through review, and
+  is recorded on the run, in the log, in progress lines, and in the report.
+  An interrupted recovery can be resumed. Cancel stops it. The starting
+  checkout is left alone.
 
 ## 0.2.0 — 2026-10-14
 

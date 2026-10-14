@@ -77,6 +77,46 @@ def repo_map(root: Path) -> str:
     return text
 
 
+def recovery_prompt(task: dict, tasks: list[dict], paths: list[str]) -> str:
+    """Prompt a provider to reconcile one task on top of the current run branch."""
+
+    base = task.get("task") if isinstance(task.get("task"), str) else ""
+    lines = [
+        base,
+        "",
+        "The merge into the run branch conflicted.",
+        "This worktree is the current run branch. Reconcile your task on top of it.",
+        "Do not revert work that already landed.",
+        "Conflicting paths:",
+    ]
+    shown = [path for path in paths if isinstance(path, str) and path][:20]
+    if shown:
+        lines.extend(f"- {path}" for path in shown)
+    else:
+        lines.append("- (none reported)")
+    lines.append("")
+    lines.append("Already landed:")
+    landed = []
+    for item in tasks:
+        if not isinstance(item, dict) or item.get("index") == task.get("index"):
+            continue
+        if item.get("status") != "completed" or item.get("merge_status") not in {None, "landed"}:
+            continue
+        landed.append(item)
+    if not landed:
+        lines.append("Summary: none")
+    for item in landed:
+        lines.append(f"Task {item.get('id')}:")
+        lines.append("Summary: " + _clip(_summary(item), SUMMARY_LIMIT))
+        commit = item.get("commit")
+        if isinstance(commit, str) and commit:
+            lines.append(f"Commit: {commit}")
+    text = redact_text("\n".join(lines))
+    if len(text) > CONTEXT_LIMIT:
+        return text[:CONTEXT_LIMIT] + "\n[recovery context truncated]"
+    return text
+
+
 def _summary(dep: dict) -> str:
     text = dep.get("text")
     if isinstance(text, str) and text.strip():

@@ -476,6 +476,7 @@ def _drive_existing(args, log, config, store, run_id: str, route_id: str) -> dic
         keep_worktrees=bool(getattr(args, "keep_worktrees", False)),
         cooldowns=_cooldowns(args),
         cooldown_seconds=config["routing"]["cooldown_seconds"],
+        conflict_retries=config["landing"]["conflict_retries"],
     )
 
 
