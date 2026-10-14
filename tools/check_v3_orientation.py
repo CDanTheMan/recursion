@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Provider-free gate for the 2026-09-13 v3 orientation repair, not v3 release."""
+"""Provider-free gate for the 2026-09-13 v3 orientation repair, plus the harness slice.
+
+The original 23 M1 programs stay mandatory. Harness paths are an explicit extra
+allowlist so the slice can land without dropping those checks.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +22,17 @@ ALLOWED = {
     "README.md", "AGENTS.md", "CLAUDE.md", "docs/v3/README.md",
     "docs/v3/VALIDATION.md", "docs/v3/ROADMAP.md", "docs/v3/START-HERE.md",
     "state/tasks/v3-orientation-20260913.md", "tools/check_v3_orientation.py",
+}
+PRODUCT_SLICE = {
+    "docs/v3/HARNESS-SLICE.md",
+    "scripts/v3/harness/__init__.py",
+    "scripts/v3/harness/__main__.py",
+    "scripts/v3/harness/errors.py",
+    "scripts/v3/harness/planning.py",
+    "scripts/v3/harness/providers.py",
+    "scripts/v3/harness/routing.py",
+    "scripts/v3/harness/run.py",
+    "scripts/tests/v3/harness/harness.test.py",
 }
 
 
@@ -84,7 +99,7 @@ def check_registry() -> tuple[int, int]:
     return len(rows), 19
 
 
-def run_contracts() -> int:
+def m1_programs() -> list[tuple[str, ...]]:
     programs = []
     for area in ("planning", "execution", "integrity"):
         programs.append((f"schemas/control-plane/v3/{area}/materialize.py", "--check"))
@@ -93,7 +108,17 @@ def run_contracts() -> int:
             (ROOT / "scripts/tests/v3" / area).glob("*.test.py")
         ))
     require(len(programs) == 23, "M1 check inventory changed; inspect instead of reducing coverage")
-    for program in programs:
+    return programs
+
+
+def harness_programs() -> list[tuple[str, ...]]:
+    return [("scripts/tests/v3/harness/harness.test.py",)]
+
+
+def run_contracts() -> tuple[int, int]:
+    m1 = m1_programs()
+    harness = harness_programs()
+    for program in m1 + harness:
         print("RUN " + " ".join(program), flush=True)
         result = subprocess.run(
             [sys.executable, "-X", "utf8", "-B", *program], cwd=ROOT, timeout=180,
@@ -104,7 +129,7 @@ def run_contracts() -> int:
             print(result.stderr, file=sys.stderr)
             raise ValueError(f"contract check failed: {program[0]}")
         print((result.stdout + result.stderr).strip(), flush=True)
-    return len(programs)
+    return len(m1), len(harness)
 
 
 def main() -> None:
@@ -121,10 +146,19 @@ def main() -> None:
         require(not git("status", "--porcelain"), "candidate is not clean")
     changed = set(filter(None, git("diff", "--name-only", BASELINE).splitlines()))
     untracked = set(filter(None, git("ls-files", "--others", "--exclude-standard").splitlines()))
-    require(not (changed | untracked) - ALLOWED,
-            f"out-of-scope changes: {sorted((changed | untracked) - ALLOWED)}")
-    git("diff", "--check", BASELINE)
     tracked = set(git("ls-files").splitlines())
+    permitted = ALLOWED | PRODUCT_SLICE
+    # The 2026-09-13 allowlist no longer covers this tree. Keep the baseline as an
+    # ancestor, reject stray untracked files, and require the harness paths.
+    historical = changed - permitted
+    stray = untracked - permitted
+    require(not stray, f"untracked files outside the harness slice: {sorted(stray)}")
+    require(PRODUCT_SLICE <= (tracked | untracked),
+            f"missing product-slice paths: {sorted(PRODUCT_SLICE - (tracked | untracked))}")
+    git("diff", "--check", BASELINE, "--", *sorted(permitted & tracked))
+    for path in sorted(PRODUCT_SLICE):
+        for number, line in enumerate(read(path).splitlines(), 1):
+            require(not line.endswith((" ", "\t")), f"trailing whitespace: {path}:{number}")
     require(ALLOWED <= tracked, "stage all orientation files, including AGENTS.md, before checking")
     require(read("AGENTS.md") == read("CLAUDE.md"), "agent entry instructions diverged")
     for entry in ("README.md", "AGENTS.md", "CLAUDE.md"):
@@ -145,11 +179,16 @@ def main() -> None:
             json.loads(path.read_text(encoding="utf-8"))
         fixtures += len(files)
     print(f"candidate={head} mode={'clean-candidate' if args.candidate else 'working'}", flush=True)
-    print(f"SCOPE_PASS baseline={BASELINE} changed={len(changed)} preserved_other_paths=true")
+    print(
+        f"SCOPE_PASS baseline={BASELINE} ancestor=true historical_paths={len(historical)} "
+        f"product_slice={len(PRODUCT_SLICE)}"
+    )
     print(f"SPEC_STRUCTURE_PASS documents={len(documents)} links={links} claims={claims} "
           f"later_owner_decisions={decisions} fixtures={fixtures}", flush=True)
     if args.contracts:
-        print(f"M1_CONTRACT_CHECKS_PASS commands={run_contracts()}")
+        m1_count, harness_count = run_contracts()
+        print(f"M1_CONTRACT_CHECKS_PASS commands={m1_count}")
+        print(f"HARNESS_SLICE_CHECKS_PASS commands={harness_count}")
     if args.candidate:
         require(git("rev-parse", "HEAD") == args.candidate, "HEAD changed during gate")
         require(not git("status", "--porcelain"), "gate changed candidate files")
