@@ -11,63 +11,25 @@
   provider is reviewed and can complete without `review.accept_unreviewed`.
   A config that leaves only one fixture enabled still records the task as
   `unreviewed`.
-- `scripts/install.sh` and `scripts/install.ps1` create a virtualenv, install
-  this checkout, run `recursion doctor`, and print the next commands. CI runs
-  the Linux script and the Windows script, then checks `recursion --help`.
-  The package depends on `jsonschema` 4.23.0 so that install can validate
-  `config/harness.json`.
-- Fake-only tests cover thin harness branches in stream parsing, config
-  rejection, doctor sign-in probes, cooldown files, and run records. They
-  do not start a provider CLI.
 
 ### Changed
 
-- Headless adapters match the CLIs checked on 2026-10-14. Claude Code 2.1.299
-  needs `--verbose` with `--output-format stream-json`, and the prompt stays
-  on stdin. Codex CLI 0.162.1 uses `exec --json --approve-for-me` and reads
-  the prompt from stdin (`-`). Grok 1.0.52 reads `--prompt-file` and
-  `--always-approve` (`--no-auto-update` included). Gemini CLI 0.64.0 uses
-  `--approval-mode yolo` and `--skip-trust`. Cursor Agent `2026.10.14-0f9edde`
-  uses `--force` and `--trust`. OpenCode 1.19.0 uses `run --format json --auto`,
-  and `doctor` probes `opencode auth list` with no extra flags. Prompts longer
-  than 7000 characters go through stdin or a file. Windows `.ps1` shims are
-  resolved and started with PowerShell `-File`. `recursion doctor --live`
-  sends one tiny prompt to each enabled, signed-in provider and stays off
-  unless that flag is passed, including in CI.
-- `recursion cancel` stops a live provider process that is still running, and a
-  provider `timeout_seconds` stops it the same way. Children started by that
-  process are stopped too: a process group on Linux and a job object on
-  Windows. Resume still continues tasks that were cancelled.
-- `recursion clean` leaves a run in place when it is `running`, `pending`, or
-  resumable, and records the reason under `skipped`. An unlanded run branch
-  (no `land.status` of `merged`, and not already in the current or default
-  branch) and a worktree with uncommitted changes are skipped unless
-  `--include-unlanded` is set. `--dry-run` prints the same removed and skipped
-  lists.
-- `recursion land` refuses a target branch that is checked out in another
-  worktree. The merge commit uses the repository's git identity when one is
-  configured, and the recursion identity otherwise.
-- `landing.conflict_retries` (default `1`, `0` disables it) lets a provider
-  reconcile a task after its merge into the run branch conflicts. The retry
-  runs on a fresh worktree cut from the run branch, then through review, and
-  is recorded on the run, in the log, in progress lines, and in the report.
-  An interrupted recovery can be resumed. Cancel stops it. The starting
-  checkout is left alone. On Windows the run-record lock waits when another
-  process already holds it, so that cancel is not rejected with a permission
-  error while a provider is still running.
+- The README quickstart no longer sets `review.accept_unreviewed`. `init`
+  enables both fixtures, and the run does not pin a provider, so review
+  finishes and `land` and `clean` succeed.
 
-## 0.2.0 — 2026-10-14
+## 0.1.0 — 2026-10-14
 
 This is the standalone fork [CDanTheMan/recursion](https://github.com/CDanTheMan/recursion).
 The v1/v2 trunk was removed on 2026-09-28 and remains at tag
 `pre-v3-clean-cut-20260928`. The notes below are what landed on this fork
-after that cut.
+after that cut. No tag and no GitHub release accompany this section.
 
 ### Added
 
 - `recursion` console script, installed with `python -m pip install -e .`.
   Subcommands: `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`,
-  `init`, `config validate`, and `logs`.
+  `init`, `config validate`, `logs`, `land`, and `clean`.
 - Provider adapters `fixture`, `claude`, `codex`, and `grok`. Live CLIs start
   only with `--allow-live`. The config refuses secret-shaped keys.
 - Provider adapters `gemini`, `cursor` (`cursor-agent`), and `opencode`,
@@ -124,3 +86,51 @@ after that cut.
   providers and commands, with Linux and Windows troubleshooting. The docs
   drift test checks subcommands, flags, provider names, config keys, and
   that diagram.
+- `scripts/install.sh` and `scripts/install.ps1` create a virtualenv, install
+  this checkout, run `recursion doctor`, and print the next commands. CI runs
+  both scripts and checks `recursion --help`. The package depends on
+  `jsonschema` 4.23.0 so that install can validate `config/harness.json`.
+- Fake-only tests cover thin harness branches in stream parsing, config
+  rejection, doctor sign-in probes, cooldown files, and run records. They
+  do not start a provider CLI.
+- The README quickstart is the fixture path through install, `doctor`,
+  `init`, `plan`, `run`, `status`, `logs`, `land`, and `clean`. CI extracts
+  that bash fence and runs it on Ubuntu and Windows.
+
+### Changed
+
+- Headless adapters match the CLIs checked on 2026-10-14. Claude Code 2.1.299
+  needs `--verbose` with `--output-format stream-json`, and the prompt stays
+  on stdin. Codex CLI 0.162.1 uses `exec --json --approve-for-me` and reads
+  the prompt from stdin (`-`). Grok 1.0.52 reads `--prompt-file` and
+  `--always-approve` (`--no-auto-update` included). Gemini CLI 0.64.0 uses
+  `--approval-mode yolo` and `--skip-trust`. Cursor Agent `2026.10.14-0f9edde`
+  uses `--force` and `--trust`. OpenCode 1.19.0 uses `run --format json --auto`,
+  and `doctor` probes `opencode auth list` with no extra flags. Prompts longer
+  than 7000 characters go through stdin or a file. Windows `.ps1` shims are
+  resolved and started with PowerShell `-File`. `recursion doctor --live`
+  sends one tiny prompt to each enabled, signed-in provider and stays off
+  unless that flag is passed, including in CI.
+- `recursion cancel` stops a live provider process that is still running, and a
+  provider `timeout_seconds` stops it the same way. Children started by that
+  process are stopped too: a process group on Linux and a job object on
+  Windows. Resume still continues tasks that were cancelled.
+- `recursion clean` leaves a run in place when it is `running`, `pending`, or
+  resumable, and records the reason under `skipped`. An unlanded run branch
+  (no `land.status` of `merged`, and not already in the current or default
+  branch) and a worktree with uncommitted changes are skipped unless
+  `--include-unlanded` is set. `--dry-run` prints the same removed and skipped
+  lists.
+- `recursion land` refuses a target branch that is checked out in another
+  worktree. The merge uses the repository's git identity when one is
+  configured, and the recursion identity otherwise. A run branch that is
+  already contained in the target records `land.status` `merged` and leaves
+  HEAD where it was.
+- `landing.conflict_retries` (default `1`, `0` disables it) lets a provider
+  reconcile a task after its merge into the run branch conflicts. The retry
+  runs on a fresh worktree cut from the run branch, then through review, and
+  is recorded on the run, in the log, in progress lines, and in the report.
+  An interrupted recovery can be resumed. Cancel stops it. The starting
+  checkout is left alone. On Windows the run-record lock waits when another
+  process already holds it, so that cancel is not rejected with a permission
+  error while a provider is still running.

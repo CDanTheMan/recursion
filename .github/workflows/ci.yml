@@ -85,3 +85,57 @@ jobs:
           fi
           echo "$suites"
           python -X utf8 -B -m pytest -q --cov --cov-report=term $suites
+
+  quickstart:
+    name: quickstart / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run the README quickstart
+        run: |
+          set -euo pipefail
+          script="$(python - <<'PY'
+          from pathlib import Path
+          import os
+          text = Path("README.md").read_text(encoding="utf-8")
+          start = text.index("## Quickstart")
+          marker = "```bash\n"
+          fence = text.index(marker, start)
+          end = text.index("\n```", fence + len(marker))
+          body = text[fence + len(marker):end]
+          required = (
+              "recursion doctor",
+              "recursion init",
+              "recursion plan",
+              "recursion run",
+              "recursion status",
+              "recursion logs",
+              "recursion land",
+              "recursion clean",
+          )
+          missing = [name for name in required if name not in body]
+          if missing:
+              raise SystemExit("quickstart fence is missing: " + ", ".join(missing))
+          out = Path(os.environ.get("RUNNER_TEMP") or os.environ.get("TEMP") or "/tmp") / "recursion-readme-quickstart.sh"
+          out.write_text(body, encoding="utf-8", newline="\n")
+          print(out)
+          PY
+          )"
+          bash -euo pipefail "$script"
