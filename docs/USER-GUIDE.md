@@ -84,9 +84,13 @@ Say hello
 ```
 
 With only `fixture` as a candidate, review is `skipped` because there is no
-second provider. The task still completes. Exit code `0` means the run
-completed. Exit code `2` means the command refused the request or the run
-ended `budget-exceeded`, `cancelled`, `failed`, or `review-rejected`.
+second provider. The default `review.accept_unreviewed` is false, so the task
+is `unreviewed` and the command exits `2`. The JSON result is still printed.
+Set `accept_unreviewed` to true when a missing reviewer should leave the
+worker result accepted. Exit code `0` means the run completed. Exit code `2`
+means the command refused the request or the run ended `budget-exceeded`,
+`cancelled`, `conflict`, `failed`, `review-rejected`, `skipped`, or
+`unreviewed`.
 
 ## Commands and flags
 
@@ -120,13 +124,16 @@ Help: admit tasks and the M1B route; do not start a provider.
 | Flag | Help text |
 |---|---|
 | `--task TASK` | one task admitted through M1A |
-| `--goal GOAL` | one M1A task per non-empty line |
+| `--goal GOAL` | plan a task graph, or one task per line when planning falls back |
 | `--log LOG` | append JSONL events to this file as well as stderr |
 
 Pass exactly one of `--task` or `--goal`. `--task` returns `planning`,
-`route`, and `task`. `--goal` returns `goal`, `route`, and `tasks`. `plan`
-does not take `--provider`, `--capability`, `--fallback`, `--allow-live`, or
-`--run`.
+`route`, and `task`. `--goal` asks a provider for a task graph and returns
+`goal`, `plan_source`, `plan_fallback`, `route`, and `tasks`. Each task has
+`id`, `depends_on`, `required_capabilities`, and its own M1A admission.
+`plan` does not take `--provider`, `--capability`, `--fallback`,
+`--allow-live`, or `--run`. Planning uses the configured preference order
+and does not start a live CLI.
 
 ### run
 
@@ -134,7 +141,7 @@ does not take `--provider`, `--capability`, `--fallback`, `--allow-live`, or
 usage: recursion run [-h] [--config CONFIG] [--state-dir STATE_DIR]
                      [--task TASK] [--goal GOAL] [--provider PROVIDER]
                      [--capability CAPABILITY] [--fallback] [--allow-live]
-                     [--log LOG]
+                     [--base-ref BASE_REF] [--keep-worktrees] [--log LOG]
 ```
 
 Help: plan, admit a route, and execute capable providers.
@@ -142,18 +149,20 @@ Help: plan, admit a route, and execute capable providers.
 | Flag | Help text |
 |---|---|
 | `--task TASK` | one task admitted through M1A |
-| `--goal GOAL` | one M1A task per non-empty line, run in parallel |
+| `--goal GOAL` | plan a task graph and run it; line splitting is the fallback |
 | `--provider PROVIDER` | use this provider instead of capability order |
 | `--capability CAPABILITY` | extra capability the provider must have |
 | `--fallback` | after an explicit provider fails, try the next capable provider |
 | `--allow-live` | start a headless CLI; omitted in tests and CI |
+| `--base-ref BASE_REF` | git ref the run branch is cut from (default: config landing.base_ref) |
+| `--keep-worktrees` | keep worktrees and branches for failed tasks |
 | `--log LOG` | append JSONL events to this file as well as stderr |
 
 Pass exactly one of `--task` or `--goal`. `--capability` may be repeated.
 `--fallback` is refused unless `--provider` is set. `--task` prints one task
-result. `--goal` prints the saved run record, including a one-line goal.
-A single task that does not complete prints the error on stderr and does not
-print the JSON result.
+result when the status is `completed` or `unreviewed`. `--goal` prints the
+saved run record. A single task that fails prints the error on stderr and
+does not print the JSON result.
 
 ### status
 
@@ -178,7 +187,8 @@ Help: show providers, log summary, and saved runs.
 
 ```text
 usage: recursion resume [-h] [--config CONFIG] [--state-dir STATE_DIR] --run
-                        RUN [--allow-live] [--log LOG]
+                        RUN [--allow-live] [--base-ref BASE_REF]
+                        [--keep-worktrees] [--log LOG]
 ```
 
 Help: continue unfinished tasks from a saved run.
@@ -187,12 +197,16 @@ Help: continue unfinished tasks from a saved run.
 |---|---|
 | `--run RUN` | required; `--help` prints no description |
 | `--allow-live` | `--help` prints no description |
+| `--base-ref BASE_REF` | git ref used when the run branch does not exist yet |
+| `--keep-worktrees` | keep worktrees and branches for failed tasks |
 | `--log LOG` | append JSONL events to this file as well as stderr |
 
 `--allow-live` has the same effect as on `run`: a headless CLI starts only
 when it is set. Resume clears a stored cancel, marks the run `running`, and
-sets tasks in `failed`, `cancelled`, `running`, `budget-exceeded`, or
-`review-rejected` back to `pending`. Tasks already `completed` stay completed.
+sets tasks in `failed`, `cancelled`, `running`, `budget-exceeded`,
+`review-rejected`, `skipped`, `conflict`, or `unreviewed` back to `pending`.
+Tasks already `completed` stay completed. The saved `depends_on` list is kept,
+so a retried dependency can unblock the tasks that were waiting on it.
 
 ### cancel
 
@@ -215,7 +229,7 @@ A run whose tasks are all `completed` stays `completed`. Any other mix is
 ## Config reference
 
 `config/harness.json` is the default file. The loader requires version `1`
-and exactly these top-level keys: `version`, `review`, `budgets`,
+and exactly these top-level keys: `version`, `review`, `landing`, `budgets`,
 `orchestration`, `providers`, `routing`. A missing or extra key is refused.
 There is no second default object: the values below are the file's values.
 
@@ -233,6 +247,13 @@ Default `1`. Must be the integer `1`.
 | Key | Default | Meaning |
 |---|---|---|
 | `max_rounds` | `2` | Integer `>= 1`. How many times a different provider may review one task. |
+| `accept_unreviewed` | `false` | Boolean. When false, a task with no finished reviewer is `unreviewed`. When true, that task is accepted. |
+
+### landing
+
+| Key | Default | Meaning |
+|---|---|---|
+| `base_ref` | `HEAD` | Non-empty git ref, without a newline, from which `recursion/run/<run-id>` is cut. `--base-ref` overrides it. |
 
 ### budgets
 
@@ -250,7 +271,7 @@ count as zero. `null` means no ceiling.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `concurrency` | `2` | Integer `>= 1`. How many goal lines run at once. |
+| `concurrency` | `2` | Integer `>= 1`. How many ready tasks run at once. |
 
 ### routing
 
@@ -329,8 +350,19 @@ next try of that same provider. `RunCancelled` stops immediately. After the
 tries are used, the next candidate runs. The recorded error is the exception
 class, not the process output.
 
-A goal is split on non-empty lines. Each line is its own M1A admission.
-Task `i` starts at the `i`-th candidate, then continues in order.
+`recursion plan --goal` and `recursion run --goal` ask the first capable
+provider for one JSON object whose only key is `tasks`. Each task has `id`,
+`description`, `required_capabilities`, and `depends_on`. The harness checks
+the shape, unique ids, known dependency ids, and cycles. Invalid output, or
+no planning provider, falls back to one task per non-empty line and logs
+`plan.fallback` with a fixed reason. The raw planner body is not stored.
+Each description is still its own M1A admission. A task's
+`required_capabilities` further filters its candidates. Task `i` starts at
+the `i`-th remaining candidate, then continues in order. A task starts only
+after every dependency is `completed` and landed, and its worktree is cut
+from the run branch so it sees that work. A failed, rejected, conflicted,
+or unreviewed dependency marks dependents `skipped` with
+`dependency <id> is <status>`.
 
 ## Cross-provider review
 
@@ -346,27 +378,42 @@ and the diff. The reviewer is asked to put `VERDICT approve` or
 | empty | Treated as revise. The note is `reviewer returned no verdict`. |
 
 Notes stored on the task are at most 1000 characters. The prompt clips the
-output and the diff at 2000 characters. If no other provider exists, the
-verdict is `skipped` (`no distinct reviewer`) and the worker result stands.
-If every reviewer fails, the verdict is `skipped` (`no reviewer completed`)
-and the worker result stands. A revise on the last round sets the task to
-`review-rejected` and the run to `review-rejected`.
+output and the diff at 2000 characters. The reviewer can read the worktree.
+Edits it makes are removed, the verdict is `rejected-write`, and the raw
+review body is not stored. If no other provider exists, the verdict is
+`skipped` (`no distinct reviewer`). If every reviewer fails, the verdict is
+`skipped` (`no reviewer completed`) and the failed attempts are stored on
+that review. Reviewer writes made before the failure are removed too.
+With `accept_unreviewed` false, either skip leaves the task `unreviewed`
+and does not merge it. With `accept_unreviewed` true, the worker result is
+accepted. A revise on the last round, or a rejected write on the last round,
+sets the task to `review-rejected`.
 
 ## Worktrees
 
-Each task gets a git worktree and branch `recursion/run/<run-id>/task-<index>`,
-created from `HEAD`. The provider's working directory is that worktree. The
-CLI removes the worktree and deletes the branch when the task finishes,
-including after a failure. Parallel adds and removes take one lock per
-repository. The stored diff is the commits, the patch, and `git status`, and
-it is cut at 8000 characters with a `[diff truncated]` suffix.
+A run branch `recursion/run/<run-id>` is cut from `landing.base_ref`
+(default `HEAD`, overridable with `--base-ref`). Each task gets a worktree
+and branch `recursion/task/<run-id>/task-<index>`, cut from the run branch.
+The two namespaces stay separate so git can store both refs. The provider's
+working directory is that worktree. If the provider leaves uncommitted
+edits, the harness commits them as `recursion: land <id>`. A commit the
+provider already made is kept. Accepted branches are merged with `--no-ff`
+into the run branch. A merge conflict aborts that merge, records the
+conflict paths, and sets the task to `conflict`. Unreviewed branches are
+kept and are not merged. Failed and rejected branches are deleted unless
+`--keep-worktrees` is set. A run that lands nothing deletes the empty run
+branch. Parallel git operations take one lock per repository. The stored
+diff is the commits, the patch, and `git status`, and it is cut at 8000
+characters with a `[diff truncated]` suffix. The commits on the branch are
+the full result.
 
 ## Reports, usage, and budgets
 
 When a run finishes, the state directory gains `<run-id>.report.json` and
 `<run-id>.report.md`. The report lists the run status, stop reason, duration,
-and usage, and for each task the text, provider, attempts, review verdicts,
-branch, duration, and diff.
+and usage, plus `run_branch`, `base_ref`, and `plan_source`. Each task lists
+its text, id, dependencies, provider, attempts, review verdicts, branch,
+commit, merge status, duration, and diff.
 
 Usage is read from provider stdout when a JSON line carries it. The last such
 object wins. Recognized fields are `input_tokens` or `prompt_tokens`,
@@ -379,7 +426,9 @@ stop, and marks unfinished tasks `budget-exceeded`.
 
 Run records live under `.recursion/runs` unless `--state-dir` is set. The
 directory is gitignored. Status values include `running`, `completed`,
-`failed`, `cancelled`, `review-rejected`, and `budget-exceeded`.
+`failed`, `cancelled`, `review-rejected`, `budget-exceeded`, `conflict`,
+`unreviewed`, and `skipped`. The task graph (`id`, `depends_on`,
+`required_capabilities`) is stored on the run, so `resume` continues it.
 
 `recursion status` lists saved runs. `recursion status --run RUN-...` prints
 one record. `recursion resume --run RUN-...` continues tasks that are not
@@ -419,7 +468,12 @@ notices the cancel before the next attempt.
 | `unknown run` | `--run` does not match a file in the state directory. |
 | `not a run id` | The id is not `RUN-` plus 16 hex characters. |
 | `malformed log` | A `--log` line is not a JSON object with an `event` string. |
-| `git <subcommand> failed (N)` | Git could not add or remove the task worktree. |
+| `git <subcommand> failed (N)` | Git could not add or remove the task worktree. Stderr is not stored. |
+| `merge conflict` | An accepted task branch did not merge into the run branch. The conflicting paths are named when git reports them. |
+| `review did not complete` | No reviewer finished, and `accept_unreviewed` is false. |
+| `dependency <id> is <status>` | A task did not start because a dependency was not accepted. |
+| `no provider has the required capabilities` | The task's `required_capabilities` matched no candidate. |
+| `planner returned invalid JSON` | The planner's text was not the required object, so the goal fell back to lines. |
 
 `plan`, `run`, and `resume` also emit a `run.refused` JSONL event when they
 raise one of these errors.
