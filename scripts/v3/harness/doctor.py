@@ -401,10 +401,12 @@ def _candidate_names(name: str, *, win32: bool, pathext: str | None) -> list[str
 
 
 def _find_named(directory: Path, candidate: str, *, win32: bool) -> Path | None:
-    direct = directory / candidate
-    if direct.is_file():
-        return direct
-    if not win32 or not directory.is_dir():
+    if not win32:
+        direct = directory / candidate
+        return direct if direct.is_file() else None
+    # Windows Path.is_file matches any case and reports the name we asked for.
+    # Scan the directory so the result keeps the on-disk shim name.
+    if not directory.is_dir():
         return None
     target = candidate.casefold()
     try:
