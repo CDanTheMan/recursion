@@ -373,10 +373,10 @@ Help: write a starter config that enables providers doctor can see.
 `init` writes a version-1 file. It enables `fixture` and every other
 registered provider whose command resolves on PATH. Sign-in is not required.
 The other providers are present and disabled. Budgets, review rounds,
-`review.accept_unreviewed`, `landing.base_ref`, concurrency, retries,
-`cooldown_seconds`, `weights`, and the capability preference match the
-shipped defaults, with preference and weights listing every registered
-provider once.
+`review.accept_unreviewed`, `landing.base_ref`, `landing.conflict_retries`,
+concurrency, retries, `cooldown_seconds`, `weights`, and the capability
+preference match the shipped defaults, with preference and weights listing
+every registered provider once.
 
 An existing file is left unchanged unless `--force` is set. A directory is
 refused even with `--force`. Both cases exit `2`. Parent directories are
@@ -525,6 +525,7 @@ Default `1`. Must be the integer `1`.
 | Key | Default | Meaning |
 |---|---|---|
 | `base_ref` | `HEAD` | Non-empty git ref, without a newline, from which `recursion/run/<run-id>` is cut. `--base-ref` overrides it. |
+| `conflict_retries` | `1` | Integer `>= 0`. After a task branch conflicts while merging into the run branch, how many times the harness may ask a provider to reconcile that task on a fresh worktree cut from the run branch. `0` records the conflict and skips dependents. |
 
 ### budgets
 
@@ -809,8 +810,17 @@ The two namespaces stay separate so git can store both refs. The provider's
 working directory is that worktree. If the provider leaves uncommitted
 edits, the harness commits them as `recursion: land <id>`. A commit the
 provider already made is kept. Accepted branches are merged with `--no-ff`
-into the run branch. A merge conflict aborts that merge, records the
-conflict paths, and sets the task to `conflict`. Unreviewed branches are
+into the run branch. A merge conflict aborts that merge and records the
+paths. When `landing.conflict_retries` is greater than `0`, the harness
+checks out a new worktree from the run branch, gives the provider the
+original task, the conflicting paths, and a short note of what already
+landed, then runs the normal review step and tries the merge again. Each
+attempt is stored on the task, in the JSONL log, in the progress line, and
+in the report. `resume` continues a recovery that was interrupted. `cancel`
+stops the recovery provider the same way it stops any other provider call.
+If recovery fails or the retries are used up, the task stays `conflict`,
+dependents are skipped, and the conflicted task branch is kept. The checkout
+you started from is not changed. Unreviewed branches are
 kept and are not merged. Failed and rejected branches are deleted unless
 `--keep-worktrees` is set. A run that lands nothing deletes the empty run
 branch. Parallel git operations take one lock per repository. The stored

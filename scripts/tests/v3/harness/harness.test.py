@@ -124,6 +124,7 @@ class HarnessSliceTests(unittest.TestCase):
                 "scripts/tests/v3/harness/ops.test.py",
                 "scripts/tests/v3/harness/orchestration.test.py",
                 "scripts/tests/v3/harness/progress.test.py",
+                "scripts/tests/v3/harness/recovery.test.py",
                 "scripts/tests/v3/harness/review.test.py",
                 "scripts/tests/v3/harness/routing.test.py",
                 "scripts/tests/v3/harness/smoke.test.py",
