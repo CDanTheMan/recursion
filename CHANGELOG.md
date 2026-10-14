@@ -8,6 +8,15 @@
   provider `timeout_seconds` stops it the same way. Children started by that
   process are stopped too: a process group on Linux and a job object on
   Windows. Resume still continues tasks that were cancelled.
+- `recursion clean` leaves a run in place when it is `running`, `pending`, or
+  resumable, and records the reason under `skipped`. An unlanded run branch
+  (no `land.status` of `merged`, and not already in the current or default
+  branch) and a worktree with uncommitted changes are skipped unless
+  `--include-unlanded` is set. `--dry-run` prints the same removed and skipped
+  lists.
+- `recursion land` refuses a target branch that is checked out in another
+  worktree. The merge commit uses the repository's git identity when one is
+  configured, and the recursion identity otherwise.
 
 ## 0.2.0 — 2026-10-14
 
