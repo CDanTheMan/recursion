@@ -32,11 +32,15 @@ V1/v2 were removed from the trunk on 2026-09-28. That tree is at tag
 
 ## Build and test
 
-Python 3.11+ and Git, from the repository root. Tests import `jsonschema` (Draft 2020-12;
-4.23.0 is the version this suite was run with). Nothing else is built.
+Python 3.11+ and Git, from the repository root. Install the pinned dependencies
+in `requirements.txt` first. Tests import `jsonschema` (Draft 2020-12; 4.23.0 is
+the version this suite was run with). Nothing else is built.
 
 ```bash
 set -euo pipefail
+python -m pip install -r requirements.txt
+python -X utf8 -B tools/check_v3_orientation.py --contracts
+python -X utf8 -B tools/test_check_v3_orientation_scope.py
 python -X utf8 -B schemas/control-plane/v3/planning/materialize.py --check
 python -X utf8 -B schemas/control-plane/v3/execution/materialize.py --check
 python -X utf8 -B schemas/control-plane/v3/integrity/materialize.py --check
@@ -53,10 +57,13 @@ That is the suite: six materialize checks, every `scripts/tests/v3/**/*.test.py`
 and the recovery-ledger tests. Keep it green. Fix the cause of a failure. Do not delete,
 skip, or weaken a check to make the run pass.
 
-`tools/check_v3_orientation.py` is a frozen 2026-09-13 path allowlist. Later work fails it
-on purpose. Leave it in place, and leave the product tree in place. It still requires this
-file and `CLAUDE.md` to match, and the text `docs/v3/START-HERE.md` in the first 2200
-characters of each.
+GitHub Actions (`.github/workflows/ci.yml`) runs the orientation `--contracts`
+check, the scope tests, and any pytest suite on pull requests and on pushes to
+`master`, for `ubuntu-latest` and `windows-latest` and Python 3.11 and 3.12.
+The orientation gate diffs the worktree against the merge-base with master.
+Paths outside its allowlist fail. Do not delete product files to satisfy it.
+It still requires this file and `CLAUDE.md` to match, and the text
+`docs/v3/START-HERE.md` in the first 2200 characters of each.
 
 ## Coding conventions
 

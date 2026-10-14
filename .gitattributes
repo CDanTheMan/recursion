@@ -1,3 +1,9 @@
+# Byte-exact checks compare fixture and schema bytes. Keep LF on every checkout,
+# including Windows, where core.autocrlf would otherwise rewrite text files.
+* text=auto eol=lf
+*.png binary
+*.zip binary
+
 # Shell scripts must stay LF — they run on the Linux VPS (CRLF breaks the shebang).
 *.sh text eol=lf
 loop/supervisor/run.sh text eol=lf
