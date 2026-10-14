@@ -155,7 +155,11 @@ class LandingTests(unittest.TestCase):
             resumed = _drive(store, record["run_id"], Flaky())
         self.assertEqual(resumed["status"], "completed")
         self.assertEqual([task["status"] for task in resumed["tasks"]], ["completed", "completed"])
-        self.assertEqual(calls, ["Build the note.", "Build the note.", "Test the note."])
+        self.assertEqual(
+            [call.split("\n", 1)[0] for call in calls],
+            ["Build the note.", "Build the note.", "Test the note."],
+        )
+        self.assertIn("Dependency context:", calls[2])
         self.assertEqual(resumed["tasks"][1]["depends_on"], ["build"])
 
     def test_unreviewed_dependency_skips_later_tasks(self) -> None:

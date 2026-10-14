@@ -79,8 +79,8 @@ task is `unreviewed` and the command exits `2` unless
 ### Commands
 
 `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `init`,
-`config validate`, and `logs`. `plan` admits tasks and does not start a live
-CLI. `run` schedules them. `--concurrency` overrides how many ready tasks
+`config validate`, `logs`, `land`, and `clean`. `plan` admits tasks and does
+not start a live CLI. `run` schedules them. `--concurrency` overrides how many ready tasks
 run at once, and `--progress` prints plain lines on stderr instead of JSONL.
 `status`, `resume`, and `cancel` use the saved
 run. `cancel` stops a provider that is still running, and the children that
@@ -88,7 +88,8 @@ process started. `providers` shows whether each CLI is on `PATH`, its weight, an
 cooldown. `doctor` checks git and sign-in without printing secrets. `init`
 writes a starter config. `config validate` checks
 [config/harness.schema.json](config/harness.schema.json). `logs` prints one
-run's JSONL and can filter by task, provider, and level.
+run's JSONL and can filter by task, provider, and level. `land` merges a
+finished run into a branch. `clean` prunes old run state.
 
 ### Providers
 

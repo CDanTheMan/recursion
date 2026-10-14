@@ -103,12 +103,13 @@ means the command refused the request or the run ended `budget-exceeded`,
 
 ```text
 usage: recursion [-h]
-                 {plan,run,status,resume,cancel,providers,doctor,init,config,logs}
+                 {plan,run,status,resume,cancel,providers,doctor,init,config,logs,land,clean}
                  ...
 ```
 
 `-h` and `--help` show that text and exit. `plan`, `run`, `status`,
-`resume`, `cancel`, and `providers` also accept `--config` and `--state-dir`.
+`resume`, `cancel`, `providers`, `land`, and `clean` also accept `--config`
+and `--state-dir`.
 `doctor` accepts `--config` and does not accept `--state-dir`. `init` accepts
 a path and `--force`, and does not accept `--config` or `--state-dir`.
 `config validate` accepts `--config`. `logs` accepts `--state-dir` and does
@@ -117,8 +118,8 @@ not read the config.
 | Flag | Help text | Where |
 |---|---|---|
 | `-h`, `--help` | show this help message and exit | every command |
-| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `config validate` |
-| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `logs` |
+| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `config validate`, `land`, `clean` |
+| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `logs`, `land`, `clean` |
 
 The default state directory is `.recursion/runs` in the repository root.
 One run is `RUN-` plus 16 hex characters, stored as `<run-id>.json`.
@@ -395,6 +396,51 @@ stderr. Each object has `event`, `ts`, and `level` (`info`, `warning`, or
 `--level error` keeps errors. `--tail` is applied after those filters. Stdout
 is JSONL, one event per line. A missing run or a missing log exits `2`.
 
+### land
+
+```text
+usage: recursion land [-h] [--config CONFIG] [--state-dir STATE_DIR]
+                      [--into INTO]
+                      run_id
+```
+
+Help: merge a finished run branch into a target branch.
+
+| Flag | Help text |
+|---|---|
+| `run_id` | saved run id |
+| `--into INTO` | branch that receives the run (default: the current branch) |
+
+`land` merges `recursion/run/<run-id>` into the current branch, or into
+`--into`, with `git merge --no-ff`. The run must be `completed` and the run
+branch must exist. A dirty worktree is refused before any merge. A conflict
+aborts the merge and leaves the target branch where it was. Both refusals
+are stored on the run as `land.status` `refused` or `conflict`, and the
+report is rewritten. A merge stores `land.status` `merged` and the new
+commit. Exit code `0` means the merge landed. Exit code `2` means it did not.
+
+### clean
+
+```text
+usage: recursion clean [-h] [--config CONFIG] [--state-dir STATE_DIR]
+                       [--older-than OLDER_THAN] [--dry-run]
+```
+
+Help: prune old run state, worktrees, and task branches.
+
+| Flag | Help text |
+|---|---|
+| `--older-than OLDER_THAN` | prune runs older than this many days |
+| `--dry-run` | list what would be removed |
+
+The default is 7 days. `0` selects every run created before now. A selected
+run loses its record, report, JSONL log, task branches
+`recursion/task/<run-id>/`, run branch `recursion/run/<run-id>`, and any
+worktree checked out on those branches. The main worktree is not removed.
+A branch checked out there is skipped and the run record stays. `--dry-run`
+prints the same lists and deletes nothing. Stdout is JSON with `dry_run`,
+`older_than_days`, `removed`, and `skipped`.
+
 ## Config reference
 
 `config/harness.json` is the default file. The loader requires version `1`
@@ -589,15 +635,19 @@ provider for one JSON object whose only key is `tasks`. The prompt includes
 a `depends_on` example: `test` depends on `build`, and independent tasks use
 `[]`. Each task has `id`, `description`, `required_capabilities`, and
 `depends_on`. The harness checks the shape, unique ids, known dependency
-ids, and cycles. Invalid output, or
-no planning provider, falls back to one task per non-empty line and logs
-`plan.fallback` with a fixed reason. The raw planner body is not stored.
-Each description is still its own M1A admission. A task's
+ids, and cycles. The same prompt includes a size-capped repository map:
+tracked file paths, plus the opening text of `README.md`,
+`docs/USER-GUIDE.md`, and `docs/v3/START-HERE.md` when they exist. Invalid
+output, or no planning provider, falls back to one task per non-empty line
+and logs `plan.fallback` with a fixed reason. The raw planner body is not
+stored. Each description is still its own M1A admission. A task's
 `required_capabilities` further filters its candidates. Task `i` starts at
 the `i`-th remaining candidate, then continues in order. A task starts only
 after every dependency is `completed` and landed, and its worktree is cut
-from the run branch so it sees that work. A failed, rejected, conflicted,
-or unreviewed dependency marks dependents `skipped` with
+from the run branch so it sees that work. The worker prompt also includes a
+size-capped summary, commit, and diff for each dependency. Token-shaped
+text in that context is redacted. A failed, rejected, conflicted, or
+unreviewed dependency marks dependents `skipped` with
 `dependency <id> is <status>`.
 
 ## Cross-provider review
@@ -691,6 +741,14 @@ key in a stored object is replaced entirely.
 | `--fallback applies to an explicit --provider` | `--fallback` was set alone. |
 | `unrecognized arguments` | The flag is not on that subcommand. Exit code 2. |
 | `concurrency must be an integer >= 1` | `--concurrency` was `0` or not an integer. Exit code 2. |
+| `older-than must be an integer >= 0` | `--older-than` was negative or not an integer. Exit code 2. |
+| `run is not finished` | `land` was asked to merge a run whose status is not `completed`. |
+| `run branch is missing` | The finished run has no `recursion/run/<run-id>` branch. |
+| `working tree is dirty` | `land` refused because `git status --porcelain` was not empty. The report records `land.status` `refused`. |
+| `merge conflict` | `land` aborted the merge. The target branch is unchanged. The report records `land.status` `conflict` and the paths. |
+| `unknown branch` | `--into` names a branch that is not in this repository. |
+| `invalid branch name` | `--into` is not a branch name. |
+| `pass --into when HEAD is detached` | `land` has no current branch to receive the run. |
 | `missing provider config` | `--config` or `config/harness.json` is not a file. |
 | `provider config is not JSON` | The file does not parse. |
 | `config keys mismatch` | A required key is missing or an unknown key is present. |

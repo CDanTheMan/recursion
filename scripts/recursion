@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recursion terminal entry point: plan, run, status, resume, cancel, providers, doctor, init, config, and logs."""
+"""Recursion terminal entry point: plan, run, status, resume, cancel, providers, doctor, init, config, logs, land, and clean."""
 
 from __future__ import annotations
 

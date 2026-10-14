@@ -7,6 +7,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+from scripts.v3.harness.context import task_prompt
 from scripts.v3.harness.dag import line_nodes
 from scripts.v3.harness.errors import HarnessError, RunCancelled
 from scripts.v3.harness.isolation import NullIsolator
@@ -227,7 +228,7 @@ def drive_run(
             start_ref = store.load(run_id).get("run_branch")
             iso = checkout.acquire(run_id, index, start_ref)
             outcome = execute_and_review(
-                task=task["task"],
+                task=task_prompt(task, store.load(run_id)["tasks"]),
                 packet_id=task["packet_id"],
                 route_id=route_id,
                 candidates=list(task["candidates"]),
