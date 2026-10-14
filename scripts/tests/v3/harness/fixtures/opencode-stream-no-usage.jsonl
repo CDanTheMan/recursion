@@ -1,0 +1,2 @@
+{"type":"step_start","timestamp":1780992719574,"sessionID":"ses_example","part":{"type":"step-start"}}
+{"type":"text","timestamp":1780992719700,"sessionID":"ses_example","part":{"type":"text","text":"Hello from OpenCode."}}

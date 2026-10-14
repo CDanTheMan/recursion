@@ -1,4 +1,4 @@
-"""``recursion`` command: plan, run, status, resume, cancel, and providers."""
+"""``recursion`` command: plan, run, status, resume, cancel, providers, doctor, and init."""
 
 from __future__ import annotations
 
@@ -9,9 +9,10 @@ from pathlib import Path
 
 from scripts.v3.harness.availability import default_cli_finder, provider_report
 from scripts.v3.harness.capabilities import select_candidates
-from scripts.v3.harness.config import ROOT, load_config
+from scripts.v3.harness.config import ROOT, load_config, write_starter
 from scripts.v3.harness.cooldowns import CooldownStore
 from scripts.v3.harness.dag import admit_goal
+from scripts.v3.harness.doctor import diagnose, discover_installed
 from scripts.v3.harness.errors import HarnessError
 from scripts.v3.harness.isolation import GitWorktreeIsolator
 from scripts.v3.harness.log import JsonLog, read_events
@@ -73,6 +74,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="show each provider, whether its CLI is found, its capabilities, and cooldown status",
     )
     _add_common(providers)
+
+    doctor = commands.add_parser("doctor", help="check git and each configured provider executable")
+    doctor.add_argument("--config", type=Path, help="provider config JSON (default: config/harness.json)")
+
+    init = commands.add_parser("init", help="write a starter config that enables providers doctor can see")
+    init.add_argument("path", type=Path, help="config path to create")
+    init.add_argument("--force", action="store_true", help="overwrite an existing file")
     return parser
 
 
@@ -101,6 +109,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = cancel_command(args)
         elif args.command == "providers":
             payload = providers_command(args)
+        elif args.command == "doctor":
+            payload = doctor_command(args)
+        elif args.command == "init":
+            payload = init_command(args)
         else:
             raise HarnessError(f"unknown command {args.command}")
     except HarnessError as exc:
@@ -113,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
             handle.close()
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
     print()
+    if args.command == "doctor" and not payload.get("ok"):
+        return 1
     if args.command in {"run", "resume"} and payload.get("status") in {
         "budget-exceeded",
         "cancelled",
@@ -252,6 +266,21 @@ def cancel_command(args: argparse.Namespace) -> dict:
 def providers_command(args: argparse.Namespace) -> dict:
     config = load_config(args.config)
     return {"providers": provider_report(config, _cooldowns(args), finder=default_cli_finder)}
+
+
+def doctor_command(args: argparse.Namespace) -> dict:
+    return diagnose(load_config(args.config))
+
+
+def init_command(args: argparse.Namespace) -> dict:
+    target = Path(args.path)
+    if target.is_dir():
+        raise HarnessError(f"{target} is a directory")
+    if target.exists() and not args.force:
+        raise HarnessError(f"refusing to overwrite {target}; pass --force")
+    enabled = discover_installed()
+    write_starter(target, set(enabled), force=args.force)
+    return {"enabled": enabled, "path": str(target)}
 
 
 def status_command(args: argparse.Namespace) -> dict:

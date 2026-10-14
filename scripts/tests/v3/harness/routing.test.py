@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import time
@@ -38,7 +39,14 @@ from scripts.v3.harness.errors import (  # noqa: E402
 )
 from scripts.v3.harness.log import NullLog  # noqa: E402
 from scripts.v3.harness.orchestrate import create_run, drive_run, reopen_run  # noqa: E402
-from scripts.v3.harness.providers import FixtureProvider, ProviderRequest, ProviderResult  # noqa: E402
+from scripts.v3.harness.providers import (  # noqa: E402
+    CursorHeadlessProvider,
+    FixtureProvider,
+    GeminiHeadlessProvider,
+    OpenCodeHeadlessProvider,
+    ProviderRequest,
+    ProviderResult,
+)
 from scripts.v3.harness.state import RunStore  # noqa: E402
 
 
@@ -67,6 +75,21 @@ class RoutingTests(unittest.TestCase):
                 self.assertNotIn("SECRET", str(error))
                 if reason is not None:
                     self.assertEqual(error.reason, reason)
+
+    def test_headless_adapters_share_the_classifier(self) -> None:
+        cases = (
+            (GeminiHeadlessProvider, 402, "SECRET resource_exhausted", ProviderQuotaExhausted),
+            (CursorHeadlessProvider, 401, "SECRET unauthorized", ProviderAuthExpired),
+            (OpenCodeHeadlessProvider, 429, "SECRET too many requests", ProviderRateLimited),
+        )
+        for cls, code, stderr, kind in cases:
+            with self.subTest(adapter=cls.name):
+                adapter = cls()
+                completed = subprocess.CompletedProcess(args=[], returncode=code, stdout="", stderr=stderr)
+                with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed):
+                    with self.assertRaises(kind) as caught:
+                        adapter.execute(REQUEST, allow_live=True)
+                self.assertNotIn("SECRET", str(caught.exception))
 
     def test_reset_time_is_read_and_then_discarded(self) -> None:
         rate = classify_failure("claude", 1, "SECRET rate limit retry-after: 30")
@@ -257,6 +280,8 @@ class RoutingTests(unittest.TestCase):
 
     def test_cli_finder_uses_doctor_without_diagnose_or_a_process(self) -> None:
         calls: list[str] = []
+        import scripts.v3.harness as harness_pkg
+
         doctor = types.ModuleType("scripts.v3.harness.doctor")
 
         def resolve_executable(name: str, **kwargs):
@@ -271,12 +296,18 @@ class RoutingTests(unittest.TestCase):
         doctor.resolve_executable = resolve_executable
         doctor.diagnose = diagnose
         previous = sys.modules.get("scripts.v3.harness.doctor")
+        previous_attr = getattr(harness_pkg, "doctor", None)
         sys.modules["scripts.v3.harness.doctor"] = doctor
+        harness_pkg.doctor = doctor
         try:
             with patch("subprocess.run") as spawned:
                 found = default_cli_finder("claude")
             spawned.assert_not_called()
         finally:
+            if previous_attr is None:
+                delattr(harness_pkg, "doctor")
+            else:
+                harness_pkg.doctor = previous_attr
             if previous is None:
                 sys.modules.pop("scripts.v3.harness.doctor", None)
             else:
