@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,13 +19,15 @@ class JsonLog:
 
     def __init__(self, streams: list) -> None:
         self.streams = streams
+        self._lock = threading.Lock()
 
     def event(self, name: str, **fields: object) -> None:
         record = {"event": name, "ts": utc_now(), **fields}
         line = json.dumps(record, ensure_ascii=False, sort_keys=True)
-        for stream in self.streams:
-            stream.write(line + "\n")
-            stream.flush()
+        with self._lock:
+            for stream in self.streams:
+                stream.write(line + "\n")
+                stream.flush()
 
 
 class NullLog:

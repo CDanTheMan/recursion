@@ -1,34 +1,42 @@
 {
   "version": 1,
+  "orchestration": {
+    "concurrency": 2
+  },
   "routing": {
     "required_capabilities": ["execute"],
     "preference": ["fixture", "claude", "codex", "grok"],
-    "retries": 1
+    "retries": 1,
+    "backoff_seconds": 1
   },
   "providers": [
     {
       "name": "fixture",
       "enabled": true,
       "capabilities": ["execute", "deterministic"],
-      "argv": ["fixture-provider", "--output-format", "json"]
+      "argv": ["fixture-provider", "--output-format", "json"],
+      "timeout_seconds": 120
     },
     {
       "name": "claude",
       "enabled": true,
       "capabilities": ["execute", "stream-json", "subscription"],
-      "argv": ["claude", "-p", "--output-format", "stream-json"]
+      "argv": ["claude", "-p", "--output-format", "stream-json"],
+      "timeout_seconds": 120
     },
     {
       "name": "codex",
       "enabled": true,
       "capabilities": ["execute", "jsonl", "subscription"],
-      "argv": ["codex", "exec", "--json"]
+      "argv": ["codex", "exec", "--json"],
+      "timeout_seconds": 120
     },
     {
       "name": "grok",
       "enabled": true,
       "capabilities": ["execute", "streaming-json", "subscription"],
-      "argv": ["grok", "-p", "--output-format", "streaming-json"]
+      "argv": ["grok", "-p", "--output-format", "streaming-json"],
+      "timeout_seconds": 120
     }
   ]
 }

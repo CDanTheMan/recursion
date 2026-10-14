@@ -38,13 +38,19 @@ def load_config(path: Path | None = None) -> dict:
     _reject_secrets(payload)
     if not isinstance(payload, dict):
         raise HarnessError("provider config must be an object")
-    _require_exact_keys(payload, {"providers", "routing", "version"}, "config")
+    _require_exact_keys(payload, {"orchestration", "providers", "routing", "version"}, "config")
     version = payload["version"]
     if isinstance(version, bool) or version != 1:
         raise HarnessError("provider config version must be 1")
     providers = _providers(payload["providers"])
     routing = _routing(payload["routing"], [item["name"] for item in providers])
-    return {"providers": providers, "routing": routing, "version": 1}
+    orchestration = _orchestration(payload["orchestration"])
+    return {
+        "orchestration": orchestration,
+        "providers": providers,
+        "routing": routing,
+        "version": 1,
+    }
 
 
 def _require_exact_keys(value: dict, expected: set[str], where: str) -> None:
@@ -75,7 +81,9 @@ def _providers(value: object) -> list[dict]:
     for item in value:
         if not isinstance(item, dict):
             raise HarnessError("each provider entry must be an object")
-        _require_exact_keys(item, {"argv", "capabilities", "enabled", "name"}, "provider")
+        _require_exact_keys(
+            item, {"argv", "capabilities", "enabled", "name", "timeout_seconds"}, "provider"
+        )
         name = item["name"]
         if not isinstance(name, str) or name not in known:
             raise HarnessError(f"unknown provider in config: {name!r}")
@@ -91,12 +99,14 @@ def _providers(value: object) -> list[dict]:
             raise HarnessError(f"provider {name} argv does not match the adapter")
         if capabilities != cls.CAPABILITIES:
             raise HarnessError(f"provider {name} capabilities do not match the adapter")
+        timeout_seconds = _positive_int(item["timeout_seconds"], f"provider {name} timeout_seconds")
         parsed.append(
             {
                 "argv": list(argv),
                 "capabilities": list(capabilities),
                 "enabled": item["enabled"],
                 "name": name,
+                "timeout_seconds": timeout_seconds,
             }
         )
     if seen != set(known):
@@ -108,7 +118,9 @@ def _providers(value: object) -> list[dict]:
 def _routing(value: object, names: list[str]) -> dict:
     if not isinstance(value, dict):
         raise HarnessError("config routing must be an object")
-    _require_exact_keys(value, {"preference", "required_capabilities", "retries"}, "routing")
+    _require_exact_keys(
+        value, {"backoff_seconds", "preference", "required_capabilities", "retries"}, "routing"
+    )
     required = _string_tuple(value["required_capabilities"], "routing.required_capabilities")
     preference = _string_tuple(value["preference"], "routing.preference")
     if sorted(preference) != sorted(names) or len(preference) != len(names):
@@ -116,11 +128,28 @@ def _routing(value: object, names: list[str]) -> dict:
     retries = value["retries"]
     if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
         raise HarnessError("routing.retries must be an integer >= 0")
+    backoff = value["backoff_seconds"]
+    if isinstance(backoff, bool) or not isinstance(backoff, int) or backoff < 0:
+        raise HarnessError("routing.backoff_seconds must be an integer >= 0")
     return {
+        "backoff_seconds": backoff,
         "preference": list(preference),
         "required_capabilities": list(required),
         "retries": retries,
     }
+
+
+def _orchestration(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise HarnessError("config orchestration must be an object")
+    _require_exact_keys(value, {"concurrency"}, "orchestration")
+    return {"concurrency": _positive_int(value["concurrency"], "orchestration.concurrency")}
+
+
+def _positive_int(value: object, where: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise HarnessError(f"{where} must be an integer >= 1")
+    return value
 
 
 def _string_tuple(value: object, where: str) -> tuple[str, ...]:

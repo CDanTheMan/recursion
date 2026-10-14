@@ -13,6 +13,7 @@ loop/logs/
 .DS_Store
 .claude/
 .tmp/
+.recursion/
 
 # Local tool binaries (downloaded, not committed): TLA+ tools for FU-03
 tools/tlaplus/
