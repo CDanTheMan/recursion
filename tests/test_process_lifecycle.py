@@ -622,13 +622,14 @@ def _reap(pid: int, group: int = 0) -> None:
             capture_output=True,
         )
         return
+    sigkill = getattr(signal, "SIGKILL", 9)
     if group > 0 and group != os.getpgrp():
         try:
-            os.killpg(group, signal.SIGKILL)
+            os.killpg(group, sigkill)
         except ProcessLookupError:
             return
         return
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, sigkill)
     except ProcessLookupError:
         return
