@@ -38,16 +38,20 @@ def load_config(path: Path | None = None) -> dict:
     _reject_secrets(payload)
     if not isinstance(payload, dict):
         raise HarnessError("provider config must be an object")
-    _require_exact_keys(payload, {"orchestration", "providers", "routing", "version"}, "config")
+    _require_exact_keys(payload, {"budgets", "orchestration", "providers", "review", "routing", "version"}, "config")
     version = payload["version"]
     if isinstance(version, bool) or version != 1:
         raise HarnessError("provider config version must be 1")
     providers = _providers(payload["providers"])
     routing = _routing(payload["routing"], [item["name"] for item in providers])
     orchestration = _orchestration(payload["orchestration"])
+    review = _review(payload["review"])
+    budgets = _budgets(payload["budgets"])
     return {
+        "budgets": budgets,
         "orchestration": orchestration,
         "providers": providers,
+        "review": review,
         "routing": routing,
         "version": 1,
     }
@@ -144,6 +148,40 @@ def _orchestration(value: object) -> dict:
         raise HarnessError("config orchestration must be an object")
     _require_exact_keys(value, {"concurrency"}, "orchestration")
     return {"concurrency": _positive_int(value["concurrency"], "orchestration.concurrency")}
+
+
+def _review(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise HarnessError("config review must be an object")
+    _require_exact_keys(value, {"max_rounds"}, "review")
+    return {"max_rounds": _positive_int(value["max_rounds"], "review.max_rounds")}
+
+
+def _budgets(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise HarnessError("config budgets must be an object")
+    _require_exact_keys(value, {"max_cost", "max_input_tokens", "max_output_tokens"}, "budgets")
+    return {
+        "max_cost": _optional_number(value["max_cost"], "budgets.max_cost"),
+        "max_input_tokens": _optional_int(value["max_input_tokens"], "budgets.max_input_tokens"),
+        "max_output_tokens": _optional_int(value["max_output_tokens"], "budgets.max_output_tokens"),
+    }
+
+
+def _optional_int(value: object, where: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise HarnessError(f"{where} must be null or an integer >= 0")
+    return value
+
+
+def _optional_number(value: object, where: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise HarnessError(f"{where} must be null or a number >= 0")
+    return float(value)
 
 
 def _positive_int(value: object, where: str) -> int:

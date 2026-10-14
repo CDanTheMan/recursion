@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 
 from scripts.v3.harness.capabilities import select_candidates
-from scripts.v3.harness.config import load_config
+from scripts.v3.harness.config import ROOT, load_config
 from scripts.v3.harness.errors import HarnessError
+from scripts.v3.harness.isolation import GitWorktreeIsolator
 from scripts.v3.harness.log import JsonLog, read_events
 from scripts.v3.harness.orchestrate import (
     cancel_run,
@@ -97,7 +98,12 @@ def main(argv: list[str] | None = None) -> int:
             handle.close()
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
     print()
-    if args.command in {"run", "resume"} and payload.get("status") in {"failed", "cancelled"}:
+    if args.command in {"run", "resume"} and payload.get("status") in {
+        "budget-exceeded",
+        "cancelled",
+        "failed",
+        "review-rejected",
+    }:
         return 2
     return 0
 
@@ -189,12 +195,16 @@ def run_command(args: argparse.Namespace, log: JsonLog) -> dict:
     if single:
         task = record["tasks"][0]
         if record["status"] != "completed":
+            if record["status"] == "budget-exceeded":
+                raise HarnessError("budget exceeded")
             raise HarnessError(task["error"] or "no provider completed the task")
         return {
             "attempts": task["attempts"],
             "candidates": task["candidates"],
             "execution": task["execution"],
             "planning": planned[0],
+            "report": record.get("report"),
+            "reviews": task.get("reviews"),
             "route": record["route"],
             "run_id": record["run_id"],
             "status": record["status"],
@@ -209,16 +219,7 @@ def resume_command(args: argparse.Namespace, log: JsonLog) -> dict:
     record = reopen_run(store, args.run)
     route_id = record["route"]["selected_route_id"]
     log.event("run.resume", run_id=record["run_id"], status=record["status"])
-    return drive_run(
-        store,
-        record["run_id"],
-        allow_live=args.allow_live,
-        retries=config["routing"]["retries"],
-        backoff_seconds=config["routing"]["backoff_seconds"],
-        timeout_seconds=_timeouts(config),
-        route_id=route_id,
-        log=log,
-    )
+    return _drive_existing(args, log, config, store, record["run_id"], route_id)
 
 
 def cancel_command(args: argparse.Namespace) -> dict:
@@ -262,15 +263,22 @@ def _drive_new_run(args, log, *, config, goal, planned, candidates, route, route
         route=route,
         concurrency=config["orchestration"]["concurrency"],
     )
+    return _drive_existing(args, log, config, store, record["run_id"], route_id)
+
+
+def _drive_existing(args, log, config, store, run_id: str, route_id: str) -> dict:
     return drive_run(
         store,
-        record["run_id"],
+        run_id,
         allow_live=args.allow_live,
         retries=config["routing"]["retries"],
         backoff_seconds=config["routing"]["backoff_seconds"],
         timeout_seconds=_timeouts(config),
         route_id=route_id,
         log=log,
+        max_rounds=config["review"]["max_rounds"],
+        budgets=config["budgets"],
+        isolator=GitWorktreeIsolator(ROOT),
     )
 
 
