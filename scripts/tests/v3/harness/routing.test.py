@@ -86,7 +86,7 @@ class RoutingTests(unittest.TestCase):
             with self.subTest(adapter=cls.name):
                 adapter = cls()
                 completed = subprocess.CompletedProcess(args=[], returncode=code, stdout="", stderr=stderr)
-                with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed):
+                with patch("scripts.v3.harness.providers.run_command", return_value=completed):
                     with self.assertRaises(kind) as caught:
                         adapter.execute(REQUEST, allow_live=True)
                 self.assertNotIn("SECRET", str(caught.exception))
@@ -265,7 +265,7 @@ class RoutingTests(unittest.TestCase):
 
             stdout = StringIO()
             with patch("sys.stdout", stdout), patch("scripts.v3.harness.cli.default_cli_finder", finder), patch(
-                "scripts.v3.harness.providers.subprocess.run"
+                "scripts.v3.harness.providers.run_command"
             ) as spawned:
                 code = main(["providers", "--state-dir", str(root)])
             spawned.assert_not_called()

@@ -12,8 +12,9 @@ from scripts.v3.harness.errors import HarnessError
 
 
 DIFF_LIMIT = 8000
-# Keep the real process starter. Provider tests replace subprocess.run to prove
-# a provider CLI did not start, and that replacement must not swallow git.
+# Keep the real process starter. Provider tests replace
+# scripts.v3.harness.providers.run_command to prove a provider CLI did not
+# start, and that replacement must not swallow git.
 _RUN = subprocess.run
 _AUTHOR = ("-c", "user.email=recursion@localhost", "-c", "user.name=recursion")
 

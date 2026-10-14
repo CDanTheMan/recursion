@@ -67,7 +67,7 @@ class AdapterTests(unittest.TestCase):
         for adapter, argv in cases:
             with self.subTest(adapter=adapter.name):
                 self.assertEqual(adapter.argv(REQUEST), argv)
-                with patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+                with patch("scripts.v3.harness.providers.run_command") as spawned:
                     if adapter.name == "fixture":
                         result = adapter.execute(REQUEST)
                         self.assertFalse(result.live)
@@ -89,17 +89,18 @@ class AdapterTests(unittest.TestCase):
         for adapter, argv, stdin_text in cases:
             with self.subTest(adapter=adapter.name):
                 completed = subprocess.CompletedProcess(args=argv, returncode=0, stdout="transcript\n", stderr="SECRET")
-                with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed) as spawned:
+                with patch("scripts.v3.harness.providers.run_command", return_value=completed) as spawned:
                     result = adapter.execute(REQUEST, allow_live=True)
                 self.assertEqual(spawned.call_args.args[0], argv)
                 self.assertTrue(result.live)
                 self.assertEqual(result.text, "transcript\n")
                 self.assertNotIn("SECRET", result.text)
+                self.assertIsNone(spawned.call_args.kwargs["cwd"])
+                self.assertIsNone(spawned.call_args.kwargs["timeout_seconds"])
                 if stdin_text is None:
-                    self.assertIs(spawned.call_args.kwargs["stdin"], subprocess.DEVNULL)
-                    self.assertNotIn("input", spawned.call_args.kwargs)
+                    self.assertIsNone(spawned.call_args.kwargs["stdin_text"])
                 else:
-                    self.assertEqual(spawned.call_args.kwargs["input"], stdin_text)
+                    self.assertEqual(spawned.call_args.kwargs["stdin_text"], stdin_text)
 
     def test_live_failure_omits_stderr(self) -> None:
         for adapter in (
@@ -112,7 +113,7 @@ class AdapterTests(unittest.TestCase):
         ):
             with self.subTest(adapter=adapter.name):
                 completed = subprocess.CompletedProcess(args=[], returncode=7, stdout="", stderr="SECRET-TOKEN")
-                with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed):
+                with patch("scripts.v3.harness.providers.run_command", return_value=completed):
                     with self.assertRaises(HarnessError) as caught:
                         adapter.execute(REQUEST, allow_live=True)
                 message = str(caught.exception)
@@ -215,7 +216,7 @@ class AdapterTests(unittest.TestCase):
         stdout = StringIO()
         stderr = StringIO()
         with patch("sys.stdout", stdout), patch("sys.stderr", stderr), patch(
-            "scripts.v3.harness.providers.subprocess.run"
+            "scripts.v3.harness.providers.run_command"
         ) as spawned:
             code = main(["plan", "--task", "Plan only."])
         spawned.assert_not_called()
@@ -228,7 +229,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(events, ["plan.admitted", "route.selected"])
 
         stdout = StringIO()
-        with patch("sys.stdout", stdout), patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+        with patch("sys.stdout", stdout), patch("scripts.v3.harness.providers.run_command") as spawned:
             code = main(["status"])
         spawned.assert_not_called()
         self.assertEqual(code, 0)
@@ -240,7 +241,7 @@ class AdapterTests(unittest.TestCase):
     def test_cli_run_uses_fixture_then_falls_back_without_a_process(self) -> None:
         stdout = StringIO()
         with patch("sys.stdout", stdout), patch("sys.stderr", StringIO()), patch(
-            "scripts.v3.harness.providers.subprocess.run"
+            "scripts.v3.harness.providers.run_command"
         ) as spawned:
             code = main(["run", "--task", "Run the fixture."])
         spawned.assert_not_called()
@@ -254,7 +255,7 @@ class AdapterTests(unittest.TestCase):
         _drop_run_branches(payload["run_id"])
 
         stderr = StringIO()
-        with patch("sys.stderr", stderr), patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+        with patch("sys.stderr", stderr), patch("scripts.v3.harness.providers.run_command") as spawned:
             code = main(["run", "--task", "Need a subscription.", "--capability", "subscription"])
         spawned.assert_not_called()
         self.assertEqual(code, 2)

@@ -118,7 +118,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_fixture_review_approves_without_a_process(self) -> None:
         request = ProviderRequest(task="review me", packet_id="PACKET-1", route_id="route-a", kind="review")
-        with patch("scripts.v3.harness.providers.subprocess.run") as spawned:
+        with patch("scripts.v3.harness.providers.run_command") as spawned:
             result = FixtureProvider().execute(request)
         spawned.assert_not_called()
         self.assertTrue(result.text.startswith("VERDICT approve"))
