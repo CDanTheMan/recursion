@@ -104,6 +104,8 @@ class ReviewTests(unittest.TestCase):
     def test_config_exposes_review_rounds_and_budgets(self) -> None:
         config = load_config()
         self.assertEqual(config["review"]["max_rounds"], 2)
+        self.assertFalse(config["review"]["accept_unreviewed"])
+        self.assertEqual(config["landing"]["base_ref"], "HEAD")
         self.assertEqual(config["budgets"]["max_input_tokens"], 1_000_000)
         self.assertIsNone(config["budgets"]["max_cost"])
         raw = json.loads((ROOT / "config" / "harness.json").read_text(encoding="utf-8"))
@@ -198,8 +200,9 @@ class ReviewTests(unittest.TestCase):
         author = Author()
         with tempfile.TemporaryDirectory() as directory:
             finished = _drive(directory, ["author"], {"author": author}, max_rounds=2)
-        self.assertEqual(finished["status"], "completed")
+        self.assertEqual(finished["status"], "unreviewed")
         self.assertEqual(finished["tasks"][0]["reviews"][0]["verdict"], "skipped")
+        self.assertEqual(finished["tasks"][0]["reviews"][0]["notes"], "no distinct reviewer")
         self.assertEqual(len(author.tasks), 1)
 
     def test_default_drive_does_not_ask_for_review(self) -> None:
@@ -352,15 +355,40 @@ class _DiffIsolator:
         self.diff_text = diff
         self.released = False
 
-    def acquire(self, run_id: str, index: int) -> TaskIsolation:
-        return TaskIsolation(Path(f"/virtual/{index}"), f"recursion/run/{run_id}/task-{index}", "base")
+    def acquire(self, run_id: str, index: int, start_ref: str | None = None) -> TaskIsolation:
+        del start_ref
+        return TaskIsolation(Path(f"/virtual/{index}"), f"recursion/task/{run_id}/task-{index}", "base")
 
     def diff(self, item: TaskIsolation) -> str:
         del item
         return self.diff_text
 
-    def release(self, item: TaskIsolation) -> None:
+    def commit_pending(self, item: TaskIsolation, message: str) -> str | None:
+        del item, message
+        return None
+
+    def snapshot(self, item: TaskIsolation) -> str | None:
         del item
+        return None
+
+    def restore(self, item: TaskIsolation, head: str | None) -> bool:
+        del item, head
+        return False
+
+    def ensure_run_branch(self, run_id: str, base_ref: str) -> str | None:
+        del run_id, base_ref
+        return None
+
+    def merge_into_run(self, run_branch: str | None, task_branch: str) -> dict:
+        del run_branch, task_branch
+        return {"commit": None, "paths": [], "status": "landed"}
+
+    def delete_run_branch(self, branch: str | None) -> bool:
+        del branch
+        return True
+
+    def release(self, item: TaskIsolation, *, keep_branch: bool = False, keep_worktree: bool = False) -> None:
+        del item, keep_branch, keep_worktree
         self.released = True
 
 
@@ -371,8 +399,12 @@ class _BarrierIsolator:
         self.released: list[str] = []
         self.lock = threading.Lock()
 
-    def acquire(self, run_id: str, index: int) -> TaskIsolation:
-        del run_id
+    def ensure_run_branch(self, run_id: str, base_ref: str) -> str | None:
+        del run_id, base_ref
+        return None
+
+    def acquire(self, run_id: str, index: int, start_ref: str | None = None) -> TaskIsolation:
+        del run_id, start_ref
         item = TaskIsolation(Path(f"/virtual/{index}"), f"branch-{index}", "base")
         with self.lock:
             self.paths.append(str(item.path))
@@ -383,7 +415,28 @@ class _BarrierIsolator:
         del item
         return ""
 
-    def release(self, item: TaskIsolation) -> None:
+    def commit_pending(self, item: TaskIsolation, message: str) -> str | None:
+        del item, message
+        return None
+
+    def snapshot(self, item: TaskIsolation) -> str | None:
+        del item
+        return None
+
+    def restore(self, item: TaskIsolation, head: str | None) -> bool:
+        del item, head
+        return False
+
+    def merge_into_run(self, run_branch: str | None, task_branch: str) -> dict:
+        del run_branch, task_branch
+        return {"commit": None, "paths": [], "status": "landed"}
+
+    def delete_run_branch(self, branch: str | None) -> bool:
+        del branch
+        return True
+
+    def release(self, item: TaskIsolation, *, keep_branch: bool = False, keep_worktree: bool = False) -> None:
+        del keep_branch, keep_worktree
         with self.lock:
             self.released.append(str(item.path))
 

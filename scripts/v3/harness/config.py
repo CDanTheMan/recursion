@@ -38,7 +38,11 @@ def load_config(path: Path | None = None) -> dict:
     _reject_secrets(payload)
     if not isinstance(payload, dict):
         raise HarnessError("provider config must be an object")
-    _require_exact_keys(payload, {"budgets", "orchestration", "providers", "review", "routing", "version"}, "config")
+    _require_exact_keys(
+        payload,
+        {"budgets", "landing", "orchestration", "providers", "review", "routing", "version"},
+        "config",
+    )
     version = payload["version"]
     if isinstance(version, bool) or version != 1:
         raise HarnessError("provider config version must be 1")
@@ -47,8 +51,10 @@ def load_config(path: Path | None = None) -> dict:
     orchestration = _orchestration(payload["orchestration"])
     review = _review(payload["review"])
     budgets = _budgets(payload["budgets"])
+    landing = _landing(payload["landing"])
     return {
         "budgets": budgets,
+        "landing": landing,
         "orchestration": orchestration,
         "providers": providers,
         "review": review,
@@ -153,8 +159,30 @@ def _orchestration(value: object) -> dict:
 def _review(value: object) -> dict:
     if not isinstance(value, dict):
         raise HarnessError("config review must be an object")
-    _require_exact_keys(value, {"max_rounds"}, "review")
-    return {"max_rounds": _positive_int(value["max_rounds"], "review.max_rounds")}
+    _require_exact_keys(value, {"accept_unreviewed", "max_rounds"}, "review")
+    return {
+        "accept_unreviewed": _bool(value["accept_unreviewed"], "review.accept_unreviewed"),
+        "max_rounds": _positive_int(value["max_rounds"], "review.max_rounds"),
+    }
+
+
+def _landing(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise HarnessError("config landing must be an object")
+    _require_exact_keys(value, {"base_ref"}, "landing")
+    return {"base_ref": _git_ref(value["base_ref"], "landing.base_ref")}
+
+
+def _bool(value: object, where: str) -> bool:
+    if not isinstance(value, bool):
+        raise HarnessError(f"{where} must be a boolean")
+    return value
+
+
+def _git_ref(value: object, where: str) -> str:
+    if not isinstance(value, str) or value.strip() == "" or any(char in value for char in "\n\r\x00"):
+        raise HarnessError(f"{where} must be a git ref")
+    return value.strip()
 
 
 def _budgets(value: object) -> dict:

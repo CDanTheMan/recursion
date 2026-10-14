@@ -77,7 +77,9 @@ def execute_with_policy(
                 {"attempt": attempt, "live": result.live, "ok": True, "provider": name}
             )
             return result, attempts
-    raise HarnessError("no provider completed the task: " + ", ".join(failures))
+    error = HarnessError("no provider completed the task: " + ", ".join(failures))
+    error.attempts = attempts
+    raise error
 
 
 def _execute(
