@@ -1,0 +1,4 @@
+{"type":"step_start","timestamp":1780992719574,"sessionID":"ses_example","part":{"type":"step-start"}}
+{"type":"tool_use","timestamp":1780992719600,"sessionID":"ses_example","part":{"type":"tool","tool":"read","state":{"status":"completed","output":"TOOL_OUTPUT_MARKER"}}}
+{"type":"text","timestamp":1780992719700,"sessionID":"ses_example","part":{"type":"text","text":"Hello from OpenCode."}}
+{"type":"step_finish","timestamp":1780992719800,"sessionID":"ses_example","part":{"type":"step-finish","reason":"stop","tokens":{"input":13174,"output":11,"reasoning":0,"cache":{"read":0,"write":0}},"cost":0.0019827}}

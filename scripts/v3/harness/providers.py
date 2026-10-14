@@ -272,6 +272,83 @@ class GrokHeadlessProvider(ProviderAdapter):
         )
 
 
+class GeminiHeadlessProvider(ProviderAdapter):
+    """Gemini CLI headless mode: ``gemini -p <prompt> --output-format stream-json``.
+
+    ``-p`` forces non-interactive execution. The task is that prompt argument.
+    Stdin is not attached. The process starts only when ``allow_live`` is true.
+    """
+
+    name = "gemini"
+    STATIC_ARGV = ("gemini", "-p", "--output-format", "stream-json")
+    CAPABILITIES = ("execute", "stream-json", "subscription")
+
+    def argv(self, request: ProviderRequest) -> tuple[str, ...]:
+        return ("gemini", "-p", request.task, "--output-format", "stream-json")
+
+    def execute(
+        self,
+        request: ProviderRequest,
+        *,
+        allow_live: bool = False,
+        timeout_seconds: int | None = None,
+    ) -> ProviderResult:
+        _refuse_unless_live(self, allow_live)
+        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+
+
+class CursorHeadlessProvider(ProviderAdapter):
+    """Cursor Agent print mode: ``cursor-agent -p --output-format stream-json <prompt>``.
+
+    ``cursor-agent`` is the installed binary (``agent`` is the same program).
+    ``-p`` is print mode. The task is the positional prompt. Stdin is not
+    attached. The process starts only when ``allow_live`` is true.
+    """
+
+    name = "cursor"
+    STATIC_ARGV = ("cursor-agent", "-p", "--output-format", "stream-json")
+    CAPABILITIES = ("execute", "stream-json", "subscription")
+
+    def argv(self, request: ProviderRequest) -> tuple[str, ...]:
+        return ("cursor-agent", "-p", "--output-format", "stream-json", request.task)
+
+    def execute(
+        self,
+        request: ProviderRequest,
+        *,
+        allow_live: bool = False,
+        timeout_seconds: int | None = None,
+    ) -> ProviderResult:
+        _refuse_unless_live(self, allow_live)
+        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+
+
+class OpenCodeHeadlessProvider(ProviderAdapter):
+    """OpenCode non-interactive mode: ``opencode run --format json <prompt>``.
+
+    ``--format json`` writes one JSON event per line. The task is the positional
+    message. Stdin is not attached. The process starts only when ``allow_live``
+    is true.
+    """
+
+    name = "opencode"
+    STATIC_ARGV = ("opencode", "run", "--format", "json")
+    CAPABILITIES = ("execute", "json")
+
+    def argv(self, request: ProviderRequest) -> tuple[str, ...]:
+        return ("opencode", "run", "--format", "json", request.task)
+
+    def execute(
+        self,
+        request: ProviderRequest,
+        *,
+        allow_live: bool = False,
+        timeout_seconds: int | None = None,
+    ) -> ProviderResult:
+        _refuse_unless_live(self, allow_live)
+        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
+
+
 def adapters() -> dict[str, type[ProviderAdapter]]:
     """Registered adapter classes, keyed by provider name."""
 
@@ -280,6 +357,9 @@ def adapters() -> dict[str, type[ProviderAdapter]]:
         ClaudeHeadlessProvider,
         CodexExecProvider,
         GrokHeadlessProvider,
+        GeminiHeadlessProvider,
+        CursorHeadlessProvider,
+        OpenCodeHeadlessProvider,
     )
     return {cls.name: cls for cls in classes}
 

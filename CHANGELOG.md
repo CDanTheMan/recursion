@@ -19,9 +19,15 @@ after that cut.
 ### Added
 
 - `recursion` console script, installed with `python -m pip install -e .`.
-  Subcommands: `plan`, `run`, `status`, `resume`, `cancel`.
+  Subcommands: `plan`, `run`, `status`, `resume`, `cancel`, `doctor`, `init`.
 - Provider adapters `fixture`, `claude`, `codex`, and `grok`. Live CLIs start
   only with `--allow-live`. The config refuses secret-shaped keys.
+- Provider adapters `gemini`, `cursor` (`cursor-agent`), and `opencode`,
+  disabled in the default config. `recursion doctor` checks git, PATH
+  (including Windows `.cmd` and `.exe` shims), version, and a cheap sign-in
+  without printing secrets. `recursion init` writes a starter config and
+  enables the providers whose commands resolve. Opt-in live smokes stay off
+  unless `RECURSION_LIVE=1` and the CLI is present, and they stay off in CI.
 - Capability routing, retries, fallback, per-task git worktrees, cross-provider
   review, run reports, usage figures, and budgets.
 - Saved runs under `.recursion/runs`, with resume and cancel.

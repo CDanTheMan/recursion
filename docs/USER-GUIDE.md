@@ -97,17 +97,19 @@ means the command refused the request or the run ended `budget-exceeded`,
 `recursion --help` lists these subcommands and no others:
 
 ```text
-usage: recursion [-h] {plan,run,status,resume,cancel} ...
+usage: recursion [-h] {plan,run,status,resume,cancel,doctor,init} ...
 ```
 
-`-h` and `--help` show that text and exit. Every subcommand also accepts
-`-h` / `--help`, `--config`, and `--state-dir`.
+`-h` and `--help` show that text and exit. `plan`, `run`, `status`,
+`resume`, and `cancel` also accept `--config` and `--state-dir`. `doctor`
+accepts `--config` and does not accept `--state-dir`. `init` accepts a path
+and `--force`, and does not accept `--config` or `--state-dir`.
 
 | Flag | Help text | Where |
 |---|---|---|
 | `-h`, `--help` | show this help message and exit | every command |
-| `--config CONFIG` | provider config JSON (default: config/harness.json) | every command |
-| `--state-dir STATE_DIR` | directory for resumable run records | every command |
+| `--config CONFIG` | provider config JSON (default: config/harness.json) | `plan`, `run`, `status`, `resume`, `cancel`, `doctor` |
+| `--state-dir STATE_DIR` | directory for resumable run records | `plan`, `run`, `status`, `resume`, `cancel` |
 
 The default state directory is `.recursion/runs` in the repository root.
 One run is `RUN-` plus 16 hex characters, stored as `<run-id>.json`.
@@ -228,6 +230,78 @@ A run whose tasks are all `completed` stays `completed`. Any other mix is
 running, and the children that process started, and does not begin another
 attempt. Resume clears that cancel and can run the unfinished tasks again.
 
+### doctor
+
+```text
+usage: recursion doctor [-h] [--config CONFIG]
+```
+
+Help: check git and each configured provider executable.
+
+| Flag | Help text |
+|---|---|
+| `--config CONFIG` | provider config JSON (default: config/harness.json) |
+
+Stdout is one JSON object with `git`, `ok`, and `providers`. `ok` is true
+when at least one enabled provider is usable. The process exits `0` when
+`ok` is true and `1` when it is false. A bad config still exits `2`.
+
+`git.available` is whether `git --version` succeeds. `git.version` is the
+first line of that output. On Windows, `git.longpaths` is true when
+`git config --get core.longpaths` prints `true`, `1`, or `yes`, and false
+when it is unset or another value. On other systems `git.longpaths` is
+null. A missing git does not by itself make `ok` false.
+
+Each provider row has `name`, `command`, `enabled`, `installed`, `resolved`,
+`version`, `signed_in`, `auth_method`, and `usable`. `fixture` is installed
+without a PATH lookup. It is usable when it is enabled, and `signed_in` is
+`not-applicable`. Another provider is installed when its command resolves on
+`PATH`. On Windows the search also tries `PATHEXT` and always tries `.exe`,
+`.cmd`, and `.bat`, ignoring case. It is usable when it is enabled and
+installed. `version` is the first line of `<command> --version` when that
+exits 0.
+
+Sign-in checks are local and do not start a billed prompt. The report never
+includes the variable's value, a credential file's contents, or the probe's
+stdout.
+
+| Provider | Check |
+|---|---|
+| `claude` | `claude auth status`. Exit 0 is signed in. The reported method is `authMethod` when it is one of `none`, `claude.ai`, `oauth_token`, `api_key`, `api_key_helper`, or `third_party`. |
+| `codex` | `codex login status`. Exit 0 is signed in. |
+| `grok` | `XAI_API_KEY` is set, or `~/.grok/auth.json` exists and is non-empty. The file is not read. |
+| `gemini` | `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_APPLICATION_CREDENTIALS` is set, or `~/.gemini/oauth_creds.json` exists and is non-empty. The file is not read. `GOOGLE_GENAI_USE_VERTEXAI` and `GOOGLE_GENAI_USE_GCA` alone are not treated as signed in. |
+| `cursor` | `CURSOR_API_KEY` is set, otherwise `cursor-agent status --format json`. |
+| `opencode` | `~/.local/share/opencode/auth.json` exists and is non-empty (the file is not read), otherwise `opencode auth list --format json --standalone`. An empty list, or the text `No authenticated integrations`, is signed out. `--standalone` keeps the check from attaching to a background server. |
+
+A disabled provider can be installed and still not usable. The shipped config
+leaves `gemini`, `cursor`, and `opencode` disabled, so a machine with only
+`fixture` enabled still has `ok` true.
+
+### init
+
+```text
+usage: recursion init [-h] [--force] path
+```
+
+Help: write a starter config that enables providers doctor can see.
+
+| Flag | Help text |
+|---|---|
+| `path` | config path to create |
+| `--force` | overwrite an existing file |
+
+`init` writes a version-1 file. It enables `fixture` and every other
+registered provider whose command resolves on PATH. Sign-in is not required.
+The other providers are present and disabled. Budgets, review rounds,
+`review.accept_unreviewed`, `landing.base_ref`, concurrency, retries, and
+the capability preference match the shipped defaults, with preference
+listing every registered provider once.
+
+An existing file is left unchanged unless `--force` is set. A directory is
+refused even with `--force`. Both cases exit `2`. Parent directories are
+created. The file is UTF-8 with LF newlines.
+
 ## Config reference
 
 `config/harness.json` is the default file. The loader requires version `1`
@@ -237,8 +311,9 @@ There is no second default object: the values below are the file's values.
 
 Secret-shaped keys are refused anywhere in the file, in any letter case:
 `api_key`, `apikey`, `api-key`, `token`, `secret`, `password`,
-`authorization`, `credential`, and `xai_api_key`. The harness does not read
-environment credentials and does not store keys.
+`authorization`, `credential`, and `xai_api_key`. The config loader does not
+read environment credentials and does not store keys. `doctor` can see that a
+sign-in variable is set, and it does not print the value.
 
 ### version
 
@@ -280,7 +355,7 @@ count as zero. `null` means no ceiling.
 | Key | Default | Meaning |
 |---|---|---|
 | `required_capabilities` | `["execute"]` | Every selected provider must have each of these. |
-| `preference` | `["fixture", "claude", "codex", "grok"]` | Order of capable providers. Each configured provider once. |
+| `preference` | `["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"]` | Order of capable providers. Each configured provider once. |
 | `retries` | `1` | Integer `>= 0`. Extra tries of the same provider after the first. |
 | `backoff_seconds` | `1` | Integer `>= 0`. On a rate limit, wait `backoff_seconds * (attempt + 1)` before the next try of that provider. Other failures are not delayed. |
 
@@ -297,6 +372,9 @@ a different command.
 | `claude` | `true` | `execute`, `stream-json`, `subscription` | `claude -p --output-format stream-json` | `120` |
 | `codex` | `true` | `execute`, `jsonl`, `subscription` | `codex exec --json` | `120` |
 | `grok` | `true` | `execute`, `streaming-json`, `subscription` | `grok -p --output-format streaming-json` | `120` |
+| `gemini` | `false` | `execute`, `stream-json`, `subscription` | `gemini -p --output-format stream-json` | `120` |
+| `cursor` | `false` | `execute`, `stream-json`, `subscription` | `cursor-agent -p --output-format stream-json` | `120` |
+| `opencode` | `false` | `execute`, `json` | `opencode run --format json` | `120` |
 
 `enabled` is a boolean. A disabled provider is skipped. Naming it with
 `--provider` is an error. `timeout_seconds` is an integer `>= 1`. A live
@@ -333,6 +411,36 @@ as the prompt argument. Stdin is not attached.
 Install Grok Build so `grok` is on `PATH`, and sign in with that CLI. With
 `--allow-live`, the harness runs `grok -p <task> --output-format streaming-json`.
 Stdin is not attached.
+
+### Gemini CLI
+
+Disabled in the shipped config. Install Gemini CLI so `gemini` is on `PATH`,
+set `enabled` to true, and sign in with Gemini CLI itself. With
+`--allow-live`, the harness runs `gemini -p <task> --output-format stream-json`.
+Stdin is not attached. `stream-json` events are newline-delimited JSON. The
+assistant text is the `message` events whose role is `assistant`. Token
+figures come from `result.stats` (`input_tokens`, `output_tokens`). That
+object has no dollar cost, so cost stays unknown.
+
+### Cursor CLI
+
+Disabled in the shipped config. The install links `agent` and `cursor-agent`
+to the same binary. This harness calls `cursor-agent`. Set `enabled` to true
+and sign in with Cursor. With `--allow-live`, the harness runs
+`cursor-agent -p --output-format stream-json <task>`. Stdin is not attached.
+The assistant text is the terminal `result` string. When that event includes
+`usage.inputTokens` and `usage.outputTokens`, those figures are kept. The
+documented result object has no dollar cost, so cost stays unknown.
+
+### OpenCode
+
+Disabled in the shipped config. Install OpenCode so `opencode` is on `PATH`
+and set `enabled` to true. With `--allow-live`, the harness runs
+`opencode run --format json <task>`. The task is the positional message.
+`-p` on this command is a password flag and is not used. Stdin is not
+attached. Assistant text is the `text` events. Each `step_finish` event
+contributes `part.tokens.input`, `part.tokens.output`, and `part.cost`, and
+those steps are added. A stream with no `step_finish` leaves usage unknown.
 
 If the executable is missing, the error names the command and does not copy
 stderr. Provider stderr is not written into the run record or the JSONL log.
@@ -417,12 +525,16 @@ and usage, plus `run_branch`, `base_ref`, and `plan_source`. Each task lists
 its text, id, dependencies, provider, attempts, review verdicts, branch,
 commit, merge status, duration, and diff.
 
-Usage is read from provider stdout when a JSON line carries it. The last such
-object wins. Recognized fields are `input_tokens` or `prompt_tokens`,
-`output_tokens` or `completion_tokens`, and `cost` or `total_cost_usd`. A
-missing figure stays unknown. Known figures from the worker and from reviews
-are added. Crossing a budget sets `stop_reason` to `budget`, asks the run to
-stop, and marks unfinished tasks `budget-exceeded`.
+Usage is read from provider stdout when a JSON line carries it. Claude,
+Codex, Grok, Gemini, and Cursor keep the last aggregate object. OpenCode
+`step_finish` events are summed, one cost and token object per step.
+Recognized fields are `input_tokens`, `prompt_tokens`, or `inputTokens`;
+`output_tokens`, `completion_tokens`, or `outputTokens`; and `cost` or
+`total_cost_usd`. OpenCode reads those figures from `part.tokens` (`input`,
+`output`) and `part.cost`. A missing figure stays unknown. A reported zero
+stays zero. Known figures from the worker and from reviews are added.
+Crossing a budget sets `stop_reason` to `budget`, asks the run to stop, and
+marks unfinished tasks `budget-exceeded`.
 
 ## Run state, resume, and cancel
 
@@ -452,7 +564,7 @@ object that contains the process.
 | `config keys mismatch` | A required key is missing or an unknown key is present. |
 | `config key '...' is not allowed` | The key looks like a secret. |
 | `provider config version must be 1` | `version` is not the integer `1`. |
-| `unknown provider` | The name is not `fixture`, `claude`, `codex`, or `grok`. |
+| `unknown provider` | The name is not `fixture`, `claude`, `codex`, `grok`, `gemini`, `cursor`, or `opencode`. |
 | `provider '...' is disabled` | `--provider` names an entry with `enabled` false. |
 | `does not satisfy capabilities` | The provider lacks a required capability. |
 | `no enabled provider satisfies capabilities` | Nothing enabled matches. |
