@@ -37,6 +37,8 @@ ALLOWED = {
     "tests/test_process_lifecycle.py", "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
     "examples/sample-goal.txt", "examples/harness.json", "examples/stubs/provider_stub.py",
     "tests/test_config_logs.py", "docs/ARCHITECTURE.md",
+    "scripts/install.sh", "scripts/install.ps1",
+    "tests/test_install_scripts.py", "tests/test_harness_gaps.py",
 }
 PRODUCT_SLICE = {
     ".gitignore",

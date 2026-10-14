@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- `scripts/install.sh` and `scripts/install.ps1` create a virtualenv, install
+  this checkout, run `recursion doctor`, and print the next commands. CI runs
+  the Linux script and the Windows script, then checks `recursion --help`.
+  The package depends on `jsonschema` 4.23.0 so that install can validate
+  `config/harness.json`.
+- Fake-only tests cover thin harness branches in stream parsing, config
+  rejection, doctor sign-in probes, cooldown files, and run records. They
+  do not start a provider CLI.
+
 ### Changed
 
 - Headless adapters match the CLIs checked on 2026-10-14. Claude Code 2.1.299
