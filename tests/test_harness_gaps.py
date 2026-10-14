@@ -82,8 +82,9 @@ def test_stream_parsers_reject_bad_lines_and_read_cursor_blocks() -> None:
         streams.parse_transcript("gemini", "{")
     with pytest.raises(HarnessError, match="not an object"):
         streams.parse_transcript("gemini", "1")
+    assert streams.parse_transcript("claude", '{"type":"result","result":"pong"}')["text"] == "pong"
     with pytest.raises(HarnessError, match="no transcript parser"):
-        streams.parse_transcript("claude", "{}")
+        streams.parse_transcript("fixture", "{}")
 
 
 def test_config_rejects_bad_files_and_helper_inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
