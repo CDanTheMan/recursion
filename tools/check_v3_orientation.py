@@ -28,6 +28,7 @@ ALLOWED = {
     "docs/v3/VALIDATION.md", "docs/v3/ROADMAP.md", "docs/v3/START-HERE.md",
     "state/tasks/v3-orientation-20260913.md", "tools/check_v3_orientation.py",
     "tools/test_check_v3_orientation_scope.py",
+    ".gitattributes", ".github/workflows/ci.yml", "requirements.txt",
 }
 
 
@@ -38,8 +39,14 @@ def require(condition: bool, message: str) -> None:
 
 def git(*args: str, cwd: Path = ROOT) -> str:
     return subprocess.check_output(
-        ["git", "-c", "core.longpaths=true", *args], cwd=cwd, encoding="utf-8"
+        ["git", "-c", "core.longpaths=true", "-c", "core.quotepath=false", *args],
+        cwd=cwd, encoding="utf-8",
     ).strip()
+
+
+def normalize_git_path(path: str) -> str:
+    """Git on Windows can emit quotes or backslashes; allowlist entries use '/'."""
+    return path.strip().strip('"').replace("\\", "/")
 
 
 def resolve_commit(cwd: Path, rev: str) -> str:
@@ -94,20 +101,21 @@ def comparison_base(cwd: Path, head: str, baseline: str | None) -> str:
 
 
 def scope_paths(cwd: Path, base: str) -> tuple[set[str], set[str]]:
-    changed = set(filter(None, git("diff", "--name-only", base, cwd=cwd).splitlines()))
-    untracked = set(filter(None, git(
+    changed = {normalize_git_path(p) for p in git("diff", "--name-only", base, cwd=cwd).splitlines() if p.strip()}
+    untracked = {normalize_git_path(p) for p in git(
         "ls-files", "--others", "--exclude-standard", cwd=cwd
-    ).splitlines()))
+    ).splitlines() if p.strip()}
     return changed, untracked
 
 
 def out_of_scope(changed: set[str], untracked: set[str], allowed: set[str]) -> list[str]:
-    return sorted((changed | untracked) - allowed)
+    paths = {normalize_git_path(p) for p in changed | untracked if p.strip()}
+    return sorted(paths - allowed)
 
 
 def check_whitespace(cwd: Path, base: str) -> None:
     result = subprocess.run(
-        ["git", "-c", "core.longpaths=true", "diff", "--check", base],
+        ["git", "-c", "core.longpaths=true", "-c", "core.quotepath=false", "diff", "--check", base],
         cwd=cwd, capture_output=True, encoding="utf-8", errors="replace", check=False,
     )
     if result.returncode:

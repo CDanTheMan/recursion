@@ -28,6 +28,7 @@ class GitRepo:
         self._git("config", "user.email", "scope@example.com")
         self._git("config", "commit.gpgsign", "false")
         self._git("config", "core.autocrlf", "false")
+        self._git("config", "core.eol", "lf")
 
     def _git(self, *args: str) -> str:
         return subprocess.check_output(
@@ -37,7 +38,7 @@ class GitRepo:
     def write(self, name: str, text: str) -> None:
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding="utf-8", newline="\n")
 
     def commit(self, message: str, *paths: str) -> None:
         if paths:
@@ -164,8 +165,17 @@ class ScopeCheckTests(unittest.TestCase):
 
     def test_allowlist_still_rejects_paths_outside_the_repair(self) -> None:
         self.assertIn("tools/check_v3_orientation.py", gate.ALLOWED)
+        self.assertIn(".github/workflows/ci.yml", gate.ALLOWED)
+        self.assertIn("requirements.txt", gate.ALLOWED)
+        self.assertIn(".gitattributes", gate.ALLOWED)
         self.assertNotIn("docs/v3/RESEARCH-SCOPE.md", gate.ALLOWED)
         self.assertNotIn("schemas/control-plane/v3/planning/materialize.py", gate.ALLOWED)
+        self.assertNotIn("scripts/v3/harness/cli.py", gate.ALLOWED)
+        self.assertEqual(gate.normalize_git_path('"tools\\check.py"'), "tools/check.py")
+        self.assertEqual(
+            gate.out_of_scope({"scripts\\v3\\harness\\cli.py"}, set(), gate.ALLOWED),
+            ["scripts/v3/harness/cli.py"],
+        )
         self.assertEqual(
             gate.out_of_scope({"README.md", "docs/v3/RESEARCH-SCOPE.md"}, set(), gate.ALLOWED),
             ["docs/v3/RESEARCH-SCOPE.md"],
