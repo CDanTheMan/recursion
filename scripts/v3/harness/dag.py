@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
+from scripts.v3.harness.config import ROOT
 from scripts.v3.harness.dispatch import execute_with_policy
 from scripts.v3.harness.errors import HarnessError
 from scripts.v3.harness.providers import ProviderRequest
@@ -15,26 +17,28 @@ _CAPABILITY = re.compile(r"^[a-z0-9][a-z0-9+-]{0,63}$")
 _TASK_KEYS = {"depends_on", "description", "id", "required_capabilities"}
 
 
-def plan_prompt(goal: str) -> str:
+def plan_prompt(goal: str, *, repo: Path | None = None) -> str:
     example = (
         '{"tasks":[{"id":"build","description":"Build the note","required_capabilities":[],'
         '"depends_on":[]},{"id":"test","description":"Test the note","required_capabilities":[],'
         '"depends_on":["build"]}]}'
     )
-    return "\n".join(
-        (
-            "Break the goal into tasks.",
-            "Reply with one JSON object and no other text.",
-            "Independent tasks use an empty depends_on list.",
-            "A task that needs another task lists that task's id in depends_on.",
-            'Keys are exactly {"tasks":[{"id","description","required_capabilities","depends_on"}]}.',
-            "Example:",
-            example,
-            "Each id is unique. depends_on lists ids from this object. required_capabilities is a list of strings.",
-            "Goal:",
-            goal,
-        )
-    )
+    lines = [
+        "Break the goal into tasks.",
+        "Reply with one JSON object and no other text.",
+        "Independent tasks use an empty depends_on list.",
+        "A task that needs another task lists that task's id in depends_on.",
+        'Keys are exactly {"tasks":[{"id","description","required_capabilities","depends_on"}]}.',
+        "Example:",
+        example,
+        "Each id is unique. depends_on lists ids from this object. required_capabilities is a list of strings.",
+    ]
+    if repo is not None:
+        from scripts.v3.harness.context import repo_map
+
+        lines.extend(["Repository:", repo_map(repo)])
+    lines.extend(["Goal:", goal])
+    return "\n".join(lines)
 
 
 def line_nodes(lines: list[str]) -> list[dict]:
@@ -80,6 +84,7 @@ def admit_goal(
     cooldowns=None,
     cooldown_seconds: float = 60,
     now=None,
+    repo: Path | None = None,
 ) -> dict:
     """Ask a provider for a task graph. Invalid output falls back to lines."""
 
@@ -92,7 +97,8 @@ def admit_goal(
         reason = "no planning provider"
         log.event("plan.fallback", reason=reason)
         return plan_goal(goal, source="lines", fallback=reason)
-    request = ProviderRequest(task=plan_prompt(goal), packet_id="PLAN", route_id="plan", kind="plan")
+    root = ROOT if repo is None else repo
+    request = ProviderRequest(task=plan_prompt(goal, repo=root), packet_id="PLAN", route_id="plan", kind="plan")
     try:
         result, _attempts = execute_with_policy(
             request,
