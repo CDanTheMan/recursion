@@ -4,7 +4,7 @@ Linux puts the child in its own session and, on cancel or timeout, signals
 that process group. The recorded group is not the harness group, so the
 signal cannot hit the harness. Windows places the child in a job object
 before any of its code runs and terminates the job, so grandchildren die
-with the CLI. Captured output is UTF-8.
+with the CLI. Captured output is UTF-8, and CR line endings become LF.
 """
 
 from __future__ import annotations
@@ -65,8 +65,8 @@ def run_command(
     try:
         reason = _supervise(child, timeout_seconds=timeout_seconds, should_stop=should_stop, poll_seconds=poll_seconds)
         decoding = "strict" if reason == "ok" else "replace"
-        stdout = bytes(child.stdout).decode("utf-8", errors=decoding)
-        stderr = bytes(child.stderr).decode("utf-8", errors=decoding)
+        stdout = _utf8_text(bytes(child.stdout), errors=decoding)
+        stderr = _utf8_text(bytes(child.stderr), errors=decoding)
         if reason == "cancel":
             raise ProcessCancelled("run cancelled")
         if reason == "timeout":
@@ -75,6 +75,13 @@ def run_command(
         return CommandResult(returncode=code, stdout=stdout, stderr=stderr)
     finally:
         child.close()
+
+
+def _utf8_text(data: bytes, *, errors: str) -> str:
+    """Decode provider output and normalize line endings to ``\\n``."""
+
+    text = data.decode("utf-8", errors=errors)
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _spawn(argv: list[str], cwd: str | None, stdin_text: str | None, env: dict[str, str] | None) -> _Child:

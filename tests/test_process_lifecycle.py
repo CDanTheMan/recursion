@@ -286,6 +286,21 @@ def test_live_call_round_trips_utf8_and_reports_a_missing_cli() -> None:
     assert captured.stderr == "café"
 
 
+def test_captured_newlines_are_lf() -> None:
+    result = run_command(
+        [
+            sys.executable,
+            "-X",
+            "utf8",
+            "-c",
+            "import sys; sys.stdout.buffer.write(b'VERDICT approve\\r\\nstub\\r\\n'); sys.stderr.buffer.write('café\\r\\n'.encode('utf-8'))",
+        ]
+    )
+    assert result.returncode == 0
+    assert result.stdout == "VERDICT approve\nstub\n"
+    assert result.stderr == "café\n"
+
+
 def test_environment_overlay_reaches_the_child() -> None:
     result = run_command(
         [sys.executable, "-X", "utf8", "-B", "-c", "import os; print(os.environ.get('RECURSION_STUB_PROVIDER', ''))"],
