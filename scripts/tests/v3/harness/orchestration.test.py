@@ -170,11 +170,12 @@ class OrchestrationTests(unittest.TestCase):
                         str(ROOT / "config" / "harness.json"),
                     ]
                 )
-            self.assertEqual(resumed, 0)
+            self.assertEqual(resumed, 2)
             stored = store.load(record["run_id"])
-            self.assertEqual(stored["status"], "completed")
+            self.assertEqual(stored["status"], "unreviewed")
             self.assertEqual([task["provider"] for task in stored["tasks"]], ["fixture", "fixture"])
             self.assertTrue(all(task["execution"]["live"] is False for task in stored["tasks"]))
+            _drop_run_branches(record["run_id"])
 
     def test_cli_goal_plans_and_runs_without_a_process(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -188,6 +189,9 @@ class OrchestrationTests(unittest.TestCase):
             self.assertEqual(code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(len(payload["tasks"]), 2)
+            self.assertEqual(payload["plan_source"], "provider")
+            self.assertEqual([task["id"] for task in payload["tasks"]], ["task-1", "task-2"])
+            self.assertEqual(payload["tasks"][1]["depends_on"], [])
             self.assertEqual(list(root.glob("RUN-*.json")), [])
 
             stdout = _String()
@@ -196,14 +200,19 @@ class OrchestrationTests(unittest.TestCase):
             ) as spawned:
                 code = main(["run", "--goal", "Alpha task.\nBeta task.", "--state-dir", str(root)])
             spawned.assert_not_called()
-            self.assertEqual(code, 0)
+            self.assertEqual(code, 2)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["status"], "completed")
+            self.assertEqual(payload["status"], "unreviewed")
+            self.assertEqual(payload["plan_source"], "provider")
+            self.assertEqual([task["id"] for task in payload["tasks"]], ["task-1", "task-2"])
             run_records = [path for path in root.glob("RUN-*.json") if path.stem.count(".") == 0]
             self.assertEqual(len(run_records), 1)
             self.assertTrue((root / f"{payload['run_id']}.report.json").is_file())
             self.assertTrue((root / f"{payload['run_id']}.report.md").is_file())
-            self.assertEqual({task["status"] for task in payload["tasks"]}, {"completed"})
+            self.assertEqual({task["status"] for task in payload["tasks"]}, {"unreviewed"})
+            report = json.loads((root / f"{payload['run_id']}.report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["run_branch"], f"recursion/run/{payload['run_id']}")
+            _drop_run_branches(payload["run_id"])
 
     def test_timeout_rate_limit_and_missing_cli(self) -> None:
         config = load_config()
@@ -262,6 +271,25 @@ class OrchestrationTests(unittest.TestCase):
         payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(payload["project"]["scripts"]["recursion"], "scripts.v3.harness.cli:main")
         self.assertGreaterEqual(tuple(int(part) for part in payload["project"]["requires-python"].removeprefix(">=").split(".")[:2]), (3, 11))
+
+
+def _drop_run_branches(run_id: str) -> None:
+    listed = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname:short)", "refs/heads/recursion"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    prefixes = (f"recursion/run/{run_id}", f"recursion/task/{run_id}/")
+    for name in listed.stdout.split():
+        if name == prefixes[0] or name.startswith(prefixes[1]):
+            completed = subprocess.run(
+                ["git", "branch", "-D", name], cwd=ROOT, capture_output=True, text=True, check=False
+            )
+            if completed.returncode != 0:
+                raise RuntimeError(completed.stderr.strip() or f"could not delete {name}")
+    subprocess.run(["git", "worktree", "prune"], cwd=ROOT, capture_output=True, check=False)
 
 
 def _planned(task: str) -> dict:

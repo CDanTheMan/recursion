@@ -1,7 +1,11 @@
 {
   "version": 1,
   "review": {
-    "max_rounds": 1
+    "max_rounds": 1,
+    "accept_unreviewed": false
+  },
+  "landing": {
+    "base_ref": "HEAD"
   },
   "budgets": {
     "max_input_tokens": 1000000,

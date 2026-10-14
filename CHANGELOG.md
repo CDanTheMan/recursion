@@ -25,3 +25,9 @@ after that cut.
 - User guide in `docs/USER-GUIDE.md`, a drift test that keeps it aligned with
   `recursion --help` and `config/harness.json`, and a release workflow that
   builds an sdist and a wheel on `v*` tags.
+- Accepted task branches merge into `recursion/run/<run-id>`. A provider
+  plans `--goal` into a dependency graph, and a missing reviewer is
+  `unreviewed` unless `review.accept_unreviewed` is true.
+- Sample goal and config in `examples/`, and a console end-to-end test that
+  installs `recursion` and drives `plan`, `run`, `status`, `cancel`, `resume`,
+  and the report through fake `claude`, `codex`, and `grok` executables.

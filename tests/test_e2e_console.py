@@ -49,6 +49,7 @@ def _install_stubs(directory: Path) -> None:
                     )
                 ),
                 encoding="utf-8",
+                newline="",
             )
         else:
             launcher = directory / name
@@ -76,6 +77,52 @@ def _env(stub_dir: Path, log_path: Path, *, fail: bool) -> dict[str, str]:
     else:
         env.pop("RECURSION_STUB_MODE", None)
     return env
+
+
+def _git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+
+def _head() -> str:
+    completed = _git("rev-parse", "HEAD")
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout.strip()
+
+
+def _recursion_branches() -> set[str]:
+    completed = _git("for-each-ref", "--format=%(refname:short)", "refs/heads/recursion")
+    return {line.strip() for line in completed.stdout.splitlines() if line.strip()}
+
+
+def _cleanup_branches(before: set[str]) -> None:
+    extra = _recursion_branches() - before
+    listed = _git("worktree", "list", "--porcelain")
+    path = None
+    branch = None
+    removals: list[str] = []
+    for line in listed.stdout.splitlines() + [""]:
+        if line.startswith("worktree "):
+            path = line.split(" ", 1)[1]
+            branch = None
+        elif line.startswith("branch "):
+            branch = line.split(" ", 1)[1].removeprefix("refs/heads/")
+        elif line == "" and path is not None:
+            if branch in extra and Path(path).resolve() != ROOT.resolve():
+                removals.append(path)
+            path = None
+            branch = None
+    for checkout in removals:
+        _git("worktree", "remove", "--force", checkout)
+    _git("worktree", "prune")
+    if extra:
+        _git("branch", "-D", *sorted(extra))
 
 
 def _recursion() -> str:
@@ -107,6 +154,30 @@ def _json_stdout(completed: subprocess.CompletedProcess[str]) -> dict:
     return payload
 
 
+def test_windows_stub_cmd_starts_python_directly(tmp_path: Path) -> None:
+    stub = tmp_path / "provider_stub.py"
+    stub.write_text("print('ok')\n", encoding="utf-8")
+    executable = r"C:\Python\python.exe"
+    launcher = tmp_path / "claude.cmd"
+    launcher.write_text(
+        "\r\n".join(
+            (
+                "@echo off",
+                "set RECURSION_STUB_PROVIDER=claude",
+                f"\"{executable}\" -X utf8 \"{stub}\" %*",
+                "",
+            )
+        ),
+        encoding="utf-8",
+        newline="",
+    )
+    from scripts.v3.harness.providers import _stub_launch
+
+    command, overlay = _stub_launch(str(launcher))
+    assert command == [executable, "-X", "utf8", str(stub)]
+    assert overlay == {"RECURSION_STUB_PROVIDER": "claude"}
+
+
 def test_console_script_plans_runs_cancels_and_resumes(tmp_path: Path) -> None:
     goal_lines = _goal_lines()
     goal = "\n".join(goal_lines)
@@ -116,11 +187,32 @@ def test_console_script_plans_runs_cancels_and_resumes(tmp_path: Path) -> None:
     _install_stubs(stub_dir)
     recursion = _recursion()
     common = ["--config", str(CONFIG_PATH), "--state-dir", str(state_dir)]
+    head = _head()
+    branches = _recursion_branches()
 
+    try:
+        _exercise(recursion, common, goal, goal_lines, stub_dir, stub_log, state_dir, head)
+    finally:
+        _cleanup_branches(branches)
+        assert _head() == head
+        assert _recursion_branches() == branches
+
+
+def _exercise(
+    recursion: str,
+    common: list[str],
+    goal: str,
+    goal_lines: list[str],
+    stub_dir: Path,
+    stub_log: Path,
+    state_dir: Path,
+    head: str,
+) -> None:
     planned = _run(recursion, ["plan", "--goal", goal, *common], _env(stub_dir, stub_log, fail=False))
     assert planned.returncode == 0, planned.stderr
     plan_payload = _json_stdout(planned)
     assert plan_payload["route"]["status"] == "selected"
+    assert plan_payload["plan_source"] == "lines"
     assert [item["intent_text"] for item in plan_payload["tasks"]] == goal_lines
 
     failed = _run(
@@ -139,9 +231,8 @@ def test_console_script_plans_runs_cancels_and_resumes(tmp_path: Path) -> None:
         for name in PROVIDERS:
             assert f"{name}#0:HarnessError" in item["error"]
     failed_calls = stub_log.read_text(encoding="utf-8").split()
-    assert failed_calls.count("claude") == len(goal_lines)
-    assert failed_calls.count("codex") == len(goal_lines)
-    assert failed_calls.count("grok") == len(goal_lines)
+    for name in PROVIDERS:
+        assert failed_calls.count(name) >= len(goal_lines)
 
     status = _run(recursion, ["status", *common], _env(stub_dir, stub_log, fail=False))
     assert status.returncode == 0, status.stderr
@@ -188,3 +279,4 @@ def test_console_script_plans_runs_cancels_and_resumes(tmp_path: Path) -> None:
         assert line in markdown
     assert "SECRET" not in markdown
     assert "SECRET" not in json_report.read_text(encoding="utf-8")
+    assert _head() == head

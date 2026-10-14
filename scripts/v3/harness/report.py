@@ -20,9 +20,14 @@ def build_report(record: dict) -> dict:
             {
                 "attempts": task.get("attempts") or [],
                 "branch": task.get("branch"),
+                "commit": task.get("commit"),
+                "depends_on": task.get("depends_on") or [],
                 "diff": task.get("diff") or "",
                 "duration_seconds": task_duration,
+                "id": task.get("id"),
                 "index": task.get("index"),
+                "merge_conflict": task.get("merge_conflict") or [],
+                "merge_status": task.get("merge_status"),
                 "provider": task.get("provider"),
                 "reviews": task.get("reviews") or [],
                 "status": task.get("status"),
@@ -35,7 +40,11 @@ def build_report(record: dict) -> dict:
         wall = duration
     return {
         "duration_seconds": wall,
+        "base_ref": record.get("base_ref"),
         "goal": record.get("goal"),
+        "plan_fallback": record.get("plan_fallback"),
+        "plan_source": record.get("plan_source"),
+        "run_branch": record.get("run_branch"),
         "run_id": record.get("run_id"),
         "status": record.get("status"),
         "stop_reason": record.get("stop_reason"),
@@ -58,6 +67,7 @@ def render_markdown(report: dict) -> str:
         f"# Run {report['run_id']}",
         "",
         f"Status: {report['status']}",
+        f"Run branch: {report.get('run_branch') or 'none'}",
         f"Duration: {_seconds(report['duration_seconds'])}",
         f"Usage: {_usage(report['usage'])}",
         "",
@@ -68,14 +78,20 @@ def render_markdown(report: dict) -> str:
     for task in report["tasks"]:
         lines.append(f"## Task {task['index']}")
         lines.append("")
+        lines.append(f"Id: {task.get('id') or task['index']}")
+        if task.get("depends_on"):
+            lines.append("Depends on: " + ", ".join(task["depends_on"]))
         lines.append(f"Task: {task['task']}")
         lines.append(f"Provider: {task['provider']}")
         lines.append(f"Status: {task['status']}")
+        lines.append(f"Branch: {task.get('branch') or 'none'}")
+        lines.append(f"Commit: {task.get('commit') or 'none'}")
+        lines.append(f"Merge: {task.get('merge_status') or 'none'}")
+        if task.get("merge_conflict"):
+            lines.append("Conflict: " + ", ".join(task["merge_conflict"]))
         lines.append(f"Duration: {_seconds(task['duration_seconds'])}")
         lines.append(f"Attempts: {len(task['attempts'])}")
         lines.append(f"Usage: {_usage(task['usage'])}")
-        if task.get("branch"):
-            lines.append(f"Branch: {task['branch']}")
         lines.append("")
         lines.append("Reviews:")
         if not task["reviews"]:

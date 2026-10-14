@@ -7,10 +7,13 @@ The harness does not read credentials. Retries and fallback live in
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 from scripts.v3.harness.errors import (
     HarnessError,
@@ -25,7 +28,7 @@ from scripts.v3.harness.errors import (
 class ProviderRequest:
     """Work handed to a provider after M1B has selected a route.
 
-    ``kind`` is ``execute`` for the task and ``review`` for a diff review.
+    ``kind`` is ``execute`` for the task, ``review`` for a diff review, and ``plan`` for a task graph.
     ``cwd`` is the task worktree when isolation is on.
     """
 
@@ -89,6 +92,8 @@ class FixtureProvider(ProviderAdapter):
         del allow_live, timeout_seconds
         if request.kind == "review":
             text = "VERDICT approve\nfixture review"
+        elif request.kind == "plan":
+            text = _fixture_plan(request.task)
         else:
             text = "\n".join(
                 (
@@ -99,6 +104,24 @@ class FixtureProvider(ProviderAdapter):
                 )
             )
         return ProviderResult(provider=self.name, argv=self.argv(request), text=text, live=False)
+
+
+def _fixture_plan(task: str) -> str:
+    """Turn the goal section of a plan prompt into a line-shaped task list."""
+
+    marker = "Goal:\n"
+    goal = task.split(marker, 1)[1] if marker in task else ""
+    lines = [line.strip() for line in goal.splitlines() if line.strip()]
+    tasks = [
+        {
+            "depends_on": [],
+            "description": line,
+            "id": f"task-{index}",
+            "required_capabilities": [],
+        }
+        for index, line in enumerate(lines, start=1)
+    ]
+    return json.dumps({"tasks": tasks})
 
 
 def _refuse_unless_live(adapter: ProviderAdapter, allow_live: bool) -> None:
@@ -119,20 +142,42 @@ def _rate_limited(completed: subprocess.CompletedProcess[str]) -> bool:
     return "rate limit" in stderr or "too many requests" in stderr
 
 
-def _spawn_command(argv: tuple[str, ...]) -> list[str]:
-    """Run argv. A Windows ``.cmd`` or ``.bat`` shim is started through ``cmd.exe``.
+_STUB_PROVIDER = re.compile(r"(?im)^set\s+RECURSION_STUB_PROVIDER=([A-Za-z0-9_-]+)\s*$")
+_STUB_LAUNCH = re.compile(r'(?im)^"([^"]+)"\s+-X\s+utf8\s+"([^"]+)"\s+%\*\s*$')
 
-    ``CreateProcess`` does not execute batch files named without an extension.
-    Real ``.exe`` commands stay unchanged.
+
+def _spawn_plan(argv: tuple[str, ...]) -> tuple[list[str], dict[str, str] | None]:
+    """Return the process argv and an optional environment overlay.
+
+    ``CreateProcess`` does not execute a ``.cmd`` or ``.bat`` named without an
+    extension. A generated provider stub is started with Python directly so a
+    multiline prompt is not parsed again by ``cmd.exe``. Any other batch shim
+    goes through ``cmd.exe``. Real ``.exe`` commands stay unchanged.
     """
 
     if os.name != "nt":
-        return list(argv)
+        return list(argv), None
     found = shutil.which(argv[0])
     if not found or not found.lower().endswith((".cmd", ".bat")):
-        return list(argv)
+        return list(argv), None
+    direct = _stub_launch(found)
+    if direct is not None:
+        return direct
     comspec = os.environ.get("ComSpec") or "cmd.exe"
-    return [comspec, "/d", "/c", found, *argv[1:]]
+    return [comspec, "/d", "/c", found, *argv[1:]], None
+
+
+def _stub_launch(launcher: str) -> tuple[list[str], dict[str, str]] | None:
+    try:
+        text = Path(launcher).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    provider = _STUB_PROVIDER.search(text)
+    launch = _STUB_LAUNCH.search(text)
+    if provider is None or launch is None:
+        return None
+    executable, stub = launch.groups()
+    return [executable, "-X", "utf8", stub], {"RECURSION_STUB_PROVIDER": provider.group(1)}
 
 
 def _run_cli(
@@ -143,7 +188,7 @@ def _run_cli(
     timeout_seconds: int | None,
 ) -> ProviderResult:
     argv = adapter.argv(request)
-    command = _spawn_command(argv)
+    command, overlay = _spawn_plan(argv)
     kwargs: dict = {
         "text": True,
         "encoding": "utf-8",
@@ -154,6 +199,8 @@ def _run_cli(
         kwargs["timeout"] = timeout_seconds
     if request.cwd:
         kwargs["cwd"] = request.cwd
+    if overlay:
+        kwargs["env"] = {**os.environ, **overlay}
     if stdin_text is None:
         kwargs["stdin"] = subprocess.DEVNULL
     else:
