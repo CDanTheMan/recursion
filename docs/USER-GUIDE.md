@@ -15,7 +15,29 @@ rename them.
 
 ## Install
 
-Python 3.11 or 3.12 and Git. From the repository root.
+Python 3.11 or 3.12 and Git. From the repository root, one script creates a
+virtualenv, installs this checkout, and runs `recursion doctor`.
+
+Linux:
+
+```bash
+bash scripts/install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+```
+
+The script prints the next commands. It installs with `python -m pip install -e .`
+inside `.venv`. That editable install registers the `recursion` console script
+from `pyproject.toml` and pulls `jsonschema` 4.23.0, which config validation
+needs. Commands that plan or run read `config/harness.json` and the
+M1 fixtures from this checkout, so install from the repository, not from a
+bare wheel.
+
+The same install without the script:
 
 Linux:
 
@@ -28,11 +50,6 @@ Windows PowerShell:
 ```powershell
 python -m pip install -e .
 ```
-
-The editable install registers the `recursion` console script from
-`pyproject.toml`. Commands that plan or run read `config/harness.json` and the
-M1 fixtures from this checkout, so install from the repository, not from a
-bare wheel.
 
 Without installing, from the repository root:
 
@@ -48,8 +65,8 @@ Windows PowerShell:
 python -X utf8 -B scripts/recursion --help
 ```
 
-`requirements.txt` is the test pin, including `jsonschema` 4.23.0. Planning
-and routing load that checker. Install it before `plan` or `run`:
+`requirements.txt` pins the test tools, including pytest and the same
+`jsonschema` 4.23.0. Install it before `pytest`:
 
 ```bash
 python -m pip install -r requirements.txt
