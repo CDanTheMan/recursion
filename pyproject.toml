@@ -21,3 +21,21 @@ packages = [
     "scripts.v3.planning.replay",
     "scripts.v3.planning.validation",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+parallel = true
+branch = true
+source = ["tests", "tools", "schemas", "scripts"]
+omit = [
+    "tools/check_next_phase.py",
+    "tools/check_public_scope.py",
+    "tools/check_rescope.py",
+]
+data_file = "tests/.coverage"
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false

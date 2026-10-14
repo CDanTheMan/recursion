@@ -39,6 +39,7 @@ the version this suite was run with). Nothing else is built.
 ```bash
 set -euo pipefail
 python -m pip install -r requirements.txt
+python -X utf8 -B -m pytest
 python -X utf8 -B tools/check_v3_orientation.py --contracts
 python -X utf8 -B tools/test_check_v3_orientation_scope.py
 python -X utf8 -B schemas/control-plane/v3/planning/materialize.py --check
@@ -57,9 +58,12 @@ That is the suite: six materialize checks, every `scripts/tests/v3/**/*.test.py`
 and the recovery-ledger tests. Keep it green. Fix the cause of a failure. Do not delete,
 skip, or weaken a check to make the run pass.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the orientation `--contracts`
-check, the scope tests, and any pytest suite on pull requests and on pushes to
-`master`, for `ubuntu-latest` and `windows-latest` and Python 3.11 and 3.12.
+`tests/` is the pytest suite CI runs. It wraps the orientation contracts, the
+scope tests, and the schema and fixture validators, and it prints coverage.
+GitHub Actions (`.github/workflows/ci.yml`) runs that suite, plus the orientation
+`--contracts` check and the scope tests directly, on pull requests and on
+pushes to `master`, for `ubuntu-latest` and `windows-latest` and Python 3.11
+and 3.12.
 The orientation gate diffs the worktree against the merge-base with master.
 Paths outside its allowlist fail. Do not delete product files to satisfy it.
 It still requires this file and `CLAUDE.md` to match, and the text

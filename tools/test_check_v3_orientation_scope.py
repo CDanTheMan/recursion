@@ -168,6 +168,8 @@ class ScopeCheckTests(unittest.TestCase):
         self.assertIn(".github/workflows/ci.yml", gate.ALLOWED)
         self.assertIn("requirements.txt", gate.ALLOWED)
         self.assertIn(".gitattributes", gate.ALLOWED)
+        self.assertIn("tests/test_v3_checks.py", gate.ALLOWED)
+        self.assertIn("pyproject.toml", gate.ALLOWED)
         self.assertNotIn("docs/v3/RESEARCH-SCOPE.md", gate.ALLOWED)
         self.assertNotIn("schemas/control-plane/v3/planning/materialize.py", gate.ALLOWED)
         self.assertNotIn("scripts/v3/harness/cli.py", gate.ALLOWED)
