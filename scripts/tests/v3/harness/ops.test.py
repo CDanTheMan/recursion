@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -259,7 +260,17 @@ class OpsTests(unittest.TestCase):
 
             def backdate(current: dict) -> None:
                 current["created"] = "2020-01-01T00:00:00Z"
+                current["status"] = "completed"
                 current["run_branch"] = f"recursion/run/{old['run_id']}"
+                current["land"] = {
+                    "branch": "main",
+                    "commit": None,
+                    "error": None,
+                    "paths": [],
+                    "status": "merged",
+                }
+                for task in current["tasks"]:
+                    task["status"] = "completed"
 
             store.update(old["run_id"], backdate)
             run_branch = f"recursion/run/{old['run_id']}"
@@ -310,7 +321,10 @@ class OpsTests(unittest.TestCase):
 
             def mark(current: dict) -> None:
                 current["created"] = "2020-01-01T00:00:00Z"
+                current["status"] = "completed"
                 current["run_branch"] = f"recursion/run/{kept['run_id']}"
+                for task in current["tasks"]:
+                    task["status"] = "completed"
 
             store.update(kept["run_id"], mark)
             kept_branch = f"recursion/run/{kept['run_id']}"
@@ -323,6 +337,362 @@ class OpsTests(unittest.TestCase):
                 self.assertIn(kept_branch, _heads(repo))
             finally:
                 subprocess.run(["git", "checkout", "main"], cwd=repo, check=True, capture_output=True)
+
+    def test_clean_skips_running_pending_and_resumable_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            state = root / "state"
+            repo.mkdir()
+            _git_repo(repo)
+            store = RunStore(state)
+            running = _old_run(store, status="running")
+            pending = _old_run(store, status="pending")
+            resumable = _old_run(store, status="failed")
+            finished = _old_run(store, status="completed", landed=True)
+            kept = f"recursion/run/{running['run_id']}"
+            gone = f"recursion/run/{finished['run_id']}"
+            subprocess.run(["git", "branch", kept], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "branch", gone], cwd=repo, check=True, capture_output=True)
+            moment = _epoch("2026-01-01T00:00:00Z")
+            preview = clean_runs(store, repo=repo, older_than_days=7, dry_run=True, now=moment)
+            cleaned = clean_runs(store, repo=repo, older_than_days=7, dry_run=False, now=moment)
+            self.assertEqual(preview["removed"], cleaned["removed"])
+            self.assertEqual(preview["skipped"], cleaned["skipped"])
+            self.assertEqual([item["run_id"] for item in cleaned["removed"]], [finished["run_id"]])
+            reasons = {item["run_id"]: item["reason"] for item in cleaned["skipped"]}
+            self.assertEqual(reasons[running["run_id"]], "running")
+            self.assertEqual(reasons[pending["run_id"]], "pending")
+            self.assertEqual(reasons[resumable["run_id"]], "resumable")
+            self.assertTrue((state / f"{running['run_id']}.json").is_file())
+            self.assertIn(kept, _heads(repo))
+            self.assertFalse((state / f"{finished['run_id']}.json").is_file())
+            self.assertNotIn(gone, _heads(repo))
+            forced = clean_runs(
+                store, repo=repo, older_than_days=7, dry_run=True, include_unlanded=True, now=moment
+            )
+            self.assertEqual(
+                [item["run_id"] for item in forced["skipped"] if item["run_id"] == running["run_id"]],
+                [running["run_id"]],
+            )
+            self.assertEqual(forced["removed"], [])
+
+    def test_clean_keeps_an_unlanded_run_branch_unless_asked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            state = root / "state"
+            repo.mkdir()
+            _git_repo(repo)
+            store = RunStore(state)
+            contained = _old_run(store, status="completed")
+            contained_branch = f"recursion/run/{contained['run_id']}"
+            subprocess.run(["git", "branch", contained_branch], cwd=repo, check=True, capture_output=True)
+            ahead = _old_run(store, status="completed")
+            ahead_branch = f"recursion/run/{ahead['run_id']}"
+            task_branch = f"recursion/task/{ahead['run_id']}/task-0"
+            _commit_on_branch(repo, ahead_branch, "only-on-run.txt", "ahead\n")
+            subprocess.run(["git", "branch", task_branch, ahead_branch], cwd=repo, check=True, capture_output=True)
+            moment = _epoch("2026-01-01T00:00:00Z")
+            preview = clean_runs(store, repo=repo, older_than_days=7, dry_run=True, now=moment)
+            self.assertTrue((state / f"{ahead['run_id']}.json").is_file())
+            cleaned = clean_runs(store, repo=repo, older_than_days=7, dry_run=False, now=moment)
+            self.assertEqual(preview["removed"], cleaned["removed"])
+            self.assertEqual(preview["skipped"], cleaned["skipped"])
+            self.assertEqual(preview["include_unlanded"], False)
+            removed = {item["run_id"]: item for item in cleaned["removed"]}
+            self.assertIn(contained_branch, removed[contained["run_id"]]["branches"])
+            self.assertNotIn(contained["run_id"], {item["run_id"] for item in cleaned["skipped"]})
+            self.assertNotIn(contained_branch, _heads(repo))
+            skipped = _one(self, cleaned["skipped"], "unlanded", ahead["run_id"])
+            self.assertEqual(skipped["branches"], [ahead_branch])
+            self.assertIn(task_branch, removed[ahead["run_id"]]["branches"])
+            self.assertNotIn(ahead_branch, removed[ahead["run_id"]]["branches"])
+            self.assertIn(str(state / f"{ahead['run_id']}.json"), removed[ahead["run_id"]]["files"])
+            self.assertFalse((state / f"{ahead['run_id']}.json").is_file())
+            self.assertIn(ahead_branch, _heads(repo))
+            self.assertNotIn(task_branch, _heads(repo))
+
+            asked = _old_run(store, status="completed")
+            asked_branch = f"recursion/run/{asked['run_id']}"
+            _commit_on_branch(repo, asked_branch, "also-ahead.txt", "asked\n")
+            preview_flag = clean_runs(
+                store, repo=repo, older_than_days=7, dry_run=True, include_unlanded=True, now=moment
+            )
+            self.assertTrue(preview_flag["include_unlanded"])
+            self.assertEqual(preview_flag["skipped"], [])
+            flagged = {item["run_id"]: item for item in preview_flag["removed"]}
+            self.assertIn(asked_branch, flagged[asked["run_id"]]["branches"])
+            stdout = _Buffer()
+            with patch("scripts.v3.harness.cli.ROOT", repo), patch("sys.stdout", stdout):
+                code = main(
+                    [
+                        "clean",
+                        "--state-dir",
+                        str(state),
+                        "--older-than",
+                        "0",
+                        "--include-unlanded",
+                        "--dry-run",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            body = json.loads(stdout.getvalue())
+            self.assertTrue(body["include_unlanded"])
+            self.assertIn(asked_branch, body["removed"][0]["branches"])
+            cleaned_flag = clean_runs(
+                store, repo=repo, older_than_days=7, dry_run=False, include_unlanded=True, now=moment
+            )
+            self.assertEqual(preview_flag["removed"], cleaned_flag["removed"])
+            self.assertNotIn(asked_branch, _heads(repo))
+
+    def test_clean_skips_a_dirty_worktree_unless_asked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            state = root / "state"
+            repo.mkdir()
+            _git_repo(repo)
+            store = RunStore(state)
+            landed = _old_run(store, status="completed", landed=True)
+            run_branch = f"recursion/run/{landed['run_id']}"
+            task_branch = f"recursion/task/{landed['run_id']}/task-0"
+            subprocess.run(["git", "branch", run_branch], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "branch", task_branch], cwd=repo, check=True, capture_output=True)
+            worktree = root / "task-tree"
+            subprocess.run(
+                ["git", "worktree", "add", str(worktree), task_branch],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+            )
+            (worktree / "scratch.txt").write_text("local edit\n", encoding="utf-8")
+            moment = _epoch("2026-01-01T00:00:00Z")
+            preview = clean_runs(store, repo=repo, older_than_days=7, dry_run=True, now=moment)
+            cleaned = clean_runs(store, repo=repo, older_than_days=7, dry_run=False, now=moment)
+            self.assertEqual(preview["removed"], cleaned["removed"])
+            self.assertEqual(preview["skipped"], cleaned["skipped"])
+            removed = cleaned["removed"][0]
+            self.assertIn(run_branch, removed["branches"])
+            self.assertNotIn(task_branch, removed["branches"])
+            self.assertEqual(removed["worktrees"], [])
+            skipped = _one(self, cleaned["skipped"], "dirty worktree", landed["run_id"])
+            self.assertEqual(skipped["branches"], [task_branch])
+            self.assertEqual({Path(path).resolve() for path in skipped["worktrees"]}, {worktree.resolve()})
+            self.assertTrue((worktree / "scratch.txt").is_file())
+            self.assertEqual((worktree / "scratch.txt").read_text(encoding="utf-8"), "local edit\n")
+            self.assertIn(task_branch, _heads(repo))
+            self.assertNotIn(run_branch, _heads(repo))
+
+            other = _old_run(store, status="completed", landed=True)
+            other_task = f"recursion/task/{other['run_id']}/task-0"
+            subprocess.run(["git", "branch", other_task], cwd=repo, check=True, capture_output=True)
+            other_tree = root / "other-tree"
+            subprocess.run(
+                ["git", "worktree", "add", str(other_tree), other_task],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+            )
+            (other_tree / "scratch.txt").write_text("discard\n", encoding="utf-8")
+            forced = clean_runs(
+                store, repo=repo, older_than_days=7, dry_run=False, include_unlanded=True, now=moment
+            )
+            self.assertEqual(forced["skipped"], [])
+            self.assertFalse(other_tree.exists())
+            self.assertNotIn(other_task, _heads(repo))
+
+    def test_clean_removes_a_branch_already_merged_to_the_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            _git_repo(repo)
+            subprocess.run(["git", "checkout", "-b", "dev"], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "checkout", "main"], cwd=repo, check=True, capture_output=True)
+            (repo / "later.txt").write_text("on main\n", encoding="utf-8")
+            subprocess.run(["git", "add", "later.txt"], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "later"], cwd=repo, check=True, capture_output=True)
+            store = RunStore(root / "state")
+            record = _old_run(store, status="completed")
+            branch = f"recursion/run/{record['run_id']}"
+            subprocess.run(["git", "branch", branch], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "checkout", "dev"], cwd=repo, check=True, capture_output=True)
+            try:
+                cleaned = clean_runs(
+                    store, repo=repo, older_than_days=0, dry_run=False, now=_epoch("2026-01-01T00:00:00Z")
+                )
+                self.assertEqual(cleaned["skipped"], [])
+                self.assertIn(branch, cleaned["removed"][0]["branches"])
+                self.assertNotIn(branch, _heads(repo))
+            finally:
+                subprocess.run(["git", "checkout", "main"], cwd=repo, check=True, capture_output=True)
+
+    def test_land_refuses_a_target_checked_out_elsewhere(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            _git_repo(repo)
+            subprocess.run(["git", "branch", "topic"], cwd=repo, check=True, capture_output=True)
+            topic_tree = root / "topic-tree"
+            subprocess.run(
+                ["git", "worktree", "add", str(topic_tree), "topic"],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+            )
+            topic_sha = _rev(repo, "topic")
+            store = RunStore(root / "state")
+            run_id, _branch = _run_branch(store, repo, "note.txt", "from-run\n")
+            calls = []
+            real = subprocess.run
+
+            def spy(argv, **kwargs):
+                calls.append(list(argv))
+                return real(argv, **kwargs)
+
+            with patch("scripts.v3.harness.land._RUN", spy):
+                with self.assertRaises(HarnessError) as refused:
+                    land_run(store, run_id, repo=repo, into="topic")
+            self.assertIn("target branch is checked out in another worktree", str(refused.exception))
+            self.assertEqual(Path(str(refused.exception).split(": ", 1)[1]).resolve(), topic_tree.resolve())
+            self.assertEqual(_rev(repo, "topic"), topic_sha)
+            self.assertFalse(any(argv[1:4] == ["worktree", "add", "--force"] or "--force" in argv for argv in calls))
+            self.assertFalse(any("worktree" in argv and "add" in argv for argv in calls))
+            stored = store.load(run_id)
+            self.assertEqual(stored["land"]["status"], "refused")
+            recorded = stored["land"]["error"].split(": ", 1)[1]
+            self.assertEqual(Path(recorded).resolve(), topic_tree.resolve())
+            listed = subprocess.run(
+                ["git", "worktree", "list"], cwd=repo, capture_output=True, text=True, check=True
+            )
+            self.assertNotIn("recursion-land-", listed.stdout)
+            landed = land_run(store, run_id, repo=repo, into="main")
+            self.assertEqual(landed["land"]["status"], "merged")
+            self.assertEqual(_author(repo, "main"), "ops-test\nops-test@example.com\n")
+            self.assertEqual(_rev(repo, "topic"), topic_sha)
+
+            side_run, _side_branch = _run_branch(store, repo, "extra.txt", "side\n")
+            subprocess.run(["git", "branch", "side"], cwd=repo, check=True, capture_output=True)
+            main_sha = _rev(repo, "main")
+            added = []
+
+            def spy_add(argv, **kwargs):
+                added.append(list(argv))
+                return real(argv, **kwargs)
+
+            with patch("scripts.v3.harness.land._RUN", spy_add):
+                landed_side = land_run(store, side_run, repo=repo, into="side")
+            self.assertEqual(landed_side["land"]["status"], "merged")
+            self.assertEqual(landed_side["land"]["branch"], "side")
+            self.assertEqual(_rev(repo, "main"), main_sha)
+            self.assertEqual(_show(repo, "side", "extra.txt"), "side\n")
+            add_calls = [argv for argv in added if "worktree" in argv and "add" in argv]
+            self.assertEqual(len(add_calls), 1)
+            self.assertNotIn("--force", add_calls[0])
+            listed_after = subprocess.run(
+                ["git", "worktree", "list"], cwd=repo, capture_output=True, text=True, check=True
+            )
+            self.assertNotIn("recursion-land-", listed_after.stdout)
+
+    def test_land_falls_back_to_the_recursion_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            _git_repo(repo)
+            store = RunStore(root / "state")
+            run_id, _branch = _run_branch(store, repo, "note.txt", "from-run\n")
+            subprocess.run(["git", "config", "--unset", "user.name"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "--unset", "user.email"], cwd=repo, check=True)
+            blank = root / "empty-gitconfig"
+            blank.write_text("", encoding="utf-8")
+            real = subprocess.run
+
+            def sandboxed(argv, **kwargs):
+                env = os.environ.copy()
+                for key in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
+                    env.pop(key, None)
+                env["GIT_CONFIG_GLOBAL"] = str(blank)
+                env["GIT_CONFIG_SYSTEM"] = str(blank)
+                env["GIT_CONFIG_NOSYSTEM"] = "1"
+                kwargs["env"] = env
+                return real(argv, **kwargs)
+
+            with patch("scripts.v3.harness.land._RUN", sandboxed):
+                landed = land_run(store, run_id, repo=repo, into="main")
+            self.assertEqual(landed["land"]["status"], "merged")
+            self.assertEqual(_author(repo, "main"), "recursion\nrecursion@localhost\n")
+
+
+def _old_run(store: RunStore, *, status: str, landed: bool = False) -> dict:
+    record = create_run(
+        store,
+        goal=status,
+        planned=[_planned(status, status)],
+        candidates=[["writer"]],
+        route=ROUTE,
+        concurrency=1,
+    )
+
+    def mark(current: dict) -> None:
+        current["created"] = "2020-01-01T00:00:00Z"
+        current["status"] = status
+        current["run_branch"] = f"recursion/run/{record['run_id']}"
+        for task in current["tasks"]:
+            task["status"] = "completed" if status == "completed" else status
+        if landed:
+            current["land"] = {
+                "branch": "main",
+                "commit": None,
+                "error": None,
+                "paths": [],
+                "status": "merged",
+            }
+
+    store.update(record["run_id"], mark)
+    return record
+
+
+def _run_branch(store: RunStore, repo: Path, filename: str, text: str) -> tuple[str, str]:
+    record = create_run(
+        store,
+        goal=filename,
+        planned=[_planned(filename, "write")],
+        candidates=[["writer"]],
+        route=ROUTE,
+        concurrency=1,
+    )
+    branch = f"recursion/run/{record['run_id']}"
+    _commit_on_branch(repo, branch, filename, text)
+
+    def mark(current: dict) -> None:
+        current["status"] = "completed"
+        current["run_branch"] = branch
+        for task in current["tasks"]:
+            task["status"] = "completed"
+
+    store.update(record["run_id"], mark)
+    return record["run_id"], branch
+
+
+def _commit_on_branch(repo: Path, branch: str, filename: str, text: str) -> None:
+    subprocess.run(["git", "checkout", "-b", branch], cwd=repo, check=True, capture_output=True)
+    (repo / filename).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "add", filename], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", filename], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "checkout", "main"], cwd=repo, check=True, capture_output=True)
+
+
+def _one(test: unittest.TestCase, skipped: list[dict], reason: str, run_id: str) -> dict:
+    matches = [item for item in skipped if item.get("reason") == reason and item.get("run_id") == run_id]
+    test.assertEqual(len(matches), 1)
+    return matches[0]
+
+
+def _author(repo: Path, branch: str) -> str:
+    return subprocess.check_output(["git", "log", "-1", "--format=%an%n%ae", branch], cwd=repo, text=True)
 
 
 def _planned(task: str, task_id: str, depends_on: list[str] | None = None) -> dict:
