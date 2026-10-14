@@ -33,7 +33,9 @@
   runs on a fresh worktree cut from the run branch, then through review, and
   is recorded on the run, in the log, in progress lines, and in the report.
   An interrupted recovery can be resumed. Cancel stops it. The starting
-  checkout is left alone.
+  checkout is left alone. On Windows the run-record lock waits when another
+  process already holds it, so that cancel is not rejected with a permission
+  error while a provider is still running.
 
 ## 0.2.0 — 2026-10-14
 
