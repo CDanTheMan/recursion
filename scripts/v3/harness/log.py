@@ -42,11 +42,15 @@ class JsonLog:
     When ``state_dir`` is set, ``bind(run_id=...)`` also appends the events to
     ``<state_dir>/<run-id>.jsonl``. Events emitted before ``bind`` are kept and
     written into that file with the run id filled in.
+
+    ``progress`` receives a short plain line for the same event. JSONL streams
+    stay JSONL. A progress stream is not also a JSONL stream.
     """
 
-    def __init__(self, streams: list, state_dir: Path | None = None) -> None:
+    def __init__(self, streams: list, state_dir: Path | None = None, progress=None) -> None:
         self.streams = streams
         self.state_dir = None if state_dir is None else Path(state_dir)
+        self.progress = progress
         self._lock = threading.Lock()
         self._buffer: list[dict] = []
         self._run_id: str | None = None
@@ -71,12 +75,17 @@ class JsonLog:
         record = redact({"event": name, "ts": utc_now(), **payload})
         if not isinstance(record, dict):
             return
+        shown = {key: value for key, value in record.items() if key not in {"event", "ts"}}
+        text = progress_line(name, shown)
         with self._lock:
             if self._run_id and "run_id" not in record:
                 record["run_id"] = self._run_id
             if self.state_dir is not None and self._run_id is None:
                 self._buffer.append(dict(record))
             _write_jsonl(self.streams, record)
+            if self.progress is not None:
+                self.progress.write(text + "\n")
+                self.progress.flush()
 
     def close(self) -> None:
         with self._lock:
@@ -126,6 +135,60 @@ class NullLog:
 
     def bind(self, **fields: object) -> None:
         del fields
+
+
+def progress_line(name: str, fields: dict) -> str:
+    """One plain line. Names the outcome and omits error bodies."""
+
+    index = fields.get("index")
+    provider = fields.get("provider")
+    if name == "task.started" and _is_index(index):
+        return f"task {index} started"
+    if name == "task.completed" and _is_index(index):
+        return f"task {index} completed provider={provider}"
+    if name == "task.failed" and _is_index(index):
+        return f"task {index} failed"
+    if name == "task.cancelled" and _is_index(index):
+        return f"task {index} cancelled"
+    if name == "task.unreviewed" and _is_index(index):
+        return f"task {index} unreviewed"
+    if name == "task.conflict" and _is_index(index):
+        return f"task {index} conflict"
+    if name == "task.review_rejected" and _is_index(index):
+        return f"task {index} review-rejected"
+    if name == "provider.attempt":
+        return f"provider {provider} attempt {fields.get('attempt')}"
+    if name == "provider.result":
+        return f"provider {provider} finished"
+    if name == "provider.failed":
+        error = fields.get("error")
+        if isinstance(error, str) and error:
+            return f"provider {provider} failed {error}"
+        return f"provider {provider} failed"
+    if name == "provider.skipped":
+        return f"provider {provider} skipped"
+    if name == "run.refused":
+        return f"run refused {fields.get('error')}"
+    if name == "run.resume":
+        return f"run resume {fields.get('status')}"
+    if name == "plan.admitted":
+        return "plan admitted"
+    if name == "plan.fallback":
+        return "plan fallback"
+    if name == "plan.ready":
+        return "plan ready"
+    if name == "route.selected":
+        return f"route {fields.get('selected_route_id')}"
+    if name == "provider.candidates":
+        names = fields.get("candidates")
+        if isinstance(names, list):
+            return "candidates " + ",".join(str(item) for item in names)
+        return "candidates"
+    return name
+
+
+def _is_index(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def read_events(path: Path) -> list[dict]:
