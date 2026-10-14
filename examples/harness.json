@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "review": {
+    "max_rounds": 1,
+    "accept_unreviewed": false
+  },
+  "landing": {
+    "base_ref": "HEAD"
+  },
+  "budgets": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 1000000,
+    "max_cost": null
+  },
+  "orchestration": {
+    "concurrency": 2
+  },
+  "routing": {
+    "required_capabilities": ["execute"],
+    "preference": ["claude", "codex", "grok", "fixture", "gemini", "cursor", "opencode"],
+    "retries": 0,
+    "backoff_seconds": 0,
+    "cooldown_seconds": 60,
+    "weights": {
+      "fixture": 1,
+      "claude": 1,
+      "codex": 1,
+      "grok": 1,
+      "gemini": 1,
+      "cursor": 1,
+      "opencode": 1
+    }
+  },
+  "providers": [
+    {
+      "name": "fixture",
+      "enabled": false,
+      "capabilities": ["execute", "deterministic"],
+      "argv": ["fixture-provider", "--output-format", "json"],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "claude",
+      "enabled": true,
+      "capabilities": ["execute", "stream-json", "subscription"],
+      "argv": ["claude", "-p", "--output-format", "stream-json"],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "codex",
+      "enabled": true,
+      "capabilities": ["execute", "jsonl", "subscription"],
+      "argv": ["codex", "exec", "--json"],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "grok",
+      "enabled": true,
+      "capabilities": ["execute", "streaming-json", "subscription"],
+      "argv": ["grok", "-p", "--output-format", "streaming-json"],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "gemini",
+      "enabled": false,
+      "capabilities": ["execute", "stream-json", "subscription"],
+      "argv": ["gemini", "-p", "--output-format", "stream-json"],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "cursor",
+      "enabled": false,
+      "capabilities": ["execute", "stream-json", "subscription"],
+      "argv": ["cursor-agent", "-p", "--output-format", "stream-json"],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "opencode",
+      "enabled": false,
+      "capabilities": ["execute", "json"],
+      "argv": ["opencode", "run", "--format", "json"],
+      "timeout_seconds": 30
+    }
+  ]
+}

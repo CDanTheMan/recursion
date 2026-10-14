@@ -40,3 +40,6 @@ after that cut.
   capabilities, and cooldown status. The planner prompt asks for
   `depends_on`, and a fixture goal that starts with `graph` emits a real
   dependency list.
+- Sample goal and config in `examples/`, and a console end-to-end test that
+  installs `recursion` and drives `plan`, `run`, `status`, `cancel`, `resume`,
+  and the report through fake `claude`, `codex`, and `grok` executables.

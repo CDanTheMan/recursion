@@ -33,8 +33,9 @@ ALLOWED = {
     "tools/test_check_v3_orientation_scope.py",
     ".gitattributes", ".github/workflows/ci.yml", ".github/workflows/release.yml",
     "requirements.txt", "pyproject.toml", "tests/conftest.py", "tests/test_v3_checks.py",
-    "tests/test_docs_drift.py", "tests/test_adapter_streams.py", "tests/.gitignore",
-    "docs/USER-GUIDE.md", "CHANGELOG.md",
+    "tests/test_docs_drift.py", "tests/test_adapter_streams.py", "tests/test_e2e_console.py",
+    "tests/.gitignore", "docs/USER-GUIDE.md", "CHANGELOG.md",
+    "examples/sample-goal.txt", "examples/harness.json", "examples/stubs/provider_stub.py",
 }
 PRODUCT_SLICE = {
     ".gitignore",
