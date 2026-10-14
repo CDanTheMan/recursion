@@ -6,6 +6,7 @@ and are not retried. The next eligible provider runs immediately.
 
 from __future__ import annotations
 
+import inspect
 import time
 
 from scripts.v3.harness.cooldowns import resolve_until
@@ -92,7 +93,14 @@ def execute_with_policy(
                 route_id=request.route_id,
             )
             try:
-                result = _execute(adapter, request, allow_live=allow_live, timeout_seconds=timeout_seconds, name=name)
+                result = _execute(
+                    adapter,
+                    request,
+                    allow_live=allow_live,
+                    timeout_seconds=timeout_seconds,
+                    name=name,
+                    should_stop=should_stop,
+                )
             except RunCancelled:
                 raise
             except HarnessError as exc:
@@ -126,11 +134,31 @@ def execute_with_policy(
     raise error
 
 
-def _execute(adapter, request: ProviderRequest, *, allow_live: bool, timeout_seconds, name: str) -> ProviderResult:
-    if timeout_seconds is None:
-        return adapter.execute(request, allow_live=allow_live)
-    return adapter.execute(
-        request,
-        allow_live=allow_live,
-        timeout_seconds=timeout_seconds.get(name),
-    )
+def _execute(
+    adapter,
+    request: ProviderRequest,
+    *,
+    allow_live: bool,
+    timeout_seconds,
+    name: str,
+    should_stop,
+) -> ProviderResult:
+    kwargs: dict = {"allow_live": allow_live}
+    if timeout_seconds is not None:
+        kwargs["timeout_seconds"] = timeout_seconds.get(name)
+    if _accepts(adapter.execute, "should_stop"):
+        kwargs["should_stop"] = should_stop
+    return adapter.execute(request, **kwargs)
+
+
+def _accepts(func, name: str) -> bool:
+    """True when ``func`` can take ``name`` without surprising older test doubles."""
+
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return False
+    parameters = signature.parameters
+    if name in parameters:
+        return True
+    return any(item.kind is inspect.Parameter.VAR_KEYWORD for item in parameters.values())

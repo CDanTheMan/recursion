@@ -252,7 +252,9 @@ Help: cancel unfinished tasks in a saved run.
 `cancel` does not take `--allow-live` or `--log`. It sets `cancel_requested`
 and marks `pending` and `running` tasks `cancelled` with error `run cancelled`.
 A run whose tasks are all `completed` stays `completed`. Any other mix is
-`cancelled`. A live driver checks the flag between attempts and stops.
+`cancelled`. A live driver terminates the provider process that is still
+running, and the children that process started, and does not begin another
+attempt. Resume clears that cancel and can run the unfinished tasks again.
 
 ### providers
 
@@ -672,7 +674,9 @@ directory is gitignored. Status values include `running`, `completed`,
 one record. `recursion resume --run RUN-...` continues tasks that are not
 `completed`. `recursion cancel --run RUN-...` cancels tasks that are still
 `pending` or `running`. A driver that is already inside a provider call
-notices the cancel before the next attempt.
+terminates that process. A provider timeout terminates it the same way.
+On Linux the call stops the process group. On Windows it stops the job
+object that contains the process.
 
 `recursion logs RUN-...` prints the JSONL file for that run. Tokens and
 API-key-looking strings are replaced with `[REDACTED]` before they are
@@ -705,7 +709,7 @@ key in a stored object is replaced entirely.
 | `goal text is empty` | `--goal` has no non-empty line. |
 | `headless CLI is not started unless --allow-live is set` | A live provider was selected without `--allow-live`. |
 | `CLI was not found on PATH` | Install that CLI or pick another provider. |
-| `timed out after N seconds` | The process exceeded that provider's `timeout_seconds`. |
+| `timed out after N seconds` | The process exceeded that provider's `timeout_seconds`. The process and the children it started are stopped. |
 | `was rate-limited` | The process exited 429 or its stderr said it was rate limited. The log does not keep that stderr. |
 | `exited N` | The process failed for another reason. Stderr is not stored. |
 | `budget exceeded` | A known usage figure is above its ceiling. |
