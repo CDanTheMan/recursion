@@ -33,15 +33,23 @@ ALLOWED = {
     "tools/test_check_v3_orientation_scope.py",
 }
 PRODUCT_SLICE = {
+    "config/harness.json",
     "docs/v3/HARNESS-SLICE.md",
+    "scripts/recursion",
+    "scripts/tests/v3/harness/adapters.test.py",
+    "scripts/tests/v3/harness/harness.test.py",
     "scripts/v3/harness/__init__.py",
     "scripts/v3/harness/__main__.py",
+    "scripts/v3/harness/capabilities.py",
+    "scripts/v3/harness/cli.py",
+    "scripts/v3/harness/config.py",
+    "scripts/v3/harness/dispatch.py",
     "scripts/v3/harness/errors.py",
+    "scripts/v3/harness/log.py",
     "scripts/v3/harness/planning.py",
     "scripts/v3/harness/providers.py",
     "scripts/v3/harness/routing.py",
     "scripts/v3/harness/run.py",
-    "scripts/tests/v3/harness/harness.test.py",
 }
 
 
@@ -199,7 +207,10 @@ def m1_programs() -> list[tuple[str, ...]]:
 
 
 def harness_programs() -> list[tuple[str, ...]]:
-    return [("scripts/tests/v3/harness/harness.test.py",)]
+    return [
+        ("scripts/tests/v3/harness/adapters.test.py",),
+        ("scripts/tests/v3/harness/harness.test.py",),
+    ]
 
 
 def run_contracts() -> tuple[int, int]:

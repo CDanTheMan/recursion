@@ -1,4 +1,9 @@
-"""Provider adapters. One headless CLI, plus a fixture that never starts a process."""
+"""Provider adapters. Headless CLIs, plus a fixture that never starts a process.
+
+Each adapter builds argv and starts a process only when ``allow_live`` is set.
+The harness does not read credentials. Retries and fallback live in
+``dispatch.py``, not inside an adapter.
+"""
 
 from __future__ import annotations
 
@@ -36,13 +41,11 @@ class ProviderResult:
 
 
 class ProviderAdapter:
-    """Headless execution behind one interface.
-
-    Adapters build an argv and, only when explicitly allowed, start that process.
-    The harness does not read credentials and does not invent a fallback provider.
-    """
+    """Headless execution behind one interface."""
 
     name = ""
+    STATIC_ARGV: tuple[str, ...] = ()
+    CAPABILITIES: tuple[str, ...] = ()
 
     def argv(self, request: ProviderRequest) -> tuple[str, ...]:
         raise NotImplementedError
@@ -55,9 +58,12 @@ class FixtureProvider(ProviderAdapter):
     """Deterministic stand-in used by local runs and the contracts gate."""
 
     name = "fixture"
+    STATIC_ARGV = ("fixture-provider", "--output-format", "json")
+    CAPABILITIES = ("execute", "deterministic")
 
     def argv(self, request: ProviderRequest) -> tuple[str, ...]:
-        return ("fixture-provider", "--output-format", "json")
+        del request
+        return self.STATIC_ARGV
 
     def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
         del allow_live
@@ -72,53 +78,107 @@ class FixtureProvider(ProviderAdapter):
         return ProviderResult(provider=self.name, argv=self.argv(request), text=text, live=False)
 
 
+def _refuse_unless_live(adapter: ProviderAdapter, allow_live: bool) -> None:
+    if not allow_live:
+        raise LiveProviderDisabled(
+            f"{adapter.name} headless CLI is not started unless --allow-live is set"
+        )
+
+
+def _run_cli(adapter: ProviderAdapter, request: ProviderRequest, *, stdin_text: str | None) -> ProviderResult:
+    argv = adapter.argv(request)
+    kwargs: dict = {
+        "text": True,
+        "encoding": "utf-8",
+        "capture_output": True,
+        "check": False,
+    }
+    if stdin_text is None:
+        kwargs["stdin"] = subprocess.DEVNULL
+    else:
+        kwargs["input"] = stdin_text
+    completed = subprocess.run(list(argv), **kwargs)
+    if completed.returncode != 0:
+        raise HarnessError(f"{adapter.name} exited {completed.returncode}")
+    return ProviderResult(provider=adapter.name, argv=argv, text=completed.stdout, live=True)
+
+
 class ClaudeHeadlessProvider(ProviderAdapter):
     """Claude Code print mode: ``claude -p --output-format stream-json``.
 
     The prompt is written to the process stdin. This adapter does not start
-    ``claude`` unless ``allow_live`` is true. Tests and the contracts gate leave
-    that flag unset.
+    ``claude`` unless ``allow_live`` is true.
     """
 
     name = "claude"
-    ARGV = ("claude", "-p", "--output-format", "stream-json")
+    STATIC_ARGV = ("claude", "-p", "--output-format", "stream-json")
+    CAPABILITIES = ("execute", "stream-json", "subscription")
 
     def argv(self, request: ProviderRequest) -> tuple[str, ...]:
         del request
-        return self.ARGV
+        return self.STATIC_ARGV
 
     def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
-        if not allow_live:
-            raise LiveProviderDisabled(
-                "claude headless CLI is not started unless --allow-live is set"
-            )
-        completed = subprocess.run(
-            list(self.argv(request)),
-            input=request.task,
-            text=True,
-            encoding="utf-8",
-            capture_output=True,
-            check=False,
-        )
-        if completed.returncode != 0:
-            raise HarnessError(f"claude exited {completed.returncode}")
-        return ProviderResult(
-            provider=self.name,
-            argv=self.argv(request),
-            text=completed.stdout,
-            live=True,
-        )
+        _refuse_unless_live(self, allow_live)
+        return _run_cli(self, request, stdin_text=request.task)
+
+
+class CodexExecProvider(ProviderAdapter):
+    """Codex noninteractive mode: ``codex exec --json <prompt>``.
+
+    The task is the prompt argument. Stdin is not attached. The process starts
+    only when ``allow_live`` is true.
+    """
+
+    name = "codex"
+    STATIC_ARGV = ("codex", "exec", "--json")
+    CAPABILITIES = ("execute", "jsonl", "subscription")
+
+    def argv(self, request: ProviderRequest) -> tuple[str, ...]:
+        return self.STATIC_ARGV + (request.task,)
+
+    def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
+        _refuse_unless_live(self, allow_live)
+        return _run_cli(self, request, stdin_text=None)
+
+
+class GrokHeadlessProvider(ProviderAdapter):
+    """Grok Build headless mode: ``grok -p <prompt> --output-format streaming-json``.
+
+    The task is the ``-p`` prompt argument. The process starts only when
+    ``allow_live`` is true.
+    """
+
+    name = "grok"
+    STATIC_ARGV = ("grok", "-p", "--output-format", "streaming-json")
+    CAPABILITIES = ("execute", "streaming-json", "subscription")
+
+    def argv(self, request: ProviderRequest) -> tuple[str, ...]:
+        return ("grok", "-p", request.task, "--output-format", "streaming-json")
+
+    def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
+        _refuse_unless_live(self, allow_live)
+        return _run_cli(self, request, stdin_text=None)
+
+
+def adapters() -> dict[str, type[ProviderAdapter]]:
+    """Registered adapter classes, keyed by provider name."""
+
+    classes = (
+        FixtureProvider,
+        ClaudeHeadlessProvider,
+        CodexExecProvider,
+        GrokHeadlessProvider,
+    )
+    return {cls.name: cls for cls in classes}
 
 
 def open_provider(name: str) -> ProviderAdapter:
     """Return the one adapter registered under ``name``."""
 
-    adapters: dict[str, ProviderAdapter] = {
-        FixtureProvider.name: FixtureProvider(),
-        ClaudeHeadlessProvider.name: ClaudeHeadlessProvider(),
-    }
+    known = adapters()
     try:
-        return adapters[name]
+        return known[name]()
     except KeyError as exc:
-        known = ", ".join(sorted(adapters))
-        raise HarnessError(f"unknown provider {name!r}; known providers: {known}") from exc
+        names = ", ".join(sorted(known))
+        raise HarnessError(f"unknown provider {name!r}; known providers: {names}") from exc

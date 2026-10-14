@@ -113,7 +113,13 @@ class HarnessSliceTests(unittest.TestCase):
         m1 = checker.m1_programs()
         harness = checker.harness_programs()
         self.assertEqual(len(m1), 23)
-        self.assertEqual([item[0] for item in harness], ["scripts/tests/v3/harness/harness.test.py"])
+        self.assertEqual(
+            [item[0] for item in harness],
+            [
+                "scripts/tests/v3/harness/adapters.test.py",
+                "scripts/tests/v3/harness/harness.test.py",
+            ],
+        )
         self.assertIn("scripts/v3/harness/run.py", checker.PRODUCT_SLICE)
         self.assertIn("docs/v3/HARNESS-SLICE.md", checker.PRODUCT_SLICE)
 
