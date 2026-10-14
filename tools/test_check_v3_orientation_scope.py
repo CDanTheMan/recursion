@@ -170,6 +170,7 @@ class ScopeCheckTests(unittest.TestCase):
         self.assertIn(".gitattributes", gate.ALLOWED)
         self.assertIn("tests/test_v3_checks.py", gate.ALLOWED)
         self.assertIn("tests/test_docs_drift.py", gate.ALLOWED)
+        self.assertIn("tests/test_adapter_streams.py", gate.ALLOWED)
         self.assertIn("pyproject.toml", gate.ALLOWED)
         self.assertIn("docs/USER-GUIDE.md", gate.ALLOWED)
         self.assertIn("CHANGELOG.md", gate.ALLOWED)
