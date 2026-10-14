@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- `scripts/install.sh` and `scripts/install.ps1` create a virtualenv, install
+  this checkout, run `recursion doctor`, and print the next commands. CI runs
+  the Linux script and the Windows script, then checks `recursion --help`.
+  The package depends on `jsonschema` 4.23.0 so that install can validate
+  `config/harness.json`.
+- Fake-only tests cover thin harness branches in stream parsing, config
+  rejection, doctor sign-in probes, cooldown files, and run records. They
+  do not start a provider CLI.
+
 ### Changed
 
 - `recursion cancel` stops a live provider process that is still running, and a

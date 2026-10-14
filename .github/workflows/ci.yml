@@ -59,6 +59,22 @@ jobs:
       - name: Install the package
         run: python -m pip install -e .
 
+      - name: One-step install
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1
+            help_text="$(.venv/Scripts/recursion.exe --help)"
+          else
+            bash scripts/install.sh
+            help_text="$(.venv/bin/recursion --help)"
+          fi
+          printf '%s\n' "$help_text"
+          case "$help_text" in
+            *"usage: recursion"*) ;;
+            *) echo "recursion --help did not print usage" >&2; exit 1 ;;
+          esac
+
       - name: Pytest suites
         run: |
           set -euo pipefail

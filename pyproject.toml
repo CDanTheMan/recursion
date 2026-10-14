@@ -8,6 +8,9 @@ version = "0.2.0"
 description = "Provider-neutral agent harness"
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+    "jsonschema==4.23.0",
+]
 
 [project.scripts]
 recursion = "scripts.v3.harness.cli:main"
