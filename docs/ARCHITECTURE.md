@@ -63,8 +63,8 @@ it started: a process group on Linux and a job object on Windows.
 
 A different candidate reviews the task, the output, and the diff. The shipped
 config enables `fixture` and `fixture-b`, so an offline run has a reviewer
-other than the worker. The first
-non-empty line is `VERDICT approve` or `VERDICT revise`. Approve accepts the
+other than the worker. The first non-empty line is `VERDICT approve` or
+`VERDICT revise`. Approve accepts the
 task. Revise sends the notes back to the same worker, up to
 `review.max_rounds`. Anything else is treated as revise. A reviewer that
 edits the worktree is rejected and the edits are removed. If no reviewer
@@ -76,9 +76,13 @@ or the task stays `unreviewed`.
 Accepted edits are committed on the task branch when the provider left a
 dirty tree. A commit the provider already made is kept. The task branch is
 merged with `--no-ff` into the run branch, not into the checkout you started
-from. A conflict aborts that merge and records the paths. Unreviewed branches
-are kept and are not merged. Failed branches are deleted unless
-`--keep-worktrees` is set.
+from. A conflict aborts that merge and records the paths. When
+`landing.conflict_retries` is greater than zero, the harness asks a provider
+to reconcile the task on a fresh worktree cut from the run branch, reviews
+that result, and merges again. The default is one try. Zero leaves the
+conflict in place. A failed recovery keeps the conflicted task branch and
+skips dependents. Unreviewed branches are kept and are not merged. Failed
+branches are deleted unless `--keep-worktrees` is set.
 
 ## report
 

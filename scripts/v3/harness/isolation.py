@@ -66,6 +66,13 @@ class NullIsolator:
     def release(self, item: TaskIsolation, *, keep_branch: bool = False, keep_worktree: bool = False) -> None:
         del item, keep_branch, keep_worktree
 
+    def acquire_recovery(self, run_id: str, index: int, attempt: int, start_ref: str | None) -> TaskIsolation:
+        del run_id, index, attempt, start_ref
+        return TaskIsolation(None, None, None)
+
+    def delete_branch(self, branch: str | None) -> None:
+        del branch
+
 
 class GitWorktreeIsolator:
     """Check out ``recursion/task/<run-id>/task-<index>`` from the run branch.
@@ -115,6 +122,35 @@ class GitWorktreeIsolator:
             shutil.rmtree(path, ignore_errors=True)
             raise
         return TaskIsolation(path, branch, base)
+
+    def acquire_recovery(self, run_id: str, index: int, attempt: int, start_ref: str | None) -> TaskIsolation:
+        """Check out a fresh branch from the run branch without deleting the conflicted one."""
+
+        branch = recovery_branch_name(run_id, index, attempt)
+        start = start_ref or "HEAD"
+        path = Path(tempfile.mkdtemp(prefix=f"recursion-{run_id}-{index}-recover-{attempt}-"))
+        try:
+            with self._lock():
+                _git_quiet(self.repo, "worktree", "prune")
+                for checkout in _worktrees_for(self.repo, branch):
+                    _git_quiet(self.repo, "worktree", "remove", "--force", checkout)
+                _git_quiet(self.repo, "branch", "-D", branch)
+                base = _git(self.repo, "rev-parse", start).strip()
+                _git(self.repo, "worktree", "add", "--force", "-b", branch, str(path), start)
+        except Exception:
+            _git_quiet(self.repo, "worktree", "remove", "--force", str(path))
+            _git_quiet(self.repo, "branch", "-D", branch)
+            shutil.rmtree(path, ignore_errors=True)
+            raise
+        return TaskIsolation(path, branch, base)
+
+    def delete_branch(self, branch: str | None) -> None:
+        if not branch:
+            return
+        with self._lock():
+            for checkout in _worktrees_for(self.repo, branch):
+                _git_quiet(self.repo, "worktree", "remove", "--force", checkout)
+            _git_quiet(self.repo, "branch", "-D", branch)
 
     def diff(self, item: TaskIsolation) -> str:
         if item.path is None or item.base is None:
@@ -229,6 +265,10 @@ def run_branch_name(run_id: str) -> str:
 
 def task_branch_name(run_id: str, index: int) -> str:
     return f"recursion/task/{run_id}/task-{index}"
+
+
+def recovery_branch_name(run_id: str, index: int, attempt: int) -> str:
+    return f"{task_branch_name(run_id, index)}-recover-{attempt}"
 
 
 def _worktrees_for(repo: Path, branch: str) -> list[str]:

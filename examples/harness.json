@@ -5,7 +5,8 @@
     "accept_unreviewed": false
   },
   "landing": {
-    "base_ref": "HEAD"
+    "base_ref": "HEAD",
+    "conflict_retries": 1
   },
   "budgets": {
     "max_input_tokens": 1000000,
