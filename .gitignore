@@ -8,11 +8,13 @@ node_modules/
 __pycache__/
 *.pyc
 .venv/
+*.egg-info/
 *.log
 loop/logs/
 .DS_Store
 .claude/
 .tmp/
+.recursion/
 
 # Local tool binaries (downloaded, not committed): TLA+ tools for FU-03
 tools/tlaplus/

@@ -10,7 +10,13 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 
-from scripts.v3.harness.errors import HarnessError, LiveProviderDisabled
+from scripts.v3.harness.errors import (
+    HarnessError,
+    LiveProviderDisabled,
+    ProviderCLIMissing,
+    ProviderRateLimited,
+    ProviderTimeout,
+)
 
 
 @dataclass(frozen=True)
@@ -65,8 +71,14 @@ class FixtureProvider(ProviderAdapter):
         del request
         return self.STATIC_ARGV
 
-    def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
-        del allow_live
+    def execute(
+        self,
+        request: ProviderRequest,
+        *,
+        allow_live: bool = False,
+        timeout_seconds: int | None = None,
+    ) -> ProviderResult:
+        del allow_live, timeout_seconds
         text = "\n".join(
             (
                 "provider=fixture",
@@ -85,7 +97,24 @@ def _refuse_unless_live(adapter: ProviderAdapter, allow_live: bool) -> None:
         )
 
 
-def _run_cli(adapter: ProviderAdapter, request: ProviderRequest, *, stdin_text: str | None) -> ProviderResult:
+def _rate_limited(completed: subprocess.CompletedProcess[str]) -> bool:
+    """Classify a failed process as rate-limited without copying its output."""
+
+    if completed.returncode == 0:
+        return False
+    if completed.returncode == 429:
+        return True
+    stderr = (completed.stderr or "").lower()
+    return "rate limit" in stderr or "too many requests" in stderr
+
+
+def _run_cli(
+    adapter: ProviderAdapter,
+    request: ProviderRequest,
+    *,
+    stdin_text: str | None,
+    timeout_seconds: int | None,
+) -> ProviderResult:
     argv = adapter.argv(request)
     kwargs: dict = {
         "text": True,
@@ -93,11 +122,23 @@ def _run_cli(adapter: ProviderAdapter, request: ProviderRequest, *, stdin_text: 
         "capture_output": True,
         "check": False,
     }
+    if timeout_seconds is not None:
+        kwargs["timeout"] = timeout_seconds
     if stdin_text is None:
         kwargs["stdin"] = subprocess.DEVNULL
     else:
         kwargs["input"] = stdin_text
-    completed = subprocess.run(list(argv), **kwargs)
+    try:
+        completed = subprocess.run(list(argv), **kwargs)
+    except FileNotFoundError as exc:
+        raise ProviderCLIMissing(
+            f"{adapter.name} CLI was not found on PATH ({argv[0]}). "
+            "Install it, or choose another provider."
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ProviderTimeout(f"{adapter.name} timed out after {timeout_seconds} seconds") from exc
+    if _rate_limited(completed):
+        raise ProviderRateLimited(f"{adapter.name} was rate-limited")
     if completed.returncode != 0:
         raise HarnessError(f"{adapter.name} exited {completed.returncode}")
     return ProviderResult(provider=adapter.name, argv=argv, text=completed.stdout, live=True)
@@ -118,9 +159,15 @@ class ClaudeHeadlessProvider(ProviderAdapter):
         del request
         return self.STATIC_ARGV
 
-    def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
+    def execute(
+        self,
+        request: ProviderRequest,
+        *,
+        allow_live: bool = False,
+        timeout_seconds: int | None = None,
+    ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=request.task)
+        return _run_cli(self, request, stdin_text=request.task, timeout_seconds=timeout_seconds)
 
 
 class CodexExecProvider(ProviderAdapter):
@@ -137,9 +184,15 @@ class CodexExecProvider(ProviderAdapter):
     def argv(self, request: ProviderRequest) -> tuple[str, ...]:
         return self.STATIC_ARGV + (request.task,)
 
-    def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
+    def execute(
+        self,
+        request: ProviderRequest,
+        *,
+        allow_live: bool = False,
+        timeout_seconds: int | None = None,
+    ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=None)
+        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
 
 
 class GrokHeadlessProvider(ProviderAdapter):
@@ -156,9 +209,15 @@ class GrokHeadlessProvider(ProviderAdapter):
     def argv(self, request: ProviderRequest) -> tuple[str, ...]:
         return ("grok", "-p", request.task, "--output-format", "streaming-json")
 
-    def execute(self, request: ProviderRequest, *, allow_live: bool = False) -> ProviderResult:
+    def execute(
+        self,
+        request: ProviderRequest,
+        *,
+        allow_live: bool = False,
+        timeout_seconds: int | None = None,
+    ) -> ProviderResult:
         _refuse_unless_live(self, allow_live)
-        return _run_cli(self, request, stdin_text=None)
+        return _run_cli(self, request, stdin_text=None, timeout_seconds=timeout_seconds)
 
 
 def adapters() -> dict[str, type[ProviderAdapter]]:

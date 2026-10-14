@@ -1,3 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recursion"
+version = "0.2.0"
+description = "Provider-neutral agent harness"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[project.scripts]
+recursion = "scripts.v3.harness.cli:main"
+
+[tool.setuptools]
+packages = [
+    "scripts",
+    "scripts.v3",
+    "scripts.v3.harness",
+    "scripts.v3.planning",
+    "scripts.v3.planning.replay",
+    "scripts.v3.planning.validation",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
