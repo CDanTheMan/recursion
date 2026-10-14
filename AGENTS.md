@@ -1,46 +1,82 @@
-# Operating rules — Recursion
+# Recursion
 
-This repository builds Recursion v3, a provider-neutral agent harness. Read
-`CONTROL_PLANE.md` first — it says who decides. Read `ANCHOR.md` before any planning task —
-it says what is in scope. Then read [docs/v3/START-HERE.md](docs/v3/START-HERE.md) before
-selecting a task.
+This fork, [CDanTheMan/recursion](https://github.com/CDanTheMan/recursion), is standalone
+development. Product orientation is [docs/v3/START-HERE.md](docs/v3/START-HERE.md). It does
+not use the CSL Laboratories issue tracker, review bot, search MCPs, CI service, or Discord
+bot. `AGENTS.md` and `CLAUDE.md` stay byte-identical.
 
-## Your role
+## What this is
 
-Lucas is the final authority and assigns tasks. You are a bounded executor: one task, one
-repository/worktree, explicit allowed paths, explicit non-goals, and one machine-checkable
-acceptance gate. Work inside that boundary. If a task could be read two materially different
-ways, stop and record a blocker in `state/INBOX.md` — do not pick one.
+Recursion v3 is a provider-neutral agent harness: a client, a local execution kernel, a
+context and compaction engine, and a multi-node fabric, plus typed adapters for other
+harnesses. A person should be able to drive it on the models they already use, without
+locking the workflow to one provider.
 
-## Hard rules
+The tree is specifications, contract schemas, and provider-free checks. There is no
+application binary to compile.
 
-1. **Never `git push --force`.** Under any circumstance, in any script, for any reason.
-2. **Never commit to or merge into `master`.** Commit to `loop/work/<task-id>` and open a
-   review branch; Lucas reviews and merges.
-3. **Never modify a protected path** — `CONTROL_PLANE.md`, `ANCHOR.md`, `state/DECISIONS.md`,
-   `.env`, or auth/credential configuration. Propose changes in `state/PROPOSALS.md`.
-4. **No secrets in tracked files, logs or notifications.**
-5. **Every task needs a parent goal and a machine-checkable gate.** No gate, no work — it
-   escalates.
-6. **An implementer's PASS is not acceptance.** An independent verifier reruns the exact
-   candidate; prefer a different model family.
-7. **Generated output without verification is not progress.** If output outpaces review,
-   generate less.
-8. **Live provider/game/host actions, spending and quota resets are human-gated.** Ask; never
-   perform them.
+V1/v2 were removed from the trunk on 2026-09-28. That tree is at tag
+`pre-v3-clean-cut-20260928`.
 
-## Escalate, don't guess
+## Layout
 
-Stop and write to `state/INBOX.md` when a task is ambiguous, needs a decision not recorded in
-`state/DECISIONS.md`, conflicts with the research, or makes a claim you cannot verify.
+| Path | What it is |
+|---|---|
+| `docs/v3/` | Product specifications, research, and evidence. Start with `START-HERE.md` and `PRODUCT.md`. |
+| `experiments/v3/` | Provider-free experiments and checks |
+| `schemas/control-plane/v3/` | Planning, execution, and integrity schemas |
+| `scripts/v3/` | Planning replay and validation |
+| `scripts/tests/v3/` | M1 test programs and fixtures (planning, execution, integrity) |
+| `tools/` | Frozen orientation and scope checks |
+| `state/` | Decision log and goal records |
 
-## Working with the v3 specifications
+## Build and test
 
-`docs/v3` is non-normative until ratified. Do not reopen answered Owner questions or select a
-language, store, framework or sandbox from a research recommendation. Keep evidence classes
-distinct: source-documented, locally observed, inferred and unmeasured are different things.
+Python 3.11+ and Git, from the repository root. Tests import `jsonschema` (Draft 2020-12;
+4.23.0 is the version this suite was run with). Nothing else is built.
 
-## Style
+```bash
+set -euo pipefail
+python -X utf8 -B schemas/control-plane/v3/planning/materialize.py --check
+python -X utf8 -B schemas/control-plane/v3/execution/materialize.py --check
+python -X utf8 -B schemas/control-plane/v3/integrity/materialize.py --check
+python -X utf8 -B scripts/tests/v3/planning/materialize_fixtures.py --check
+python -X utf8 -B scripts/tests/v3/execution/materialize_fixtures.py --check
+python -X utf8 -B scripts/tests/v3/integrity/materialize_fixtures.py --check
+find scripts/tests/v3 -name '*.test.py' -print | sort | while IFS= read -r f; do
+  python -X utf8 -B "$f"
+done
+python -X utf8 -B experiments/v3/recovery-ledger-20260914/test_ledger.py
+```
 
-Plain markdown. Dates as `YYYY-MM-DD`. Keep files skimmable — anything not reread is dead
-weight.
+That is the suite: six materialize checks, every `scripts/tests/v3/**/*.test.py` program,
+and the recovery-ledger tests. Keep it green. Fix the cause of a failure. Do not delete,
+skip, or weaken a check to make the run pass.
+
+`tools/check_v3_orientation.py` is a frozen 2026-09-13 path allowlist. Later work fails it
+on purpose. Leave it in place, and leave the product tree in place. It still requires this
+file and `CLAUDE.md` to match, and the text `docs/v3/START-HERE.md` in the first 2200
+characters of each.
+
+## Coding conventions
+
+- Checks and experiments are Python 3.11+. Runtime code stays on the standard library.
+  `jsonschema` is for tests and schema validation.
+- `from __future__ import annotations`, `pathlib`, and `unittest`. Run with
+  `python -X utf8 -B`.
+- Schemas are closed JSON Schema objects. Fixture ids stay contiguous (`F-M1A-001`, and
+  the same pattern for M1B and M1C).
+- Markdown is plain. Dates are `YYYY-MM-DD`.
+- No secrets, tokens, or credentials in tracked files.
+- Checks stay provider-free. Do not call a live provider, host, or paid API from a test.
+
+## Branch and pull request
+
+Work on this fork.
+
+1. Branch from up-to-date `master`.
+2. Commit on that branch. Do not commit to `master`.
+3. Push the branch and open a pull request against `master`.
+4. Never `git push --force`.
+
+Dan reviews and merges. Open the pull request with the suite green.
