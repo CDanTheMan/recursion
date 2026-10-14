@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from scripts.v3.harness.dag import line_nodes
 from scripts.v3.harness.errors import HarnessError, RunCancelled
 from scripts.v3.harness.isolation import NullIsolator
-from scripts.v3.harness.log import NullLog, utc_now
+from scripts.v3.harness.log import BoundLog, NullLog, utc_now
 from scripts.v3.harness.planning import plan_task
 from scripts.v3.harness.report import write_reports
 from scripts.v3.harness.review import execute_and_review
@@ -238,7 +238,7 @@ def drive_run(
                 max_rounds=max_rounds,
                 cwd=None if iso.path is None else str(iso.path),
                 diff_of=lambda: checkout.diff(iso),
-                log=sink,
+                log=BoundLog(sink, index=index, packet_id=task["packet_id"], run_id=run_id),
                 open_adapter=open_adapter,
                 sleep=pause,
                 should_stop=stopped,
