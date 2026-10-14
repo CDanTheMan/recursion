@@ -101,6 +101,37 @@ class RoutingTests(unittest.TestCase):
         stamped = classify_failure("grok", 429, "reset 2026-10-14T08:35:00Z SECRET")
         self.assertEqual(stamped.until, "2026-10-14T08:35:00Z")
         self.assertNotIn("SECRET", str(stamped))
+        signed_out = classify_failure("grok", 1, "Error: Not signed in. SECRET")
+        self.assertIsInstance(signed_out, ProviderAuthExpired)
+        self.assertNotIn("SECRET", str(signed_out))
+        gemini = classify_failure("gemini", 41, "Please set an Auth method in GEMINI_API_KEY")
+        self.assertIsInstance(gemini, ProviderAuthExpired)
+        limited = classify_failure("claude", 1, "error category rate_limit")
+        self.assertIsInstance(limited, ProviderRateLimited)
+        claude_stdout = "\n".join(
+            (
+                '{"type":"assistant","error":"authentication_failed","message":{"content":[{"type":"text","text":"Not logged in"}]}}',
+                '{"type":"result","is_error":true,"result":"Not logged in · Please run /login","terminal_reason":"api_error"}',
+            )
+        )
+        claude = classify_failure("claude", 1, "", stdout=claude_stdout)
+        self.assertIsInstance(claude, ProviderAuthExpired)
+        self.assertNotIn("Not logged in", str(claude))
+        quiet = classify_failure("claude", 0, "", stdout=claude_stdout)
+        self.assertIsInstance(quiet, ProviderAuthExpired)
+        echoed = '{"type":"assistant","message":{"content":[{"type":"text","text":"the word unauthorized appears"}]}}'
+        generic = classify_failure("claude", 1, "", stdout=echoed)
+        self.assertIsInstance(generic, HarnessError)
+        self.assertIn("exited 1", str(generic))
+        self.assertNotIsInstance(generic, ProviderAuthExpired)
+        codex = classify_failure(
+            "codex",
+            1,
+            "",
+            stdout='{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized"}}',
+        )
+        self.assertIsInstance(codex, ProviderAuthExpired)
+        self.assertNotIn("Unauthorized", str(codex))
 
     def test_rate_limit_cools_down_and_the_next_provider_runs(self) -> None:
         calls: list[str] = []

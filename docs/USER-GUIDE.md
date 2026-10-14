@@ -142,7 +142,7 @@ usage: recursion [-h]
 `-h` and `--help` show that text and exit. `plan`, `run`, `status`,
 `resume`, `cancel`, `providers`, `land`, and `clean` also accept `--config`
 and `--state-dir`.
-`doctor` accepts `--config` and does not accept `--state-dir`. `init` accepts
+`doctor` accepts `--config` and `--live`, and does not accept `--state-dir`. `init` accepts
 a path and `--force`, and does not accept `--config` or `--state-dir`.
 `config validate` accepts `--config`. `logs` accepts `--state-dir` and does
 not read the config.
@@ -304,14 +304,14 @@ or `{reason, until}`. `until` is UTC, `YYYY-MM-DDTHH:MM:SSZ`.
 
 `cli_found` is true for `fixture` without looking it up. For every other
 provider it is true when `doctor`'s PATH search finds the command, including
-Windows `.exe`, `.cmd`, and `.bat` shims. The command does not start the CLI
+Windows `.exe`, `.cmd`, `.bat`, and `.ps1` shims. The command does not start the CLI
 and does not probe sign-in. Active cooldowns come from
 `<state-dir>/cooldowns.json`.
 
 ### doctor
 
 ```text
-usage: recursion doctor [-h] [--config CONFIG]
+usage: recursion doctor [-h] [--config CONFIG] [--live]
 ```
 
 Help: check git and each configured provider executable.
@@ -319,10 +319,22 @@ Help: check git and each configured provider executable.
 | Flag | Help text |
 |---|---|
 | `--config CONFIG` | provider config JSON (default: config/harness.json) |
+| `--live` | send one tiny prompt to each enabled, signed-in provider |
 
 Stdout is one JSON object with `git`, `ok`, and `providers`. `ok` is true
 when at least one enabled provider is usable. The process exits `0` when
 `ok` is true and `1` when it is false. A bad config still exits `2`.
+
+`--live` is off unless you pass it. It sends one prompt, `Reply with the
+single word pong. Do not use tools and do not change any files.`, to each
+enabled provider that is installed and signed in. Each prompt runs in a
+throwaway git repository. The report then also has `live` and `live_ok`.
+`live` is one row per provider, with `status` (`skipped` or `ran`),
+`reason`, `ok`, `text`, and `error`. `text` is the parsed assistant reply,
+truncated. `live_ok` is true when every attempted prompt passed, and also
+when none were attempted. The process exits `1` when `ok` is false or
+`live_ok` is false. `doctor --live` refuses, before any prompt, when `CI`
+or `GITHUB_ACTIONS` is set. Tests and CI do not pass `--live`.
 
 `git.available` is whether `git --version` succeeds. `git.version` is the
 first line of that output. On Windows, `git.longpaths` is true when
@@ -335,9 +347,13 @@ Each provider row has `name`, `command`, `enabled`, `installed`, `resolved`,
 without a PATH lookup. It is usable when it is enabled, and `signed_in` is
 `not-applicable`. Another provider is installed when its command resolves on
 `PATH`. On Windows the search also tries `PATHEXT` and always tries `.exe`,
-`.cmd`, and `.bat`, ignoring case. It is usable when it is enabled and
-installed. `version` is the first line of `<command> --version` when that
-exits 0.
+`.cmd`, `.bat`, and `.ps1`, ignoring case. A `.cmd` or `.bat` shim is
+started through `cmd.exe /d /c`. A generated provider stub is started with
+Python directly. A `.ps1` shim is started with `powershell.exe -NoProfile
+-NonInteractive -ExecutionPolicy Bypass -File`, or with `pwsh` when that
+is the PowerShell found on `PATH`. A `.exe` is started directly. A provider
+is usable when it is enabled and installed. `version` is the first line of
+`<command> --version` when that exits 0.
 
 Sign-in checks are local and do not start a billed prompt. The report never
 includes the variable's value, a credential file's contents, or the probe's
@@ -349,8 +365,8 @@ stdout.
 | `codex` | `codex login status`. Exit 0 is signed in. |
 | `grok` | `XAI_API_KEY` is set, or `~/.grok/auth.json` exists and is non-empty. The file is not read. |
 | `gemini` | `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_APPLICATION_CREDENTIALS` is set, or `~/.gemini/oauth_creds.json` exists and is non-empty. The file is not read. `GOOGLE_GENAI_USE_VERTEXAI` and `GOOGLE_GENAI_USE_GCA` alone are not treated as signed in. |
-| `cursor` | `CURSOR_API_KEY` is set, otherwise `cursor-agent status --format json`. |
-| `opencode` | `~/.local/share/opencode/auth.json` exists and is non-empty (the file is not read), otherwise `opencode auth list --format json --standalone`. An empty list, or the text `No authenticated integrations`, is signed out. `--standalone` keeps the check from attaching to a background server. |
+| `cursor` | `CURSOR_API_KEY` is set, otherwise `cursor-agent status --format json`. A boolean `isAuthenticated` is read before the `status` word. `unauthenticated` is signed out. The command exits 0 when signed out. |
+| `opencode` | `~/.local/share/opencode/auth.json` exists and is non-empty (the file is not read), otherwise `opencode auth list`. An empty JSON list, the text `0 credentials`, or `No authenticated integrations`, is signed out. ANSI color codes are ignored. |
 
 A disabled provider can be installed and still not usable. The shipped config
 leaves `gemini`, `cursor`, and `opencode` disabled, so a machine with only
@@ -568,12 +584,12 @@ a different command.
 | name | enabled | capabilities | argv | timeout_seconds |
 |---|---|---|---|---|
 | `fixture` | `true` | `execute`, `deterministic` | `fixture-provider --output-format json` | `120` |
-| `claude` | `true` | `execute`, `stream-json`, `subscription` | `claude -p --output-format stream-json` | `120` |
-| `codex` | `true` | `execute`, `jsonl`, `subscription` | `codex exec --json` | `120` |
-| `grok` | `true` | `execute`, `streaming-json`, `subscription` | `grok -p --output-format streaming-json` | `120` |
-| `gemini` | `false` | `execute`, `stream-json`, `subscription` | `gemini -p --output-format stream-json` | `120` |
-| `cursor` | `false` | `execute`, `stream-json`, `subscription` | `cursor-agent -p --output-format stream-json` | `120` |
-| `opencode` | `false` | `execute`, `json` | `opencode run --format json` | `120` |
+| `claude` | `true` | `execute`, `stream-json`, `subscription` | `claude -p --output-format stream-json --verbose --dangerously-skip-permissions` | `120` |
+| `codex` | `true` | `execute`, `jsonl`, `subscription` | `codex exec --json --approve-for-me` | `120` |
+| `grok` | `true` | `execute`, `streaming-json`, `subscription` | `grok --output-format streaming-json --always-approve --no-auto-update` | `120` |
+| `gemini` | `false` | `execute`, `stream-json`, `subscription` | `gemini -p --output-format stream-json --approval-mode yolo --skip-trust` | `120` |
+| `cursor` | `false` | `execute`, `stream-json`, `subscription` | `cursor-agent -p --output-format stream-json --force --trust` | `120` |
+| `opencode` | `false` | `execute`, `json` | `opencode run --format json --auto` | `120` |
 
 `enabled` is a boolean. A disabled provider is skipped. Naming it with
 `--provider` is an error. `timeout_seconds` is an integer `>= 1`. A live
@@ -600,50 +616,120 @@ non-empty line. An invalid graph falls back to that line split.
 ### Claude Code
 
 Install Claude Code so `claude` is on `PATH`, and sign in with Claude Code
-itself. With `--allow-live`, the harness runs `claude -p --output-format stream-json`
-and writes the task to the process stdin.
+itself. With `--allow-live`, the harness runs
+`claude -p --output-format stream-json --verbose --dangerously-skip-permissions`
+and writes the task to the process stdin. `stream-json` requires `--verbose`.
+`--dangerously-skip-permissions` lets a headless tool call proceed. There is
+no working-directory flag; the process cwd is the task directory. The model
+flag is left unset, so the signed-in CLI default is used. Assistant text is
+the `result` string. An `is_api_error_message` assistant event is not that
+text. Usage comes from the result event.
+
+Verified against Claude Code 2.1.299 on 2026-10-14, from `claude --help` and
+a signed-out `stream-json` run. That run exits 1 with an empty stderr. The
+stdout result has `is_error` true, `terminal_reason` `api_error`, and the
+text `Not logged in · Please run /login`. A signed-in completion was not
+run here. A live rate-limit body was not produced; the `rate_limit` category
+is the name in the Claude docs.
 
 ### Codex
 
 Install the Codex CLI so `codex` is on `PATH`, and sign in with that CLI.
-With `--allow-live`, the harness runs `codex exec --json` and passes the task
-as the prompt argument. Stdin is not attached.
+With `--allow-live`, the harness runs `codex exec --json --approve-for-me`.
+The task is written to stdin and the prompt argument is `-`. When the task
+has a directory, `--cd` is that directory. `exec` accepts `--approve-for-me`
+for unattended workspace writes. The model flag is left unset. Assistant
+text is each completed `agent_message`. Usage comes from `turn.completed`.
+
+Verified against Codex CLI 0.162.1 on 2026-10-14, from `codex exec --help`
+and a signed-out run inside a fresh git repository. That run reached
+`401 Unauthorized` on stdout and stderr. A directory that is not a git repo
+stops with `Not inside a trusted directory` unless the CLI is given
+`--skip-git-repo-check`; the harness leaves that flag off because task
+worktrees are git repos. A signed-in completion was not run here.
 
 ### Grok Build
 
 Install Grok Build so `grok` is on `PATH`, and sign in with that CLI. With
-`--allow-live`, the harness runs `grok -p <task> --output-format streaming-json`.
-Stdin is not attached.
+`--allow-live`, the harness runs
+`grok --output-format streaming-json --always-approve --no-auto-update --prompt-file <file>`.
+The task is the prompt file. Headless Grok reads that file, and it reads
+`--cwd` when the task has a directory. `--always-approve` lets tool calls
+proceed. The model flag is left unset. Assistant text is the `text` events'
+`data`. Thoughts and tool output are not that text. Usage is the last
+`usage` object in the stream.
+
+Verified against Grok 1.0.52 (`0920c8169e27`) on 2026-10-14, from `grok --help`
+and the headless guide shipped with that install. A signed-out run exits 1
+with stderr `Not signed in` and a stdout `{"type":"error","message":...}`.
+`--prompt-file`, `--cwd`, `--always-approve`, and `--no-auto-update` were
+accepted at the flag layer. A signed-in completion was not run here. The
+streaming event sample in the tests is the shape from that shipped guide.
 
 ### Gemini CLI
 
 Disabled in the shipped config. Install Gemini CLI so `gemini` is on `PATH`,
 set `enabled` to true, and sign in with Gemini CLI itself. With
-`--allow-live`, the harness runs `gemini -p <task> --output-format stream-json`.
-Stdin is not attached. `stream-json` events are newline-delimited JSON. The
-assistant text is the `message` events whose role is `assistant`. Token
-figures come from `result.stats` (`input_tokens`, `output_tokens`). That
-object has no dollar cost, so cost stays unknown.
+`--allow-live`, the harness runs
+`gemini -p <task> --output-format stream-json --approval-mode yolo --skip-trust`.
+`--approval-mode yolo` approves tool calls. `--skip-trust` accepts the
+workspace for the session. A task longer than 7000 characters is written to
+stdin, and the `-p` value is a single space so the flag still has a value.
+There is no working-directory flag; the process cwd is the task directory.
+The model flag is left unset. `stream-json` events are newline-delimited
+JSON. The assistant text is the `message` events whose role is `assistant`.
+Token figures come from `result.stats` (`input_tokens`, `output_tokens`).
+That object has no dollar cost, so cost stays unknown.
+
+Verified against Gemini CLI 0.64.0 on 2026-10-14, from `gemini --help` and a
+signed-out run. That run exits 41 and asks to set an auth method. The same
+exit happened for a prompt on stdin and for `-p` pointing at a file, so
+those paths were accepted at the flag layer. Whether a signed-in run
+concatenates stdin with `-p` was not observed. A signed-in completion was
+not run here.
 
 ### Cursor CLI
 
 Disabled in the shipped config. The install links `agent` and `cursor-agent`
 to the same binary. This harness calls `cursor-agent`. Set `enabled` to true
 and sign in with Cursor. With `--allow-live`, the harness runs
-`cursor-agent -p --output-format stream-json <task>`. Stdin is not attached.
-The assistant text is the terminal `result` string. When that event includes
+`cursor-agent -p --output-format stream-json --force --trust`. `--force`
+approves tool calls. `--trust` accepts the workspace. `--workspace` is the
+task directory when one is set. A short task is the positional prompt after
+`--`. A task longer than 7000 characters is written to stdin and the
+positional prompt is omitted. The model flag is left unset. The assistant
+text is the terminal `result` string. When that event includes
 `usage.inputTokens` and `usage.outputTokens`, those figures are kept. The
 documented result object has no dollar cost, so cost stays unknown.
+
+Verified against Cursor Agent `2026.10.14-0f9edde` on 2026-10-14, from
+`cursor-agent --help` and `status --help`. A signed-out print run exits 1
+with stderr `Authentication required`. `status --format json` exits 0 and
+reports `isAuthenticated` false. A signed-in completion was not run here,
+so a signed-in stdin prompt was not observed.
 
 ### OpenCode
 
 Disabled in the shipped config. Install OpenCode so `opencode` is on `PATH`
 and set `enabled` to true. With `--allow-live`, the harness runs
-`opencode run --format json <task>`. The task is the positional message.
-`-p` on this command is a password flag and is not used. Stdin is not
-attached. Assistant text is the `text` events. Each `step_finish` event
+`opencode run --format json --auto`. `--auto` approves permissions that are
+not explicitly denied. `--dir` is the task directory when one is set. The
+short task is the positional message. `-p` on this command is a password
+flag and is not used. This CLI has no stdin prompt. A task longer than 7000
+characters is written to a file in the task directory and passed with
+`--file`, plus a short message that points at that file. The model flag is
+left unset. Assistant text is the `text` events. Each `step_finish` event
 contributes `part.tokens.input`, `part.tokens.output`, and `part.cost`, and
 those steps are added. A stream with no `step_finish` leaves usage unknown.
+A reported cost of zero stays zero.
+
+Verified against OpenCode 1.19.0 on 2026-10-14, from `opencode run --help`
+and `opencode auth list`. The auth command takes no `--format` or
+`--standalone` flag in this version. Signed out, it prints `0 credentials`
+and exits 0. One headless run of `opencode run --format json --auto` with
+the prompt `Reply with the single word pong.` completed and returned
+`pong`, with `step_finish` cost 0. A second run that attaches `--file` was
+not made. A live rate-limit body was not produced.
 
 If the executable is missing, the error names the command and does not copy
 stderr. Provider stderr is not written into the run record or the JSONL log.
