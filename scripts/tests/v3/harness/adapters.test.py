@@ -26,8 +26,11 @@ from scripts.v3.harness.log import JsonLog, read_events  # noqa: E402
 from scripts.v3.harness.providers import (  # noqa: E402
     ClaudeHeadlessProvider,
     CodexExecProvider,
+    CursorHeadlessProvider,
     FixtureProvider,
+    GeminiHeadlessProvider,
     GrokHeadlessProvider,
+    OpenCodeHeadlessProvider,
     ProviderRequest,
     ProviderResult,
 )
@@ -56,6 +59,9 @@ class AdapterTests(unittest.TestCase):
             (ClaudeHeadlessProvider(), ("claude", "-p", "--output-format", "stream-json")),
             (CodexExecProvider(), ("codex", "exec", "--json", "hello")),
             (GrokHeadlessProvider(), ("grok", "-p", "hello", "--output-format", "streaming-json")),
+            (GeminiHeadlessProvider(), ("gemini", "-p", "hello", "--output-format", "stream-json")),
+            (CursorHeadlessProvider(), ("cursor-agent", "-p", "--output-format", "stream-json", "hello")),
+            (OpenCodeHeadlessProvider(), ("opencode", "run", "--format", "json", "hello")),
             (FixtureProvider(), ("fixture-provider", "--output-format", "json")),
         )
         for adapter, argv in cases:
@@ -76,6 +82,9 @@ class AdapterTests(unittest.TestCase):
             (ClaudeHeadlessProvider(), ["claude", "-p", "--output-format", "stream-json"], "hello"),
             (CodexExecProvider(), ["codex", "exec", "--json", "hello"], None),
             (GrokHeadlessProvider(), ["grok", "-p", "hello", "--output-format", "streaming-json"], None),
+            (GeminiHeadlessProvider(), ["gemini", "-p", "hello", "--output-format", "stream-json"], None),
+            (CursorHeadlessProvider(), ["cursor-agent", "-p", "--output-format", "stream-json", "hello"], None),
+            (OpenCodeHeadlessProvider(), ["opencode", "run", "--format", "json", "hello"], None),
         )
         for adapter, argv, stdin_text in cases:
             with self.subTest(adapter=adapter.name):
@@ -93,7 +102,14 @@ class AdapterTests(unittest.TestCase):
                     self.assertEqual(spawned.call_args.kwargs["input"], stdin_text)
 
     def test_live_failure_omits_stderr(self) -> None:
-        for adapter in (ClaudeHeadlessProvider(), CodexExecProvider(), GrokHeadlessProvider()):
+        for adapter in (
+            ClaudeHeadlessProvider(),
+            CodexExecProvider(),
+            GrokHeadlessProvider(),
+            GeminiHeadlessProvider(),
+            CursorHeadlessProvider(),
+            OpenCodeHeadlessProvider(),
+        ):
             with self.subTest(adapter=adapter.name):
                 completed = subprocess.CompletedProcess(args=[], returncode=7, stdout="", stderr="SECRET-TOKEN")
                 with patch("scripts.v3.harness.providers.subprocess.run", return_value=completed):
@@ -106,9 +122,18 @@ class AdapterTests(unittest.TestCase):
     def test_config_matches_adapter_classes_and_rejects_secrets(self) -> None:
         config = load_config()
         by_name = {item["name"]: item for item in config["providers"]}
-        self.assertEqual(list(by_name), ["fixture", "claude", "codex", "grok"])
+        self.assertEqual(
+            list(by_name),
+            ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
+        )
         self.assertEqual(by_name["codex"]["argv"], ["codex", "exec", "--json"])
         self.assertEqual(by_name["grok"]["argv"], ["grok", "-p", "--output-format", "streaming-json"])
+        self.assertEqual(by_name["gemini"]["argv"], ["gemini", "-p", "--output-format", "stream-json"])
+        self.assertEqual(by_name["cursor"]["argv"], ["cursor-agent", "-p", "--output-format", "stream-json"])
+        self.assertEqual(by_name["opencode"]["argv"], ["opencode", "run", "--format", "json"])
+        self.assertFalse(by_name["gemini"]["enabled"])
+        self.assertFalse(by_name["cursor"]["enabled"])
+        self.assertFalse(by_name["opencode"]["enabled"])
         self.assertEqual(config["routing"]["retries"], 1)
         raw = json.loads((ROOT / "config" / "harness.json").read_text(encoding="utf-8"))
         raw["api_key"] = "nope"
@@ -209,7 +234,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(code, 0)
         status = json.loads(stdout.getvalue())
         names = [item["name"] for item in status["providers"]]
-        self.assertEqual(names, ["fixture", "claude", "codex", "grok"])
+        self.assertEqual(names, ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"])
         self.assertEqual(status["log"]["events"], 0)
 
     def test_cli_run_uses_fixture_then_falls_back_without_a_process(self) -> None:
@@ -274,7 +299,10 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         status = json.loads(completed.stdout)
-        self.assertEqual(status["routing"]["preference"], ["fixture", "claude", "codex", "grok"])
+        self.assertEqual(
+            status["routing"]["preference"],
+            ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
+        )
 
 
 def _drop_run_branches(run_id: str) -> None:
