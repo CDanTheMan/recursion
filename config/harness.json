@@ -19,7 +19,17 @@
     "required_capabilities": ["execute"],
     "preference": ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
     "retries": 1,
-    "backoff_seconds": 1
+    "backoff_seconds": 1,
+    "cooldown_seconds": 60,
+    "weights": {
+      "fixture": 1,
+      "claude": 1,
+      "codex": 1,
+      "grok": 1,
+      "gemini": 1,
+      "cursor": 1,
+      "opencode": 1
+    }
   },
   "providers": [
     {

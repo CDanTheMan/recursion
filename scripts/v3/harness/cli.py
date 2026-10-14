@@ -1,4 +1,4 @@
-"""``recursion`` command: plan, run, status, resume, cancel, doctor, and init."""
+"""``recursion`` command: plan, run, status, resume, cancel, providers, doctor, and init."""
 
 from __future__ import annotations
 
@@ -7,8 +7,10 @@ import json
 import sys
 from pathlib import Path
 
+from scripts.v3.harness.availability import default_cli_finder, provider_report
 from scripts.v3.harness.capabilities import select_candidates
 from scripts.v3.harness.config import ROOT, load_config, write_starter
+from scripts.v3.harness.cooldowns import CooldownStore
 from scripts.v3.harness.dag import admit_goal
 from scripts.v3.harness.doctor import diagnose, discover_installed
 from scripts.v3.harness.errors import HarnessError
@@ -67,6 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(cancel)
     cancel.add_argument("--run", required=True)
 
+    providers = commands.add_parser(
+        "providers",
+        help="show each provider, whether its CLI is found, its capabilities, and cooldown status",
+    )
+    _add_common(providers)
+
     doctor = commands.add_parser("doctor", help="check git and each configured provider executable")
     doctor.add_argument("--config", type=Path, help="provider config JSON (default: config/harness.json)")
 
@@ -99,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = resume_command(args, log)
         elif args.command == "cancel":
             payload = cancel_command(args)
+        elif args.command == "providers":
+            payload = providers_command(args)
         elif args.command == "doctor":
             payload = doctor_command(args)
         elif args.command == "init":
@@ -253,6 +263,11 @@ def cancel_command(args: argparse.Namespace) -> dict:
     return cancel_run(_store(args), args.run)
 
 
+def providers_command(args: argparse.Namespace) -> dict:
+    config = load_config(args.config)
+    return {"providers": provider_report(config, _cooldowns(args), finder=default_cli_finder)}
+
+
 def doctor_command(args: argparse.Namespace) -> dict:
     return diagnose(load_config(args.config))
 
@@ -339,6 +354,8 @@ def _drive_existing(args, log, config, store, run_id: str, route_id: str) -> dic
         accept_unreviewed=config["review"]["accept_unreviewed"],
         base_ref=base_ref,
         keep_worktrees=bool(getattr(args, "keep_worktrees", False)),
+        cooldowns=_cooldowns(args),
+        cooldown_seconds=config["routing"]["cooldown_seconds"],
     )
 
 
@@ -353,6 +370,8 @@ def _admit(args, log, config, goal: str, *, allow_live: bool) -> dict:
         timeout_seconds=_timeouts(config),
         log=log,
         open_adapter=None,
+        cooldowns=_cooldowns(args),
+        cooldown_seconds=config["routing"]["cooldown_seconds"],
     )
 
 
@@ -382,6 +401,10 @@ def _goal_text(args: argparse.Namespace) -> tuple[str, bool]:
 
 def _timeouts(config: dict) -> dict[str, int]:
     return {item["name"]: item["timeout_seconds"] for item in config["providers"]}
+
+
+def _cooldowns(args: argparse.Namespace) -> CooldownStore:
+    return CooldownStore(_store(args).root / "cooldowns.json")
 
 
 def _store(args: argparse.Namespace) -> RunStore:

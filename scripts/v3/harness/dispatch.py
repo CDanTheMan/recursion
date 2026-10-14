@@ -1,10 +1,21 @@
-"""Retry one provider, then fall back to the next capable provider."""
+"""Retry transient failures, then fall back to the next capable provider.
+
+Rate limits, exhausted quotas, and expired auth are recorded as cooldowns
+and are not retried. The next eligible provider runs immediately.
+"""
 
 from __future__ import annotations
 
 import time
 
-from scripts.v3.harness.errors import HarnessError, ProviderRateLimited, RunCancelled
+from scripts.v3.harness.cooldowns import resolve_until
+from scripts.v3.harness.errors import (
+    HarnessError,
+    ProviderAvailability,
+    ProviderTimeout,
+    ProviderTransient,
+    RunCancelled,
+)
 from scripts.v3.harness.log import NullLog
 from scripts.v3.harness.providers import ProviderRequest, ProviderResult, open_provider
 
@@ -21,26 +32,54 @@ def execute_with_policy(
     sleep=None,
     should_stop=None,
     timeout_seconds: dict[str, int] | None = None,
+    cooldowns=None,
+    cooldown_seconds: float = 60,
+    now=None,
 ) -> tuple[ProviderResult, list[dict]]:
-    """Try each candidate up to ``retries`` extra times.
+    """Try each candidate that is not cooling down.
 
-    A raised ``HarnessError`` is a failed attempt. Rate limits wait
-    ``backoff_seconds * (attempt + 1)`` before the next try of the same
-    provider. ``RunCancelled`` stops the policy immediately. Stderr from a
-    live process is not recorded.
+    ``ProviderTransient`` and ``ProviderTimeout`` wait
+    ``backoff_seconds * (attempt + 1)`` before another try of the same
+    provider. Availability failures record a cooldown and move on. Other
+    ``HarnessError`` values are retried without waiting, then the next
+    candidate runs. ``RunCancelled`` stops the policy immediately. Stderr
+    from a live process is not recorded.
     """
 
     if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
         raise HarnessError("retries must be an integer >= 0")
     if isinstance(backoff_seconds, bool) or not isinstance(backoff_seconds, (int, float)) or backoff_seconds < 0:
         raise HarnessError("backoff_seconds must be a number >= 0")
+    if (
+        isinstance(cooldown_seconds, bool)
+        or not isinstance(cooldown_seconds, (int, float))
+        or cooldown_seconds < 0
+    ):
+        raise HarnessError("cooldown_seconds must be a number >= 0")
     if not candidates:
         raise HarnessError("no provider candidates")
     sink = log if log is not None else NullLog()
     pause = time.sleep if sleep is None else sleep
+    clock = time.time if now is None else now
     attempts: list[dict] = []
     failures: list[str] = []
     for name in candidates:
+        if cooldowns is not None:
+            cooled = cooldowns.active(clock())
+            if name in cooled:
+                reason = cooled[name].get("reason")
+                sink.event(
+                    "provider.skipped",
+                    packet_id=request.packet_id,
+                    provider=name,
+                    reason="cooldown",
+                    route_id=request.route_id,
+                )
+                attempts.append(
+                    {"attempt": 0, "error": "cooldown", "ok": False, "provider": name, "reason": reason}
+                )
+                failures.append(f"{name}#cooldown")
+                continue
         adapter = open_adapter(name)
         for attempt in range(retries + 1):
             if should_stop is not None and should_stop():
@@ -59,9 +98,22 @@ def execute_with_policy(
             except HarnessError as exc:
                 error = type(exc).__name__
                 sink.event("provider.failed", attempt=attempt, error=error, provider=name)
-                attempts.append({"attempt": attempt, "error": error, "ok": False, "provider": name})
+                row = {"attempt": attempt, "error": error, "ok": False, "provider": name}
+                reason = getattr(exc, "reason", None)
+                if isinstance(reason, str):
+                    row["reason"] = reason
+                attempts.append(row)
                 failures.append(f"{name}#{attempt}:{error}")
-                if isinstance(exc, ProviderRateLimited) and attempt < retries:
+                if isinstance(exc, ProviderAvailability):
+                    if cooldowns is not None:
+                        moment = clock()
+                        cooldowns.record(
+                            name,
+                            exc.reason,
+                            resolve_until(exc.until, exc.retry_after, moment, float(cooldown_seconds)),
+                        )
+                    break
+                if isinstance(exc, (ProviderTransient, ProviderTimeout)) and attempt < retries:
                     pause(backoff_seconds * (attempt + 1))
                 continue
             sink.event("provider.result", attempt=attempt, live=result.live, provider=name)

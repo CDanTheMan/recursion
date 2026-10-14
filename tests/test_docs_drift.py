@@ -35,7 +35,7 @@ def _help_text() -> str:
 
 def test_guide_mentions_every_subcommand() -> None:
     help_text = _help_text()
-    match = re.search(r"^usage: recursion \[-h\] \{([^}]+)\}", help_text, re.MULTILINE)
+    match = re.search(r"usage: recursion \[-h\]\s+\{([^}]+)\}", help_text)
     assert match, "recursion --help did not list subcommands"
     guide = _guide()
     missing = [name.strip() for name in match.group(1).split(",") if name.strip() not in guide]

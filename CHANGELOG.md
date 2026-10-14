@@ -10,7 +10,7 @@ after that cut.
 ### Added
 
 - `recursion` console script, installed with `python -m pip install -e .`.
-  Subcommands: `plan`, `run`, `status`, `resume`, `cancel`, `doctor`, `init`.
+  Subcommands: `plan`, `run`, `status`, `resume`, `cancel`, `providers`, `doctor`, `init`.
 - Provider adapters `fixture`, `claude`, `codex`, and `grok`. Live CLIs start
   only with `--allow-live`. The config refuses secret-shaped keys.
 - Provider adapters `gemini`, `cursor` (`cursor-agent`), and `opencode`,
@@ -34,6 +34,12 @@ after that cut.
 - Accepted task branches merge into `recursion/run/<run-id>`. A provider
   plans `--goal` into a dependency graph, and a missing reviewer is
   `unreviewed` unless `review.accept_unreviewed` is true.
+- Capability weights, distinct rate-limit, quota, and auth failures, and
+  automatic fallback to the next eligible provider. Cooldowns persist in
+  the run state directory. `recursion providers` shows CLI presence,
+  capabilities, and cooldown status. The planner prompt asks for
+  `depends_on`, and a fixture goal that starts with `graph` emits a real
+  dependency list.
 - Sample goal and config in `examples/`, and a console end-to-end test that
   installs `recursion` and drives `plan`, `run`, `status`, `cancel`, `resume`,
   and the report through fake `claude`, `codex`, and `grok` executables.
