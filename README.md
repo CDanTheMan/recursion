@@ -30,7 +30,7 @@ Start here:
 | `scripts/v3/` | v3 planning replay and validation |
 | `scripts/v3/harness/` | harness slice: plan a task, admit one route, run one provider |
 | `scripts/tests/v3/` | v3 M1 test programs and fixtures |
-| `tools/check_v3_orientation.py` | the frozen 2026-09-13 orientation-repair gate |
+| `tools/check_v3_orientation.py` | 2026-09-13 orientation-repair gate; scope vs merge-base with master |
 | `state/` | decision log and v3 goal/task records |
 
 ## Run the harness

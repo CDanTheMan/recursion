@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Provider-free gate for the 2026-09-13 v3 orientation repair, plus the harness slice.
 
+The default scope diff is the merge-base of HEAD and master, so a clean
+master checkout passes and a work branch is judged only on its own changes.
+``--baseline COMMIT`` compares against another ancestor. The repair pin is
+``797be4f18edf3f9e0f2dbac9432f190dbe1ed969``.
+
 The original 23 M1 programs stay mandatory. Harness paths are an explicit extra
 allowlist so the slice can land without dropping those checks.
 """
@@ -17,11 +22,15 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-BASELINE = "797be4f18edf3f9e0f2dbac9432f190dbe1ed969"
+HISTORICAL_BASELINE = "797be4f18edf3f9e0f2dbac9432f190dbe1ed969"
+# Kept so older callers that imported the pin still see the same commit.
+BASELINE = HISTORICAL_BASELINE
+MASTER_REFS = ("master", "origin/master")
 ALLOWED = {
     "README.md", "AGENTS.md", "CLAUDE.md", "docs/v3/README.md",
     "docs/v3/VALIDATION.md", "docs/v3/ROADMAP.md", "docs/v3/START-HERE.md",
     "state/tasks/v3-orientation-20260913.md", "tools/check_v3_orientation.py",
+    "tools/test_check_v3_orientation_scope.py",
 }
 PRODUCT_SLICE = {
     "docs/v3/HARNESS-SLICE.md",
@@ -41,10 +50,83 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def git(*args: str) -> str:
+def git(*args: str, cwd: Path = ROOT) -> str:
     return subprocess.check_output(
-        ["git", "-c", "core.longpaths=true", *args], cwd=ROOT, encoding="utf-8"
+        ["git", "-c", "core.longpaths=true", *args], cwd=cwd, encoding="utf-8"
     ).strip()
+
+
+def resolve_commit(cwd: Path, rev: str) -> str:
+    try:
+        return git("rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}", cwd=cwd)
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(f"commit does not resolve: {rev}") from exc
+
+
+def require_ancestor(cwd: Path, ancestor: str, head: str, message: str) -> str:
+    resolved = resolve_commit(cwd, ancestor)
+    require(git("merge-base", resolved, head, cwd=cwd) == resolved, message)
+    return resolved
+
+
+def default_scope_base(cwd: Path, head: str) -> str:
+    """Nearest merge-base of HEAD with ``master`` or ``origin/master``.
+
+    The closer base wins, so a stale local master does not classify commits
+    already on origin/master as out-of-scope branch work. A clean checkout of
+    either tip has an empty diff.
+    """
+    tips = []
+    for ref in MASTER_REFS:
+        try:
+            tips.append(resolve_commit(cwd, ref))
+        except ValueError:
+            continue
+    if not tips:
+        raise ValueError("master ref not found (tried master, origin/master)")
+    best: str | None = None
+    best_distance: int | None = None
+    for tip in tips:
+        try:
+            base = git("merge-base", tip, head, cwd=cwd)
+        except subprocess.CalledProcessError as exc:
+            raise ValueError(f"{tip} does not share history with HEAD") from exc
+        distance = int(git("rev-list", "--count", f"{base}..{head}", cwd=cwd))
+        if best is None or best_distance is None or distance < best_distance:
+            best = base
+            best_distance = distance
+    if best is None:
+        raise ValueError("master ref not found (tried master, origin/master)")
+    return best
+
+
+def comparison_base(cwd: Path, head: str, baseline: str | None) -> str:
+    """Commit the out-of-scope diff is measured against."""
+    if baseline:
+        return require_ancestor(cwd, baseline, head, "baseline is not an ancestor")
+    return default_scope_base(cwd, head)
+
+
+def scope_paths(cwd: Path, base: str) -> tuple[set[str], set[str]]:
+    changed = set(filter(None, git("diff", "--name-only", base, cwd=cwd).splitlines()))
+    untracked = set(filter(None, git(
+        "ls-files", "--others", "--exclude-standard", cwd=cwd
+    ).splitlines()))
+    return changed, untracked
+
+
+def out_of_scope(changed: set[str], untracked: set[str], allowed: set[str]) -> list[str]:
+    return sorted((changed | untracked) - allowed)
+
+
+def check_whitespace(cwd: Path, base: str) -> None:
+    result = subprocess.run(
+        ["git", "-c", "core.longpaths=true", "diff", "--check", base],
+        cwd=cwd, capture_output=True, encoding="utf-8", errors="replace", check=False,
+    )
+    if result.returncode:
+        detail = (result.stdout + result.stderr).strip()
+        raise ValueError(detail or f"whitespace errors against {base}")
 
 
 def read(path: str) -> str:
@@ -99,14 +181,19 @@ def check_registry() -> tuple[int, int]:
     return len(rows), 19
 
 
-def m1_programs() -> list[tuple[str, ...]]:
-    programs = []
+def contract_programs() -> list[tuple[str, ...]]:
+    programs: list[tuple[str, ...]] = []
     for area in ("planning", "execution", "integrity"):
         programs.append((f"schemas/control-plane/v3/{area}/materialize.py", "--check"))
         programs.append((f"scripts/tests/v3/{area}/materialize_fixtures.py", "--check"))
         programs.extend((str(p.relative_to(ROOT)),) for p in sorted(
             (ROOT / "scripts/tests/v3" / area).glob("*.test.py")
         ))
+    return programs
+
+
+def m1_programs() -> list[tuple[str, ...]]:
+    programs = contract_programs()
     require(len(programs) == 23, "M1 check inventory changed; inspect instead of reducing coverage")
     return programs
 
@@ -136,26 +223,28 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--contracts", action="store_true")
     parser.add_argument("--candidate", help="require this full HEAD commit and a clean tree")
+    parser.add_argument(
+        "--baseline",
+        help="ancestor to diff against (default: merge-base of HEAD and master). "
+             f"The 2026-09-13 pin is {HISTORICAL_BASELINE}.",
+    )
     args = parser.parse_args()
     head = git("rev-parse", "HEAD")
-    require(git("merge-base", BASELINE, head) == BASELINE, "baseline is not an ancestor")
+    require_ancestor(ROOT, HISTORICAL_BASELINE, head, "historical baseline is not an ancestor")
     if args.candidate:
         require(re.fullmatch(r"[0-9a-f]{40}", args.candidate) is not None,
                 "candidate must be a full commit")
         require(args.candidate == head, "candidate is not HEAD")
         require(not git("status", "--porcelain"), "candidate is not clean")
-    changed = set(filter(None, git("diff", "--name-only", BASELINE).splitlines()))
-    untracked = set(filter(None, git("ls-files", "--others", "--exclude-standard").splitlines()))
+    base = comparison_base(ROOT, head, args.baseline)
+    changed, untracked = scope_paths(ROOT, base)
     tracked = set(git("ls-files").splitlines())
     permitted = ALLOWED | PRODUCT_SLICE
-    # The 2026-09-13 allowlist no longer covers this tree. Keep the baseline as an
-    # ancestor, reject stray untracked files, and require the harness paths.
-    historical = changed - permitted
-    stray = untracked - permitted
-    require(not stray, f"untracked files outside the harness slice: {sorted(stray)}")
+    outside = out_of_scope(changed, untracked, permitted)
+    require(not outside, f"out-of-scope changes: {outside}")
     require(PRODUCT_SLICE <= (tracked | untracked),
             f"missing product-slice paths: {sorted(PRODUCT_SLICE - (tracked | untracked))}")
-    git("diff", "--check", BASELINE, "--", *sorted(permitted & tracked))
+    check_whitespace(ROOT, base)
     for path in sorted(PRODUCT_SLICE):
         for number, line in enumerate(read(path).splitlines(), 1):
             require(not line.endswith((" ", "\t")), f"trailing whitespace: {path}:{number}")
@@ -179,10 +268,8 @@ def main() -> None:
             json.loads(path.read_text(encoding="utf-8"))
         fixtures += len(files)
     print(f"candidate={head} mode={'clean-candidate' if args.candidate else 'working'}", flush=True)
-    print(
-        f"SCOPE_PASS baseline={BASELINE} ancestor=true historical_paths={len(historical)} "
-        f"product_slice={len(PRODUCT_SLICE)}"
-    )
+    print(f"SCOPE_PASS baseline={base} historical={HISTORICAL_BASELINE} "
+          f"changed={len(changed)} preserved_other_paths=true product_slice={len(PRODUCT_SLICE)}")
     print(f"SPEC_STRUCTURE_PASS documents={len(documents)} links={links} claims={claims} "
           f"later_owner_decisions={decisions} fixtures={fixtures}", flush=True)
     if args.contracts:

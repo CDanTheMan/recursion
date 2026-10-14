@@ -164,7 +164,7 @@ The main assistant directly creates and monitors ARM executives. There is no sep
 | [prompts/overnight-adversarial-swarm-research.md](prompts/overnight-adversarial-swarm-research.md) | Which superseded swarm prompt is retained only as provenance? |
 | [prompts/architecture-proof-deep-research.md](prompts/architecture-proof-deep-research.md) | What should the next focused architecture-proof Deep Research session execute? |
 | [prompts/m1a-autonomous-planning-contract.md](prompts/m1a-autonomous-planning-contract.md) | What standalone prompt may build M1A only after a separate Owner authorization? |
-| `archive/session-transcript-2026-09-02.md` | What internal human-visible conversation produced this hypothesis? The transcript is not in this tree. |
+| `archive/session-transcript-2026-09-02.md` | What internal human-visible conversation produced this hypothesis? Removed from the tree on 2026-09-28; it is not a public-release artifact. |
 
 ## Status vocabulary
 
