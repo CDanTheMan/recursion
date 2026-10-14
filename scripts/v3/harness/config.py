@@ -218,6 +218,57 @@ def _positive_int(value: object, where: str) -> int:
     return value
 
 
+def starter_config(enabled: set[str]) -> dict:
+    """Build a version-1 config. ``enabled`` names the providers that start on."""
+
+    known = adapters()
+    unknown = sorted(enabled - set(known))
+    if unknown:
+        raise HarnessError(f"unknown providers: {unknown}")
+    return {
+        "version": 1,
+        "review": {"accept_unreviewed": False, "max_rounds": 2},
+        "landing": {"base_ref": "HEAD"},
+        "budgets": {
+            "max_input_tokens": 1000000,
+            "max_output_tokens": 1000000,
+            "max_cost": None,
+        },
+        "orchestration": {"concurrency": 2},
+        "routing": {
+            "required_capabilities": ["execute"],
+            "preference": list(known),
+            "retries": 1,
+            "backoff_seconds": 1,
+        },
+        "providers": [
+            {
+                "name": name,
+                "enabled": name in enabled,
+                "capabilities": list(cls.CAPABILITIES),
+                "argv": list(cls.STATIC_ARGV),
+                "timeout_seconds": 120,
+            }
+            for name, cls in known.items()
+        ],
+    }
+
+
+def write_starter(path: Path, enabled: set[str], *, force: bool = False) -> dict:
+    """Write a starter config. An existing file is left in place without ``force``."""
+
+    target = Path(path)
+    if target.is_dir():
+        raise HarnessError(f"{target} is a directory")
+    if target.exists() and not force:
+        raise HarnessError(f"refusing to overwrite {target}; pass --force")
+    payload = starter_config(enabled)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    target.write_text(text, encoding="utf-8", newline="\n")
+    return payload
+
+
 def _string_tuple(value: object, where: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not value:
         raise HarnessError(f"{where} must be a non-empty list")
