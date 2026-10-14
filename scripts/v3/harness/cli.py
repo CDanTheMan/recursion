@@ -9,6 +9,7 @@ from pathlib import Path
 
 from scripts.v3.harness.capabilities import select_candidates
 from scripts.v3.harness.config import ROOT, load_config, write_starter
+from scripts.v3.harness.dag import admit_goal
 from scripts.v3.harness.doctor import diagnose, discover_installed
 from scripts.v3.harness.errors import HarnessError
 from scripts.v3.harness.isolation import GitWorktreeIsolator
@@ -34,17 +35,19 @@ def build_parser() -> argparse.ArgumentParser:
     plan = commands.add_parser("plan", help="admit tasks and the M1B route; do not start a provider")
     _add_common(plan)
     plan.add_argument("--task", help="one task admitted through M1A")
-    plan.add_argument("--goal", help="one M1A task per non-empty line")
+    plan.add_argument("--goal", help="plan a task graph, or one task per line when planning falls back")
     plan.add_argument("--log", help="append JSONL events to this file as well as stderr")
 
     run = commands.add_parser("run", help="plan, admit a route, and execute capable providers")
     _add_common(run)
     run.add_argument("--task", help="one task admitted through M1A")
-    run.add_argument("--goal", help="one M1A task per non-empty line, run in parallel")
+    run.add_argument("--goal", help="plan a task graph and run it; line splitting is the fallback")
     run.add_argument("--provider", help="use this provider instead of capability order")
     run.add_argument("--capability", action="append", default=None, help="extra capability the provider must have")
     run.add_argument("--fallback", action="store_true", help="after an explicit provider fails, try the next capable provider")
     run.add_argument("--allow-live", action="store_true", help="start a headless CLI; omitted in tests and CI")
+    run.add_argument("--base-ref", help="git ref the run branch is cut from (default: config landing.base_ref)")
+    run.add_argument("--keep-worktrees", action="store_true", help="keep worktrees and branches for failed tasks")
     run.add_argument("--log", help="append JSONL events to this file as well as stderr")
 
     status = commands.add_parser("status", help="show providers, log summary, and saved runs")
@@ -56,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(resume)
     resume.add_argument("--run", required=True)
     resume.add_argument("--allow-live", action="store_true")
+    resume.add_argument("--base-ref", help="git ref used when the run branch does not exist yet")
+    resume.add_argument("--keep-worktrees", action="store_true", help="keep worktrees and branches for failed tasks")
     resume.add_argument("--log", help="append JSONL events to this file as well as stderr")
 
     cancel = commands.add_parser("cancel", help="cancel unfinished tasks in a saved run")
@@ -115,8 +120,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in {"run", "resume"} and payload.get("status") in {
         "budget-exceeded",
         "cancelled",
+        "conflict",
         "failed",
         "review-rejected",
+        "skipped",
+        "unreviewed",
     }:
         return 2
     return 0
@@ -141,7 +149,8 @@ def plan_command(args: argparse.Namespace, log: JsonLog) -> dict:
             status=route["status"],
         )
         return {"planning": planned, "route": _route_view(route, route_id), "task": planned["intent_text"]}
-    planned_goal = plan_goal(goal)
+    config = load_config(args.config)
+    planned_goal = _admit(args, log, config, goal, allow_live=False)
     for item in planned_goal["tasks"]:
         log.event(
             "plan.admitted",
@@ -157,6 +166,8 @@ def plan_command(args: argparse.Namespace, log: JsonLog) -> dict:
     )
     return {
         "goal": planned_goal["goal"],
+        "plan_fallback": planned_goal["fallback"],
+        "plan_source": planned_goal["source"],
         "route": _route_view(route, route_id),
         "tasks": planned_goal["tasks"],
     }
@@ -173,7 +184,7 @@ def run_command(args: argparse.Namespace, log: JsonLog) -> dict:
         planned = [plan_task(goal)]
         shown_goal = planned[0]["intent_text"]
     else:
-        planned_goal = plan_goal(goal)
+        planned_goal = _admit(args, log, config, goal, allow_live=args.allow_live)
         planned = planned_goal["tasks"]
         shown_goal = planned_goal["goal"]
     for item in planned:
@@ -202,13 +213,15 @@ def run_command(args: argparse.Namespace, log: JsonLog) -> dict:
         config=config,
         goal=shown_goal,
         planned=planned,
-        candidates=rotate_candidates(candidates, len(planned)),
+        candidates=_assign_candidates(candidates, planned, config),
         route=_route_view(route, route_id),
         route_id=route_id,
+        plan_source=planned_goal["source"] if not single else "lines",
+        plan_fallback=planned_goal["fallback"] if not single else None,
     )
     if single:
         task = record["tasks"][0]
-        if record["status"] != "completed":
+        if record["status"] not in {"completed", "unreviewed"}:
             if record["status"] == "budget-exceeded":
                 raise HarnessError("budget exceeded")
             raise HarnessError(task["error"] or "no provider completed the task")
@@ -282,7 +295,19 @@ def status_command(args: argparse.Namespace) -> dict:
     return payload
 
 
-def _drive_new_run(args, log, *, config, goal, planned, candidates, route, route_id) -> dict:
+def _drive_new_run(
+    args,
+    log,
+    *,
+    config,
+    goal,
+    planned,
+    candidates,
+    route,
+    route_id,
+    plan_source: str,
+    plan_fallback: str | None,
+) -> dict:
     store = _store(args)
     record = create_run(
         store,
@@ -291,11 +316,14 @@ def _drive_new_run(args, log, *, config, goal, planned, candidates, route, route
         candidates=candidates,
         route=route,
         concurrency=config["orchestration"]["concurrency"],
+        plan_source=plan_source,
+        plan_fallback=plan_fallback,
     )
     return _drive_existing(args, log, config, store, record["run_id"], route_id)
 
 
 def _drive_existing(args, log, config, store, run_id: str, route_id: str) -> dict:
+    base_ref = args.base_ref if getattr(args, "base_ref", None) else config["landing"]["base_ref"]
     return drive_run(
         store,
         run_id,
@@ -308,7 +336,37 @@ def _drive_existing(args, log, config, store, run_id: str, route_id: str) -> dic
         max_rounds=config["review"]["max_rounds"],
         budgets=config["budgets"],
         isolator=GitWorktreeIsolator(ROOT),
+        accept_unreviewed=config["review"]["accept_unreviewed"],
+        base_ref=base_ref,
+        keep_worktrees=bool(getattr(args, "keep_worktrees", False)),
     )
+
+
+def _admit(args, log, config, goal: str, *, allow_live: bool) -> dict:
+    candidates = select_candidates(config, extra_capabilities=getattr(args, "capability", None))
+    return admit_goal(
+        goal,
+        candidates=candidates,
+        allow_live=allow_live,
+        retries=config["routing"]["retries"],
+        backoff_seconds=config["routing"]["backoff_seconds"],
+        timeout_seconds=_timeouts(config),
+        log=log,
+        open_adapter=None,
+    )
+
+
+def _assign_candidates(candidates: list[str], planned: list[dict], config: dict) -> list[list[str]]:
+    rotated = rotate_candidates(candidates, len(planned))
+    capabilities = {item["name"]: set(item["capabilities"]) for item in config["providers"]}
+    assigned = []
+    for index, item in enumerate(planned):
+        required = set(item.get("required_capabilities") or [])
+        if not required:
+            assigned.append(rotated[index])
+            continue
+        assigned.append([name for name in rotated[index] if required <= capabilities.get(name, set())])
+    return assigned
 
 
 def _goal_text(args: argparse.Namespace) -> tuple[str, bool]:

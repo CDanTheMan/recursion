@@ -119,6 +119,7 @@ class HarnessSliceTests(unittest.TestCase):
                 "scripts/tests/v3/harness/adapters.test.py",
                 "scripts/tests/v3/harness/doctor.test.py",
                 "scripts/tests/v3/harness/harness.test.py",
+                "scripts/tests/v3/harness/landing.test.py",
                 "scripts/tests/v3/harness/live.test.py",
                 "scripts/tests/v3/harness/orchestration.test.py",
                 "scripts/tests/v3/harness/review.test.py",

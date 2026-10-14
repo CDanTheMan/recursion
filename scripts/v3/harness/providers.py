@@ -7,6 +7,7 @@ The harness does not read credentials. Retries and fallback live in
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import dataclass
 
@@ -23,7 +24,7 @@ from scripts.v3.harness.errors import (
 class ProviderRequest:
     """Work handed to a provider after M1B has selected a route.
 
-    ``kind`` is ``execute`` for the task and ``review`` for a diff review.
+    ``kind`` is ``execute`` for the task, ``review`` for a diff review, and ``plan`` for a task graph.
     ``cwd`` is the task worktree when isolation is on.
     """
 
@@ -87,6 +88,8 @@ class FixtureProvider(ProviderAdapter):
         del allow_live, timeout_seconds
         if request.kind == "review":
             text = "VERDICT approve\nfixture review"
+        elif request.kind == "plan":
+            text = _fixture_plan(request.task)
         else:
             text = "\n".join(
                 (
@@ -97,6 +100,24 @@ class FixtureProvider(ProviderAdapter):
                 )
             )
         return ProviderResult(provider=self.name, argv=self.argv(request), text=text, live=False)
+
+
+def _fixture_plan(task: str) -> str:
+    """Turn the goal section of a plan prompt into a line-shaped task list."""
+
+    marker = "Goal:\n"
+    goal = task.split(marker, 1)[1] if marker in task else ""
+    lines = [line.strip() for line in goal.splitlines() if line.strip()]
+    tasks = [
+        {
+            "depends_on": [],
+            "description": line,
+            "id": f"task-{index}",
+            "required_capabilities": [],
+        }
+        for index, line in enumerate(lines, start=1)
+    ]
+    return json.dumps({"tasks": tasks})
 
 
 def _refuse_unless_live(adapter: ProviderAdapter, allow_live: bool) -> None:

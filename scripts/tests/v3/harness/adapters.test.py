@@ -244,12 +244,14 @@ class AdapterTests(unittest.TestCase):
         ) as spawned:
             code = main(["run", "--task", "Run the fixture."])
         spawned.assert_not_called()
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 2)
         payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "unreviewed")
         self.assertEqual(payload["execution"]["provider"], "fixture")
         self.assertEqual(payload["candidates"], ["fixture", "claude", "codex", "grok"])
         self.assertFalse(payload["execution"]["live"])
         self.assertEqual(payload["route"]["selected_route_id"], "route-a")
+        _drop_run_branches(payload["run_id"])
 
         stderr = StringIO()
         with patch("sys.stderr", stderr), patch("scripts.v3.harness.providers.subprocess.run") as spawned:
@@ -262,6 +264,14 @@ class AdapterTests(unittest.TestCase):
         self.assertTrue(all(item["error"] == "LiveProviderDisabled" for item in failed))
         self.assertEqual(events[-1]["event"], "run.refused")
         self.assertNotIn("SECRET", stderr.getvalue())
+        leftover = subprocess.run(
+            ["git", "for-each-ref", "--format=%(refname:short)", "refs/heads/recursion"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(leftover.stdout.strip(), "")
 
     def test_status_reads_a_log_and_the_entrypoint_runs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -293,6 +303,25 @@ class AdapterTests(unittest.TestCase):
             status["routing"]["preference"],
             ["fixture", "claude", "codex", "grok", "gemini", "cursor", "opencode"],
         )
+
+
+def _drop_run_branches(run_id: str) -> None:
+    listed = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname:short)", "refs/heads/recursion"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    prefixes = (f"recursion/run/{run_id}", f"recursion/task/{run_id}/")
+    for name in listed.stdout.split():
+        if name == prefixes[0] or name.startswith(prefixes[1]):
+            completed = subprocess.run(
+                ["git", "branch", "-D", name], cwd=ROOT, capture_output=True, text=True, check=False
+            )
+            if completed.returncode != 0:
+                raise RuntimeError(completed.stderr.strip() or f"could not delete {name}")
+    subprocess.run(["git", "worktree", "prune"], cwd=ROOT, capture_output=True, check=False)
 
 
 def main_tests() -> int:
