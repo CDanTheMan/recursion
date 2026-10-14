@@ -83,7 +83,8 @@ task is `unreviewed` and the command exits `2` unless
 CLI. `run` schedules them. `--concurrency` overrides how many ready tasks
 run at once, and `--progress` prints plain lines on stderr instead of JSONL.
 `status`, `resume`, and `cancel` use the saved
-run. `providers` shows whether each CLI is on `PATH`, its weight, and any
+run. `cancel` stops a provider that is still running, and the children that
+process started. `providers` shows whether each CLI is on `PATH`, its weight, and any
 cooldown. `doctor` checks git and sign-in without printing secrets. `init`
 writes a starter config. `config validate` checks
 [config/harness.schema.json](config/harness.schema.json). `logs` prints one

@@ -55,7 +55,9 @@ The worker is the first candidate that finishes. `fixture` never starts a
 process. `claude`, `codex`, `grok`, `gemini`, `cursor` (`cursor-agent`), and
 `opencode` start only with `--allow-live`. The harness does not read or store
 API keys. Usage figures are read from the provider's stdout when that stream
-carries them. Stderr is not stored.
+carries them. Stderr is not stored. `cancel`, and a provider
+`timeout_seconds`, stop the process that is still running and the children
+it started: a process group on Linux and a job object on Windows.
 
 ## review
 

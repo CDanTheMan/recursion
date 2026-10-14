@@ -744,7 +744,8 @@ own login. A missing command is `CLI was not found on PATH`.
 
 Git is required for task worktrees. `git <subcommand> failed` means the
 worktree could not be added or removed. `git worktree prune` drops a
-checkout left behind by an interrupted run. Text files in this repository
+checkout left behind by an interrupted run. A cancel or a provider timeout
+stops the running process and its process group. Text files in this repository
 are LF (`.gitattributes`). Leave `core.autocrlf` false so a checkout does
 not rewrite fixtures the checkers compare byte for byte.
 
@@ -765,6 +766,8 @@ still reported as installed when that search finds it.
 
 Task worktrees are created with `git -c core.longpaths=true`. Turn on
 Windows long paths if a worktree path still exceeds the legacy path limit.
+A cancel or a provider timeout stops the running process and the job object
+that contains it.
 `doctor` reports `git.longpaths` from `git config --get core.longpaths`.
 This repository stores text as LF (`.gitattributes`). Leave `core.autocrlf`
 off so a checkout does not rewrite the fixtures the checkers compare byte
