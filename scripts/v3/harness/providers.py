@@ -21,11 +21,17 @@ from scripts.v3.harness.errors import (
 
 @dataclass(frozen=True)
 class ProviderRequest:
-    """Work handed to a provider after M1B has selected a route."""
+    """Work handed to a provider after M1B has selected a route.
+
+    ``kind`` is ``execute`` for the task and ``review`` for a diff review.
+    ``cwd`` is the task worktree when isolation is on.
+    """
 
     task: str
     packet_id: str
     route_id: str
+    kind: str = "execute"
+    cwd: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,14 +85,17 @@ class FixtureProvider(ProviderAdapter):
         timeout_seconds: int | None = None,
     ) -> ProviderResult:
         del allow_live, timeout_seconds
-        text = "\n".join(
-            (
-                "provider=fixture",
-                f"route={request.route_id}",
-                f"packet={request.packet_id}",
-                request.task,
+        if request.kind == "review":
+            text = "VERDICT approve\nfixture review"
+        else:
+            text = "\n".join(
+                (
+                    "provider=fixture",
+                    f"route={request.route_id}",
+                    f"packet={request.packet_id}",
+                    request.task,
+                )
             )
-        )
         return ProviderResult(provider=self.name, argv=self.argv(request), text=text, live=False)
 
 
@@ -124,6 +133,8 @@ def _run_cli(
     }
     if timeout_seconds is not None:
         kwargs["timeout"] = timeout_seconds
+    if request.cwd:
+        kwargs["cwd"] = request.cwd
     if stdin_text is None:
         kwargs["stdin"] = subprocess.DEVNULL
     else:

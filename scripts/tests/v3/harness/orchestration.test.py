@@ -199,7 +199,10 @@ class OrchestrationTests(unittest.TestCase):
             self.assertEqual(code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "completed")
-            self.assertEqual(len(list(root.glob("RUN-*.json"))), 1)
+            run_records = [path for path in root.glob("RUN-*.json") if path.stem.count(".") == 0]
+            self.assertEqual(len(run_records), 1)
+            self.assertTrue((root / f"{payload['run_id']}.report.json").is_file())
+            self.assertTrue((root / f"{payload['run_id']}.report.md").is_file())
             self.assertEqual({task["status"] for task in payload["tasks"]}, {"completed"})
 
     def test_timeout_rate_limit_and_missing_cli(self) -> None:
